@@ -99,13 +99,13 @@ const THEME = {
   light: {
     bg:"#F7F8FC", surface:"#FFFFFF", border:"#E5E7EB", text:"#1A1D2E",
     textMuted:"#6B7280", textFaint:"#9CA3AF", headerBg:"linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)",
-    rowEven:"#FFFFFF", rowOdd:"#F3F4FA", rowSel:"#EDE9FE", inputBg:"#FFFFFF",
+    rowEven:"#FFFFFF", rowOdd:"#EEF0F8", rowSel:"#EDE9FE", inputBg:"#FFFFFF",
     tablehead:"#F8F9FF", accent:"#4338CA",
   },
   dark: {
     bg:"#0F1117", surface:"#1E2130", border:"#2D3148", text:"#E8EAFF",
     textMuted:"#8B92C0", textFaint:"#555D85", headerBg:"linear-gradient(135deg,#0A0820,#13103A,#1D1880)",
-    rowEven:"#1E2130", rowOdd:"#161929", rowSel:"#252A45", inputBg:"#252A45",
+    rowEven:"#1A1E2E", rowOdd:"#13162A", rowSel:"#252A45", inputBg:"#252A45",
     tablehead:"#181C2B", accent:"#7C82FF",
   }
 };
@@ -405,13 +405,26 @@ function App() {
           else newOnes.push(p);
         });
         setImportStatus(null);
-        if(conflicts.length>0) {
-          setDupModal({conflicts, index:0, newOnes, resolved:[]});
+        // If all conflicts are seed data (importedAt===0), replace them silently
+        const seedConflicts = conflicts.filter(c => c.existing[0].importedAt === 0);
+        const realConflicts = conflicts.filter(c => c.existing[0].importedAt !== 0);
+        
+        let updatedParts = [...participants];
+        // Auto-replace seed duplicates
+        seedConflicts.forEach(({incoming, existing}) => {
+          updatedParts = updatedParts.map(p => p.id===existing[0].id ? {...incoming, id:p.id} : p);
+          newOnes.push(); // already handled
+        });
+        
+        if(realConflicts.length > 0) {
+          // Show modal only for real (non-seed) conflicts
+          setParticipants(updatedParts);
+          setDupModal({conflicts: realConflicts, index:0, newOnes, resolved:[]});
         } else {
-          setParticipants(prev=>[...prev,...newOnes]);
-          addLog("יבוא CSV",`יובאו ${newOnes.length} משתתפים`);
-          setImportStatus({state:"ok", msg:`✅ יובאו ${newOnes.length} משתתפים`});
-          setTimeout(()=>setImportStatus(null),4000);
+          setParticipants([...updatedParts, ...newOnes]);
+          addLog("יבוא CSV", `יובאו ${newOnes.length} חדשים, עודכנו ${seedConflicts.length} קיימים`);
+          setImportStatus({state:"ok", msg:`✅ יובאו ${newOnes.length + seedConflicts.length} משתתפים`});
+          setTimeout(()=>setImportStatus(null), 4000);
         }
       } catch(err) {
         setImportStatus({state:"error", msg:`שגיאה: ${err.message}`});
@@ -670,8 +683,11 @@ function App() {
                     });
                   })
                   .catch(e=>{
-                    setImportStatus({state:"error", msg:`שגיאה: ${e.message}`});
-                    setTimeout(()=>setImportStatus(null),5000);
+                    const msg = e.message.includes("Unknown action") 
+                      ? "עדכן את Apps Script ל-v3 ופרסם גרסה חדשה"
+                      : e.message;
+                    setImportStatus({state:"error", msg:`שגיאה: ${msg}`});
+                    setTimeout(()=>setImportStatus(null),7000);
                   });
               }}
                 disabled={importStatus?.state==="loading"}
