@@ -30,37 +30,26 @@ const APP_NAME = "מנהל ניסוי";
 const LANG = {
   he: {
     appName:"מנהל ניסוי", appSub:"ניסוי תכנון מסלול נסיעה עם AI",
-    // tabs
-    tabAssign:L("tabAssign"), tabCalendar:L("tabCalendar"), tabCharts:L("tabCharts"),
-    tabEmails:L("tabEmails"), tabLocations:L("tabLocations"),
-    // header
+    tabAssign:"📋 שיבוצים", tabCalendar:"📅 לוח", tabCharts:"📊 גרפים",
+    tabEmails:"✉️ מיילים", tabLocations:"📍 מיקומים",
     btnLoad:"↻ טען", btnSave:"💾 שמור", syncLocal:"מקומי", syncSaving:"...",
-    completed:L("completed"),
-    // stats bar
-    statReg:L("statReg"), statAssigned:L("statAssigned"), statConfirmed:L("statConfirmed"), statDeclined:L("statDeclined"),
-    // actions
+    completed:"השלימו",
+    statReg:"נרשמו", statAssigned:"שובצו", statConfirmed:"אישרו", statDeclined:"ביטלו",
     btnAddParticipant:"+ הוסף נבדק", btnAutoAssign:"⚡ שיבוץ אוטומטי לכולם",
     btnAutoAssignSel:"⚡ שיבץ נבחרים", btnClearAssign:"🗑 נקה שיבוצים",
-    btnExport:"⬇️ ייצוא", btnImportCSV:L("btnImportCSV"), btnImportSheets:L("btnImportSheets"),
-    // filters
-    searchPlaceholder:{L("searchPlaceholder")}, filterAssigned:"שובצו/לא",
-    filterAll:"הכל", filterYes:L("statAssigned"), filterNo:"לא שובצו", clearAll:"✕ נקה הכל",
-    // column headers
+    btnExport:"⬇️ ייצוא", btnImportCSV:"📂 יבוא CSV", btnImportSheets:"📋 יבוא מ-Sheets",
+    searchPlaceholder:"🔍 חיפוש שם / מייל", filterAssigned:"שובצו/לא",
+    filterAll:"הכל", filterYes:"שובצו", filterNo:"לא שובצו", clearAll:"✕ נקה הכל",
     colName:"שם", colEmail:"אימייל", colAge:"גיל", colGender:"מגדר",
     colAvail:"זמינות", colDay:"יום", colSlot:"משמרת", colLocation:"מיקום",
     colRoom:"חדר", colStatus:"סטטוס", colLocPref:"העדפת מיקום",
     colNotes:"הערות", colActions:"פעולות",
-    // col filter menu
     sortAsc:"↑ סדר עולה", sortDesc:"↓ סדר יורד", clearColFilter:"✕ נקה סינון עמודה",
-    // status
     statusPending:"ממתין", statusAssigned:"שובץ", statusConfirmed:"אישר",
     statusCompleted:"השלים", statusDeclined:"ביטל",
-    // days
     dayA:"ראשון", dayB:"שני", dayC:"שלישי", dayD:"רביעי", dayE:"חמישי", dayF:"שישי",
     dayPrefix:"יום ",
-    // slots
     slotMorning:"בוקר", slotAfternoon:"צהריים",
-    // modal
     editParticipant:"עריכת נבדק", addParticipant:"הוספת נבדק ידנית",
     fieldName:"שם מלא *", fieldEmail:"אימייל", fieldPhone:"טלפון",
     fieldAge:"גיל", fieldGender:"מגדר", fieldStatus:"סטטוס",
@@ -69,32 +58,25 @@ const LANG = {
     btnCancel:"ביטול", btnSaveChanges:"💾 שמור שינויים", btnAddConfirm:"✅ הוסף נבדק",
     available:"✓ זמין", notAvailable:"—",
     noLocations:"אין מיקומים מוגדרים",
-    // menu
     menuHelp:"📖 הדרכה ועזרה", menuChangelog:"📋 לוג שינויים",
     menuDark:"מצב כהה", menuLight:"מצב בהיר",
     menuGmail:"✉️ הגדרות Gmail", menuSettings:"⚙️ הגדרות",
     menuAbout:"ℹ️ אודות", menuLang:"🌐 English",
-    // email tab
-    emailManualTitle:L("emailManualTitle"),
-    emailThanksTitle:L("emailThanksTitle"),
+    emailManualTitle:"✍️ הודעה חופשית לנבדקים",
+    emailThanksTitle:"🙏 תודה למשתתפים שהשלימו",
     btnSendThanks:"✉️ שלח תודה", btnSendThanksAll:"📨 שלח תודה לכולם",
     btnProofread:"✍️ תיקון כתיב (AI)", btnRewrite:"🔄 שכתוב (AI)",
-    // warnings
     langWarning:"שים לב: חלק מהתוכן (שמות, זמינות) יישאר בעברית",
-    // bulk
-    bulkLocPref:L("bulkLocPref"),
-    // settings
+    bulkLocPref:"📍 העדפה:",
     settingsTitle:"⚙️ הגדרות ניסוי",
-    // dup modal
     dupTitle:"⚠️ נמצא כפול", dupOf:"מתוך", dupConflicts:"קונפליקטים",
-    dupFrom:L("dupFrom"), dupExisting:L("dupExisting"),
+    dupFrom:"📥 מהקובץ (חדש)", dupExisting:"✅ במערכת (קיים)",
     dupFoundBy:"🔍 זוהה כפול לפי:",
-    dupSkip:"⏭", dupSkipDesc:L("dupSkipDesc"), dupSkipSub:L("dupSkipSub"),
-    dupMerge:"🔀", dupMergeDesc:L("dupMergeDesc"), dupMergeSub:L("dupMergeSub"),
-    dupReplace:"🔁", dupReplaceDesc:L("dupReplaceDesc"), dupReplaceSub:L("dupReplaceSub"),
-    dupAdd:"➕", dupAddDesc:L("dupAddDesc"), dupAddSub:L("dupAddSub"),
-    dupApplyAll:L("dupApplyAll"), dupSkipAll:L("dupSkipAll"), dupMergeAll:L("dupMergeAll"), dupReplaceAll:L("dupReplaceAll"),
-    // location modal
+    dupSkip:"⏭", dupSkipDesc:"דלג — אל תשנה כלום", dupSkipSub:"שמור את הקיים, התעלם מהחדש",
+    dupMerge:"🔀", dupMergeDesc:"מזג — שמור שיבוץ וסטטוס", dupMergeSub:"עדכן זמינות ופרטים, שמור שיבוץ",
+    dupReplace:"🔁", dupReplaceDesc:"החלף — הכל מהקובץ", dupReplaceSub:"מחק קיים, שים חדש במקומו",
+    dupAdd:"➕", dupAddDesc:"הוסף — כנסיון נפרד", dupAddSub:"שמור את שניהם",
+    dupApplyAll:"החל על כל הכפולים:", dupSkipAll:"⏭ דלג לכולם", dupMergeAll:"🔀 מזג הכל", dupReplaceAll:"🔁 החלף הכל",
     addLocation:"+ הוסף מיקום",
   },
   en: {
