@@ -6,8 +6,8 @@
   <title>מנהל ניסוי</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif; }
@@ -128,7 +128,7 @@ const emptyP = () => ({
 });
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
-export default function App() {
+function App() {
   const saved = loadState();
   const [participants,setParticipants] = useState(()=>saved?.participants||SEED.map((p,i)=>({...p,id:i,assigned:null,status:"pending",notes:"",importedAt:0})));
   const [locations,setLocations]       = useState(()=>saved?.locations||[{id:1,name:"נמל",rooms:["כיתה א","כיתה ב"]},{id:2,name:"הר",rooms:["חדר 1"]}]);
