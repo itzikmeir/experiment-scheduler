@@ -4,20 +4,32 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>מנהל ניסוי</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif; }
+    #loading { display:flex; align-items:center; justify-content:center; height:100vh; font-size:18px; color:#4338CA; font-family:inherit; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel" data-presets="react">
+  <div id="root"><div id="loading">⏳ טוען...</div></div>
+
+  <!-- Step 1: React -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+  <!-- Step 2: Recharts (needs React on window first) -->
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js" crossorigin></script>
+
+  <!-- Step 3: Babel (compiles JSX in next script tag) -->
+  <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+
+  <!-- Step 4: App -->
+  <script type="text/babel" data-type="module" data-presets="react,env">
     const { useState, useMemo, useEffect, useRef, useCallback } = React;
-    const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } = Recharts;
+    const {
+      BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+      PieChart, Pie, Cell, CartesianGrid
+    } = Recharts;
 
 
 // ─── Version ──────────────────────────────────────────────────────────────────
@@ -30,14 +42,42 @@ const loadState = () => { try { const r = localStorage.getItem(SK); return r ? J
 const saveState = (s) => { try { localStorage.setItem(SK, JSON.stringify(s)); } catch {} };
 
 // ─── Google Sheets Sync ───────────────────────────────────────────────────────
+// Note: Claude artifacts block outbound fetch to external URLs.
+// Sync works via copy/paste of JSON — paste into Sheets script manually,
+// or deploy the app on Replit/Vercel for live sync.
 const GS_URL = "https://script.google.com/macros/s/AKfycbyuFJwANd8oR3S5fR_w5J2Qm4dZgvvgPQIwIhgV3wlajt6ZLTDi_a1djDwh5LsKbW0U/exec";
 
 async function gsGetAll() {
-  const res = await fetch(`${GS_URL}?action=getAll`);
-  if (!res.ok) throw new Error("Network error " + res.status);
+  // Try fetch — will fail in artifact due to network policy
+  const res = await fetch(`${GS_URL}?action=getAll`, { mode: "cors" });
+  if (!res.ok) throw new Error("Network blocked");
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data;
+}
+
+async function gsSaveAll(payload) {
+  const res = await fetch(GS_URL, {
+    method: "POST",
+    mode: "cors",
+    headers: { "Content-Type": "text/plain" }, // avoid preflight
+    body: JSON.stringify({ action: "saveAll", ...payload }),
+  });
+  if (!res.ok) throw new Error("Network blocked");
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+async function gsUpdateP(id, patch, user) {
+  const res = await fetch(GS_URL, {
+    method: "POST",
+    mode: "cors",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ action: "updateP", id, patch, user }),
+  });
+  if (!res.ok) throw new Error("Network blocked");
+  return res.json();
 }
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
@@ -1418,8 +1458,9 @@ function LocModal({loc,T,onSave,onClose}) {
 }
 
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(React.createElement(App));
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(React.createElement(React.StrictMode, null, React.createElement(App)));
   </script>
 </body>
 </html>
