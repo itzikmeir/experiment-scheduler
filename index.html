@@ -842,6 +842,38 @@ function App() {
                     </select>
                   )}
 
+                  {/* Bulk set location preference */}
+                  <div style={{position:"relative",display:"inline-flex",alignItems:"center",gap:3}}>
+                    <span style={{fontSize:10,color:T.textMuted,fontWeight:600,whiteSpace:"nowrap"}}>📍 העדפה:</span>
+                    {locations.map(loc=>{
+                      const allOn=selList.every(p=>(p.locPref||[]).includes(loc.id));
+                      const someOn=selList.some(p=>(p.locPref||[]).includes(loc.id));
+                      const c=LOC_COLORS[(locations.findIndex(l=>l.id===loc.id))%LOC_COLORS.length];
+                      return(
+                        <button key={loc.id} onClick={()=>{
+                          // If all selected have it → remove from all; otherwise add to all
+                          setParticipants(prev=>prev.map(p=>{
+                            if(!selected.has(p.id)) return p;
+                            const cur=p.locPref||[];
+                            const next=allOn?cur.filter(x=>x!==loc.id):cur.includes(loc.id)?cur:[...cur,loc.id];
+                            return {...p,locPref:next};
+                          }));
+                          addLog("עדכון העדפת מיקום",`"${loc.name}" ${allOn?"הוסר מ":"נוסף ל"}-${selected.size} נבדקים`);
+                          showToast(`📍 ${loc.name} ${allOn?"הוסר":"נוסף"} ל-${selected.size} נבדקים`);
+                        }} style={{
+                          background:allOn?c.bg:someOn?c.bg+"88":T.tablehead,
+                          color:allOn?c.text:someOn?c.text:T.textFaint,
+                          border:`1.5px solid ${allOn?c.border:someOn?c.border+"88":T.border}`,
+                          borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",
+                          fontFamily:"inherit",fontWeight:allOn?700:400,
+                          transition:"all .15s",
+                        }}>
+                          {allOn?"✓ ":someOn?"~ ":""}{loc.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+
                   {/* Bulk email */}
                   {selList.some(p=>p.email&&p.assigned)&&(
                     <button onClick={()=>setModal("bulkEmail")} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
@@ -898,7 +930,7 @@ function App() {
                         <SortIcon col={h.k}/>{h.l}
                       </th>
                     ))}
-                    {["זמינות","יום","משמרת","מיקום","חדר","העדפת מיקום","סטטוס","הערות","פעולות"].map(h=>(
+                    {["זמינות","יום","משמרת","מיקום","חדר","סטטוס","העדפת מיקום","הערות","פעולות"].map(h=>(
                       <th key={h} style={{padding:"8px 10px",textAlign:"right",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
                     ))}
                   </tr>
