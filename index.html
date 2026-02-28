@@ -120,19 +120,71 @@ const tsToStr = ts => { const d=new Date(ts); return `${d.getDate()}/${d.getMont
 const newId = arr => Math.max(0,...arr.map(x=>x.id||0))+1;
 
 function parseCSVRows(text) {
-  const lines = text.split("\n").filter(Boolean);
-  if(lines.length<2) return [];
-  const headers = lines[0].split(",").map(h=>h.replace(/"/g,"").trim());
-  return lines.slice(1).map(line=>{
-    const vals=line.split(",").map(v=>v.replace(/"/g,"").trim());
-    const obj={}; headers.forEach((h,i)=>obj[h]=vals[i]||""); return obj;
+  // Handle quoted fields properly
+  const rows = [];
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if(lines.length < 2) return [];
+  
+  function parseLine(line) {
+    const result = [];
+    let cur = "", inQ = false;
+    for(let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if(c === '"' && !inQ) { inQ = true; }
+      else if(c === '"' && inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else if(c === '"' && inQ) { inQ = false; }
+      else if(c === ',' && !inQ) { result.push(cur.trim()); cur = ""; }
+      else { cur += c; }
+    }
+    result.push(cur.trim());
+    return result;
+  }
+  
+  const headers = parseLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const vals = parseLine(line);
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = (vals[i] || "").trim());
+    return obj;
   });
 }
-function parseRow(row,id) {
-  const g=s=>{const k=Object.keys(row).find(k=>k.includes(s));return k?(row[k]||"").toString().trim():"";};
-  const avail={};
-  DAYS.forEach(d=>{const raw=g(DAY_SUB[d]);avail[d]=raw?raw.split(",").map(x=>x.trim()).filter(Boolean):[];});
-  return {id,name:g("שם מלא")||g("שם"),email:g("אימייל")||g("Email")||g("email"),phone:g("טלפון"),age:g("גיל"),gender:g("מגדר"),availability:avail,assigned:null,status:"pending",notes:"",importedAt:Date.now()};
+
+function parseRow(row, id) {
+  // Flexible column finder - strips whitespace and brackets
+  const g = s => {
+    const key = Object.keys(row).find(k => {
+      const kn = k.replace(/\s+/g,"").replace(/[\[\]']/g,"");
+      const sn = s.replace(/\s+/g,"").replace(/[\[\]']/g,"");
+      return kn.includes(sn);
+    });
+    return key ? (row[key] || "").toString().trim() : "";
+  };
+  
+  const avail = {};
+  // Match columns like "זמינות להגעה לקמפוס הנמל [יום א']" or "יום א" etc
+  const DAY_KEYS = {"א":["יוםא","יוםא'"], "ב":["יוםב","יוםב'"], "ג":["יוםג","יוםג'"], 
+                    "ד":["יוםד","יוםד'"], "ה":["יוםה","יוםה'"], "ו":["יוםו","יוםו'"]};
+  
+  DAYS.forEach(d => {
+    const matchKeys = DAY_KEYS[d];
+    const key = Object.keys(row).find(k => {
+      const kn = k.replace(/\s+/g,"").replace(/[\[\]']/g,"");
+      return matchKeys.some(mk => kn.includes(mk));
+    });
+    const raw = key ? (row[key] || "").toString().trim() : "";
+    avail[d] = raw ? raw.split(",").map(x => x.trim()).filter(Boolean) : [];
+  });
+  
+  return {
+    id, 
+    name:   g("שם מלא") || g("שם"),
+    email:  g("אימייל") || g("כתובת אימייל") || g("Email") || g("email"),
+    phone:  g("טלפון") || g("מספר טלפון"),
+    age:    g("גיל"),
+    gender: g("מגדר"),
+    availability: avail,
+    assigned: null, status: "pending", notes: "", importedAt: Date.now()
+  };
 }
 function exportCSV(rows,filename) {
   if(!rows.length) return;
@@ -315,16 +367,32 @@ function App() {
     reader.onload=e=>{
       const rows=parseCSVRows(e.target.result);
       let nextId=newId(participants);
-      const newOnes=[],conflicts=[];
+      const toAdd=[], toUpdate=[], skipped=[];
       rows.forEach(row=>{
         const p=parseRow(row,nextId++);
         if(!p.name) return;
-        const dups=participants.filter(ex=>dupReason(p,ex));
-        if(dups.length>0) conflicts.push({incoming:p,existing:dups,reason:dupReason(p,dups[0])});
-        else newOnes.push(p);
+        const dup=participants.find(ex=>dupReason(p,ex));
+        if(dup) {
+          // Auto-merge: update availability and contact info but keep assignment/status
+          toUpdate.push({id:dup.id, patch:{
+            availability:p.availability,
+            email:p.email||dup.email,
+            phone:p.phone||dup.phone,
+            age:p.age||dup.age,
+            gender:p.gender||dup.gender,
+          }});
+          skipped.push(p.name);
+        } else {
+          toAdd.push(p);
+        }
       });
-      if(conflicts.length>0) setDupModal({conflicts,index:0,newOnes,resolved:[]});
-      else{setParticipants(prev=>[...prev,...newOnes]);addLog("יבוא CSV",`יובאו ${newOnes.length} משתתפים`);showToast(`✅ יובאו ${newOnes.length}`);}
+      setParticipants(prev=>{
+        let updated=[...prev];
+        toUpdate.forEach(({id,patch})=>{updated=updated.map(p=>p.id===id?{...p,...patch}:p);});
+        return [...updated,...toAdd];
+      });
+      addLog("יבוא CSV",`נוספו ${toAdd.length}, עודכנו ${toUpdate.length}`);
+      showToast(`✅ נוספו ${toAdd.length} חדשים, עודכנו ${toUpdate.length}`);
     };
     reader.readAsText(file,"UTF-8");
   }
@@ -436,7 +504,7 @@ function App() {
   const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset,settings.baseDate]);
 
   // ── CSS vars via style tag ─────────────────────────────────────────────────
-  const baseStyle={fontFamily:"'Segoe UI','Arial Hebrew',Arial,sans-serif",background:T.bg,minHeight:"100vh",color:T.text,transition:"background .3s,color .3s"};
+  const baseStyle={fontFamily:"'Segoe UI','Arial Hebrew',Arial,sans-serif",background:T.bg,height:"100vh",display:"flex",flexDirection:"column",overflow:"hidden",color:T.text,transition:"background .3s,color .3s"};
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
@@ -565,6 +633,7 @@ function App() {
         </div>
       </div>
 
+      <div style={{flex:1,overflowY:"auto"}}>
       <div style={{maxWidth:1500,margin:"0 auto",padding:"16px 22px"}}>
 
         {/* ══ ASSIGNMENTS ══════════════════════════════════════════════════════ */}
@@ -1171,6 +1240,7 @@ function App() {
             </div>
           </div>
         )}
+      </div>
       </div>
 
       {/* ══════════════════════ MODALS ══════════════════════════════════════════ */}
