@@ -6,7 +6,7 @@
   <title>מנהל ניסוי</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "Segoe UI", "Arial Hebrew", Arial, sans-serif; }
+    body { font-family: Arial, sans-serif; }
     #loading { display:flex;align-items:center;justify-content:center;height:100vh;font-size:18px;color:#4338CA; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
@@ -292,21 +292,9 @@ function App() {
       });
   },[]);
 
-  // ── Auto-save to Sheets (debounced 3s after any change) ───────────────────
-  useEffect(()=>{
-    if(syncStatus==="syncing") return;
-    clearTimeout(syncTimerRef.current);
-    syncTimerRef.current=setTimeout(()=>{
-      setSyncStatus("syncing");setSyncMsg("שומר...");
-      gsSaveAll({participants,locations,settings,user:settings.currentUser})
-        .then(r=>{
-          if(r.error) throw new Error(r.error);
-          setSyncStatus("ok");setSyncMsg("נשמר");setLastSync(new Date());
-        })
-        .catch(()=>{setSyncStatus("error");setSyncMsg("שגיאת שמירה");});
-    },3000);
-    return ()=>clearTimeout(syncTimerRef.current);
-  },[participants,locations,settings]);
+  // ── NO auto-save: Sheets is the database, never overwrite automatically ─────
+  // Changes are pushed row-by-row via gsUpdateP (single participant updates only)
+  // Full save only happens via the explicit "💾 שמור ל-Sheets" button
 
   const showToast=(msg,type="ok")=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
 
@@ -323,11 +311,13 @@ function App() {
   const updP = useCallback((id,patch,logMsg)=>{
     setParticipants(prev=>prev.map(p=>p.id===id?{...p,...patch}:p));
     if(logMsg) addLog("עדכון",logMsg);
-    // Sync single row to Sheets immediately (fast path)
-    gsUpdateP(id, patch, settings.currentUser)
-      .then(()=>{setSyncStatus("ok");setSyncMsg("נשמר");setLastSync(new Date());})
-      .catch(()=>{setSyncStatus("error");setSyncMsg("שגיאת שמירה");});
-  },[addLog, settings.currentUser]);
+    // Push only this single row to Sheets (safe — never touches other rows)
+    if(syncStatus!=="error") {
+      gsUpdateP(id, patch, settings.currentUser)
+        .then(()=>{setSyncStatus("ok");setSyncMsg("נשמר");setLastSync(new Date());})
+        .catch(()=>{setSyncStatus("error");setSyncMsg("שגיאת עדכון שורה");});
+    }
+  },[addLog, settings.currentUser, syncStatus]);
 
   const assignP = (id,day,slot,locationId,room)=>{
     const p=participants.find(x=>x.id===id);
@@ -556,7 +546,7 @@ function App() {
   const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset,settings.baseDate]);
 
   // ── CSS vars via style tag ─────────────────────────────────────────────────
-  const baseStyle={fontFamily:"'Segoe UI','Arial Hebrew',Arial,sans-serif",background:T.bg,height:"100vh",display:"flex",flexDirection:"column",overflow:"hidden",color:T.text,transition:"background .3s,color .3s"};
+  const baseStyle={fontFamily:"Arial,sans-serif",background:T.bg,height:"100vh",display:"flex",flexDirection:"column",overflow:"hidden",color:T.text,transition:"background .3s,color .3s"};
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
@@ -603,24 +593,44 @@ function App() {
               })}
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
-              {/* Sync indicator */}
-              <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.1)",borderRadius:7,padding:"4px 10px"}}>
+              {/* Sheets sync bar */}
+              <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,0.1)",borderRadius:7,padding:"4px 8px",flexWrap:"wrap",justifyContent:"flex-end"}}>
+                {/* Status dot */}
                 <span style={{fontSize:11}}>
-                  {syncStatus==="syncing"&&"⏳"}
+                  {syncStatus==="syncing"&&<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>}
                   {syncStatus==="ok"&&"☁️"}
-                  {syncStatus==="error"&&"💾"}
-                  {syncStatus==="idle"&&"💾"}
+                  {(syncStatus==="error"||syncStatus==="idle")&&"💾"}
                 </span>
                 <span style={{fontSize:10,color:"rgba(255,255,255,0.85)",fontWeight:600}}>
-                  {syncStatus==="ok"?"שמור בענן":syncStatus==="syncing"?"שומר...":"שמור מקומית"}
+                  {syncStatus==="ok"?`Sheets${lastSync?" "+lastSync.getHours()+":"+String(lastSync.getMinutes()).padStart(2,"0"):""}`:syncStatus==="syncing"?"...":"מקומי"}
                 </span>
-                {lastSync&&syncStatus==="ok"&&<span style={{fontSize:9,opacity:0.5}}>{lastSync.getHours()}:{String(lastSync.getMinutes()).padStart(2,"0")}</span>}
-                {/* Manual share button */}
-                <button onClick={()=>{
-                  const json=JSON.stringify({participants,locations,settings,changelog},null,2);
-                  navigator.clipboard.writeText(json).then(()=>showToast("📋 JSON הועתק — הדבק לשותף")).catch(()=>showToast("השתמש בייצוא JSON","err"));
-                }} title="העתק JSON לשיתוף" style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
-                  שתף
+                {/* Reload from Sheets */}
+                <button title="טען מחדש מ-Sheets" onClick={()=>{
+                  setSyncStatus("syncing");setSyncMsg("טוען...");
+                  gsGetAll().then(data=>{
+                    if(data.error) throw new Error(data.error);
+                    if(data.participants?.length) setParticipants(data.participants);
+                    if(data.locations?.length)    setLocations(data.locations);
+                    if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
+                    setSyncStatus("ok");setSyncMsg("טעון");setLastSync(new Date());
+                    showToast("✅ נטען מ-Sheets");
+                  }).catch(e=>{setSyncStatus("error");showToast("שגיאה: "+e.message,"error");});
+                }} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",color:"white",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
+                  ↻ טען
+                </button>
+                {/* Explicit save to Sheets — only on demand */}
+                <button title="שמור כל הנתונים ל-Sheets" onClick={()=>{
+                  if(!window.confirm("זה ישכתב את כל נתוני ה-Sheets עם המצב הנוכחי. להמשיך?")) return;
+                  setSyncStatus("syncing");setSyncMsg("שומר...");
+                  gsSaveAll({participants,locations,settings,user:settings.currentUser})
+                    .then(r=>{
+                      if(r.error) throw new Error(r.error);
+                      setSyncStatus("ok");setSyncMsg("נשמר");setLastSync(new Date());
+                      showToast("✅ נשמר ל-Sheets");
+                    })
+                    .catch(e=>{setSyncStatus("error");showToast("שגיאת שמירה: "+e.message,"error");});
+                }} style={{background:"rgba(255,255,255,0.9)",border:"none",color:"#4338CA",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:800}}>
+                  💾 שמור
                 </button>
               </div>
               {/* Progress pill */}
