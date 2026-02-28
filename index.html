@@ -35,7 +35,7 @@ const saveState = (s) => { try { localStorage.setItem(SK, JSON.stringify(s)); } 
 // Note: Claude artifacts block outbound fetch to external URLs.
 // Sync works via copy/paste of JSON — paste into Sheets script manually,
 // or deploy the app on Replit/Vercel for live sync.
-const GS_URL = "https://script.google.com/macros/s/AKfycbyuFJwANd8oR3S5fR_w5J2Qm4dZgvvgPQIwIhgV3wlajt6ZLTDi_a1djDwh5LsKbW0U/exec";
+const GS_URL = "https://script.google.com/macros/s/AKfycbzzJP566YX-Hsy5kwaOh1H6Vh_qfCtIALGj-8KxlhtTt0xKGOmcRmV3QmoKpllfCcfr/exec";
 
 async function gsGetAll() {
   // Try fetch — will fail in artifact due to network policy
