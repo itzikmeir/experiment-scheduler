@@ -357,6 +357,39 @@ function App() {
   const [darkMode,setDarkMode]         = useState(()=>saved?.darkMode||false);
   const [lang,setLang]                 = useState(()=>saved?.lang||"he");
   const L = (key) => LANG[lang]?.[key] ?? LANG.he[key] ?? key;
+  const [history,setHistory] = useState([]);
+  const [future,setFuture]   = useState([]);
+  const [undoLabel,setUndoLabel] = useState(null);
+  const [redoLabel,setRedoLabel] = useState(null);
+
+  // Wrap setParticipants to snapshot for undo
+  const setParticipantsUndo = (updater, label) => {
+    setHistory(h=>[...h.slice(-29),{participants, label}]);
+    setFuture([]);
+    setUndoLabel(label||null);
+    setRedoLabel(null);
+    setParticipants(updater);
+  };
+  const undo = () => {
+    if(!history.length) return;
+    const prev=history[history.length-1];
+    setFuture(f=>[{participants,label:undoLabel},...f.slice(0,29)]);
+    setParticipants(prev.participants);
+    setHistory(h=>h.slice(0,-1));
+    setUndoLabel(history[history.length-2]?.label||null);
+    setRedoLabel(undoLabel);
+    showToast(`↩ ${lang==="en"?"Undone":"בוטל"}: ${prev.label||""}`);
+  };
+  const redo = () => {
+    if(!future.length) return;
+    const next=future[0];
+    setHistory(h=>[...h,{participants,label:redoLabel}]);
+    setParticipants(next.participants);
+    setFuture(f=>f.slice(1));
+    setUndoLabel(redoLabel);
+    setRedoLabel(future[1]?.label||null);
+    showToast(`↪ ${lang==="en"?"Redone":"הוחזר"}: ${next.label||""}`);
+  };
 
   // Dynamic status labels using L()
   const statusMeta = useMemo(()=>({
@@ -394,6 +427,7 @@ function App() {
   const [toast,setToast]           = useState(null);
   const [dupModal,setDupModal]     = useState(null);
   const [exportMenu,setExportMenu] = useState(false);
+  const [bulkEmailOpen,setBulkEmailOpen] = useState(false);
   const [chartFilter,setChartFilter] = useState({status:"",location:""});
   const [weekOffset,setWeekOffset] = useState(0);
   const [calMode,setCalMode]       = useState("week");
@@ -445,7 +479,7 @@ function App() {
 
   // ── Participant mutations ──────────────────────────────────────────────────
   const updP = useCallback((id,patch,logMsg)=>{
-    setParticipants(prev=>prev.map(p=>p.id===id?{...p,...patch}:p));
+    setParticipantsUndo(prev=>prev.map(p=>p.id===id?{...p,...patch}:p), logMsg);
     if(logMsg) addLog("עדכון",logMsg);
     // Push only this single row to Sheets (safe — never touches other rows)
     if(syncStatus!=="error") {
@@ -493,7 +527,7 @@ function App() {
         }
       }
     });
-    setParticipants(updated);
+    setParticipantsUndo(()=>updated, lang==="en"?"Auto-assign":"שיבוץ אוטומטי");
     addLog("שיבוץ אוטומטי",`שובצו ${n} משתתפים`);
     showToast(`⚡ שובצו ${n} משתתפים`);
   }
@@ -514,6 +548,7 @@ function App() {
       // Check for duplicates before adding
       const dups=participants.filter(ex=>dupReason(np,ex));
       if(dups.length>0) {
+        setModal(null);setEditP(null);
         setDupModal({conflicts:[{incoming:np,existing:dups,reason:dupReason(np,dups[0])}],index:0,newOnes:[],resolved:[],onDone:(action)=>{
           if(action==="add"){setParticipants(prev=>[...prev,np]);addLog("הוספה ידנית",`נוסף: ${np.name}`);}
           else if(action==="replace"){setParticipants(prev=>prev.map(q=>q.id===dups[0].id?{...np,id:q.id}:q));addLog("החלפה ידנית",`הוחלף: ${np.name}`);}
@@ -522,7 +557,7 @@ function App() {
         }});
         return;
       }
-      setParticipants(prev=>[...prev,np]);
+      setParticipantsUndo(prev=>[...prev,np], `${lang==="en"?"Add":"הוסף"}: ${np.name}`);
       addLog("הוספה ידנית",`נוסף: ${np.name}`);
       showToast(`✅ ${np.name} נוסף`);
     } else {
@@ -710,7 +745,7 @@ function App() {
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setRowEmailMenu(null);}}>
+    <div dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setColMenu(null);}}>
 
 
       {/* ── Header ── */}
@@ -722,7 +757,7 @@ function App() {
             <div style={{position:"relative"}}>
               <button onClick={e=>{e.stopPropagation();setMenuOpen(v=>!v);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:7,padding:"5px 9px",cursor:"pointer",fontSize:16,lineHeight:1}}>☰</button>
               {menuOpen&&(
-                <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 12px 40px rgba(0,0,0,0.2)",zIndex:200,minWidth:200,overflow:"hidden"}}>
+                <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",[lang==="en"?"left":"right"]:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 12px 40px rgba(0,0,0,0.2)",zIndex:200,minWidth:200,overflow:"hidden"}}>
                   {[
                     {icon:"📖",label:L("menuHelp"),action:()=>{setModal("help");setMenuOpen(false);}},
                     {icon:"📋",label:L("menuChangelog"),action:()=>{setModal("changelog");setMenuOpen(false);}},
@@ -778,7 +813,7 @@ function App() {
                 showToast("✅ נטען מ-Sheets");
               }).catch(e=>{setSyncStatus("error");showToast("שגיאה: "+e.message,"error");});
             }} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",color:"white",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
-              ↻ טען
+              {L("btnLoad")}
             </button>
             <button title="שמור ל-Sheets" onClick={()=>{
               if(!window.confirm("ישכתב את כל נתוני ה-Sheets. להמשיך?")) return;
@@ -791,7 +826,7 @@ function App() {
                 })
                 .catch(e=>{setSyncStatus("error");showToast("שגיאת שמירה: "+e.message,"error");});
             }} style={{background:"rgba(255,255,255,0.9)",border:"none",color:"#4338CA",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:800}}>
-              💾 שמור
+              {L("btnSave")}
             </button>
           </div>
         </div>
@@ -917,6 +952,14 @@ function App() {
             <div style={{marginBottom:8}}>
               {/* Row 1: always-visible actions */}
               <div style={{display:"flex",gap:7,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
+                {/* Undo / Redo */}
+                <button onClick={undo} disabled={!history.length} title={lang==="en"?"Undo":"בטל"} style={{background:T.tablehead,color:history.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:history.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:history.length?1:0.4}} title={undoLabel?`${lang==="en"?"Undo":"בטל"}: ${undoLabel}`:(lang==="en"?"Nothing to undo":"אין מה לבטל")}>
+                  ↩{undoLabel?<span style={{fontSize:9,marginRight:3,color:T.textMuted,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-block",verticalAlign:"middle"}}>{undoLabel}</span>:null}
+                </button>
+                <button onClick={redo} disabled={!future.length} title={lang==="en"?"Redo":"בצע שוב"} style={{background:T.tablehead,color:future.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:future.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:future.length?1:0.4}}>
+                  ↪
+                </button>
+                <div style={{width:1,height:22,background:T.border,margin:"0 2px"}}/>
                 <button onClick={()=>{setEditP(emptyP());setModal("addEdit");}} style={{background:"#059669",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
                   {L("btnAddParticipant")}
                 </button>
@@ -1034,10 +1077,10 @@ function App() {
 
                     {selList.some(p=>p.email)&&(
                       <div style={{position:"relative"}}>
-                        <button onClick={e=>{e.stopPropagation();setExportMenu(v=>v==="bulkEmailMenu"?false:"bulkEmailMenu");}} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
+                        <button onClick={e=>{e.stopPropagation();setBulkEmailOpen(v=>!v);setExportMenu(false);}} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
                           ✉️ {lang==="en"?"Email selected":"מייל לנבחרים"} ({selList.filter(p=>p.email).length}) ▾
                         </button>
-                        {exportMenu==="bulkEmailMenu"&&(
+                        {bulkEmailOpen&&(
                           <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",zIndex:300,minWidth:200,overflow:"hidden"}}>
                             {[
                               {type:"invitation",icon:"📨",he:"הזמנה לניסוי",en:"Invitation",cond:p=>p.email&&p.assigned},
@@ -1060,7 +1103,7 @@ function App() {
                                     }
                                     sendViaGmail(subj,body,p.email);
                                   });
-                                  setExportMenu(false);
+                                  setBulkEmailOpen(false);
                                   showToast(`✉️ ${targets.length} ${lang==="en"?"emails opened":"חלונות נפתחו"}`);
                                 }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
                                   <span>{opt.icon}</span>
@@ -1183,9 +1226,8 @@ function App() {
                         <td style={{padding:"4px 6px",minWidth:140}}>
                           <div style={{display:"flex",gap:3,flexWrap:"wrap",minWidth:130}}>
                             {DAYS.filter(d=>p.availability[d]?.length>0).map(d=>(
-                              <span key={d} style={{background:T.tablehead,color:T.accent,borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,border:`1px solid ${T.border}`,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:2}}>
-                                {dayNames[d]?.slice(0,3)||d}
-                                <span style={{opacity:0.6,fontSize:8}}>{(p.availability[d]||[]).some(s=>s.includes("בוקר"))?"🌅":""}{(p.availability[d]||[]).some(s=>s.includes("צהריים"))?"☀️":""}</span>
+                              <span key={d} style={{background:T.tablehead,color:T.accent,borderRadius:4,padding:"2px 5px",fontSize:9,fontWeight:700,border:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>
+                                {lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:d}
                               </span>
                             ))}
                             {Object.values(p.availability).every(s=>s.length===0)&&<span style={{color:"#FCA5A5",fontSize:10}}>—</span>}
@@ -1207,7 +1249,7 @@ function App() {
                         <td style={{padding:"4px 5px"}}>
                           <select value={p.assigned?.slot||""} disabled={!p.assigned} onChange={e=>updP(p.id,{assigned:{...p.assigned,slot:e.target.value}})}
                             style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.tablehead,color:p.assigned?T.accent:T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:85,opacity:p.assigned?1:0.5}}>
-                            {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?"🌅 בוקר":"☀️ צהריים"}</option>)}
+                            {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</option>)}
                           </select>
                         </td>
                         {/* Location */}
@@ -1283,7 +1325,7 @@ function App() {
                               </button>
                             )}
                             {p.assigned&&<button title="נקה שיבוץ" onClick={()=>clearA(p.id)} style={{background:"#FEF2F2",color:"#9CA3AF",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✕</button>}
-                            <button title="מחק" onClick={()=>{if(window.confirm(`למחוק ${p.name}?`)){setParticipants(prev=>prev.filter(x=>x.id!==p.id));addLog("מחיקה",`נמחק: ${p.name}`);}}} style={{background:T.tablehead,color:T.textFaint,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>🗑</button>
+                            <button title="מחק" onClick={()=>{if(window.confirm(`למחוק ${p.name}?`)){setParticipantsUndo(prev=>prev.filter(x=>x.id!==p.id), `${lang==="en"?"Delete":"מחק"}: ${p.name}`);addLog("מחיקה",`נמחק: ${p.name}`);}}} style={{background:T.tablehead,color:T.textFaint,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>🗑</button>
                           </div>
                         </td>
                       </tr>
@@ -1946,7 +1988,7 @@ function App() {
       {rowEmailMenu&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setRowEmailMenu(null)}/>
-          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",left:rowEmailMenu.x,top:rowEmailMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",[lang==="en"?"left":"right"]:rowEmailMenu.x,top:rowEmailMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
             {(()=>{
               const p=rowEmailMenu.p;
               const opts=[
@@ -1980,7 +2022,7 @@ function App() {
       {colMenu&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setColMenu(null)}/>
-          <div style={{position:"fixed",left:colMenu.x,top:colMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:180,maxHeight:320,overflowY:"auto",padding:"6px 0"}} onClick={e=>e.stopPropagation()}>
+          <div style={{position:"fixed",[lang==="en"?"left":"right"]:colMenu.x,top:colMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:180,maxHeight:320,overflowY:"auto",padding:"6px 0"}} onClick={e=>e.stopPropagation()}>
             <div style={{padding:"6px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:6}}>
               <button onClick={()=>{toggleSort(colMenu.col);}} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="asc"?800:400}}>
                 ↑ סדר עולה
@@ -2185,7 +2227,7 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h3 style={{margin:0,fontSize:15,color:T.text}}>{p.id?"עריכת נבדק":"הוספת נבדק ידנית"}</h3>
+          <h3 style={{margin:0,fontSize:15,color:T.text}}>{p.id?L("editParticipant"):L("addParticipant")}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -2196,15 +2238,15 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
             </div>
           ))}
           <div>
-            <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>מגדר</label>
+            <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{L("fieldGender")}</label>
             <select value={p.gender||""} onChange={e=>setP(prev=>({...prev,gender:e.target.value}))} style={{...inputStyle}}>
               <option value="">{L("genderPick")}</option><option value="גבר">{L("genderM")}</option><option value="אישה">{L("genderF")}</option><option value="אחר">{L("genderO")}</option>
             </select>
           </div>
           <div>
-            <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>סטטוס</label>
+            <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{L("fieldStatus")}</label>
             <select value={p.status} onChange={e=>setP(prev=>({...prev,status:e.target.value}))} style={{...inputStyle}}>
-              {Object.entries({pending:"ממתין",assigned:"שובץ",confirmed:"אישר",completed:"השלים",declined:"ביטל"}).map(([v,l])=><option key={v} value={v}>{l}</option>)}
+              {["pending","assigned","confirmed","completed","declined"].map(v=><option key={v} value={v}>{L("status"+v.charAt(0).toUpperCase()+v.slice(1))}</option>)}
             </select>
           </div>
         </div>
@@ -2213,20 +2255,20 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
             <thead>
               <tr>
-                <th style={{padding:"5px 8px",textAlign:"right",color:T.textFaint}}>יום</th>
-                {SLOTS.map(s=><th key={s} style={{padding:"5px 8px",textAlign:"center",color:T.textFaint}}>{s.includes("בוקר")?"בוקר":"צהריים"}</th>)}
+                <th style={{padding:"5px 8px",textAlign:"right",color:T.textFaint}}>{L("colDay")}</th>
+                {SLOTS.map(s=><th key={s} style={{padding:"5px 8px",textAlign:"center",color:T.textFaint}}>{s.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</th>)}
               </tr>
             </thead>
             <tbody>
               {DAYS.map(day=>(
                 <tr key={day} style={{borderBottom:`1px solid ${T.border}`}}>
-                  <td style={{padding:"5px 8px",fontWeight:600,color:T.text}}>יום {dayNames[day]}</td>
+                  <td style={{padding:"5px 8px",fontWeight:600,color:T.text}}>{L("dayPrefix")}{dayNames[day]}</td>
                   {SLOTS.map(slot=>{
                     const on=(p.availability[day]||[]).includes(slot);
                     return(
                       <td key={slot} style={{textAlign:"center",padding:"4px"}}>
                         <button onClick={()=>toggleAvail(day,slot)} style={{background:on?"#4338CA":T.tablehead,color:on?"white":T.textMuted,border:`1px solid ${on?"#4338CA":T.border}`,borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:on?700:400,transition:"all .15s"}}>
-                          {on?"✓ זמין":"—"}
+                          {on?L("available"):L("notAvailable")}
                         </button>
                       </td>
                     );
@@ -2237,9 +2279,9 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
           </table>
         </div>
         <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:6,fontWeight:600}}>📍 העדפת מיקום (ניתן לבחור מספר)</label>
+          <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:6,fontWeight:600}}>{L("fieldLocPref")}</label>
           <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-            {locations.length===0 && <span style={{fontSize:11,color:T.textFaint}}>אין מיקומים מוגדרים — הוסף במלן מיקומים</span>}
+            {locations.length===0 && <span style={{fontSize:11,color:T.textFaint}}>{L("noLocations")}</span>}
             {locations.map((loc,i)=>{
               const pref=p.locPref||[];
               const on=pref.includes(loc.id);
