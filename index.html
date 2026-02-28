@@ -6,22 +6,17 @@
   <title>מנהל ניסוי</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif; }
+    body { font-family: "Segoe UI", "Arial Hebrew", Arial, sans-serif; }
     #loading { display:flex;align-items:center;justify-content:center;height:100vh;font-size:18px;color:#4338CA; }
   </style>
+  <script src="https://unpkg.com/react@17.0.2/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@17.0.2/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.22.5/babel.min.js"></script>
 </head>
 <body>
   <div id="root"><div id="loading">⏳ טוען...</div></div>
-
-  <!-- Load in exact order, all synchronous -->
-  <script src="https://unpkg.com/react@17.0.2/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@17.0.2/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/recharts@2.1.16/umd/Recharts.js"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
-
   <script type="text/babel">
     const { useState, useMemo, useEffect, useRef, useCallback } = React;
-    const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } = Recharts;
 
 
 // ─── Version ──────────────────────────────────────────────────────────────────
@@ -952,8 +947,8 @@ function App() {
         {tab==="charts"&&(
           <div>
             {/* Chart filters */}
-            <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center",background:T.surface,padding:"10px 12px",borderRadius:10,border:`1px solid ${T.border}`}}>
-              <span style={{fontSize:12,color:T.textMuted,fontWeight:700}}>סנן גרפים:</span>
+            <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center",background:T.surface,padding:"9px 12px",borderRadius:9,border:`1px solid ${T.border}`}}>
+              <span style={{fontSize:12,color:T.textMuted,fontWeight:700}}>סינון:</span>
               <select value={chartFilter.status} onChange={e=>setChartFilter(f=>({...f,status:e.target.value}))} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
                 <option value="">כל הסטטוסים</option>
                 {Object.entries(STATUS_META).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
@@ -962,16 +957,16 @@ function App() {
                 <option value="">כל המיקומים</option>
                 {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
-              {(chartFilter.status||chartFilter.location)&&<button onClick={()=>setChartFilter({status:"",location:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"4px 9px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ נקה</button>}
+              {(chartFilter.status||chartFilter.location)&&<button onClick={()=>setChartFilter({status:"",location:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"4px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ נקה</button>}
             </div>
 
-            {/* KPIs */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:16}}>
+            {/* KPI Cards */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
               {[
                 {l:"יעד",v:`${stats.byStatus.completed}/${settings.totalTarget}`,sub:`${Math.round(stats.byStatus.completed/settings.totalTarget*100)}%`,c:"#4338CA",bg:"#EEF2FF"},
                 {l:"שובצו",v:stats.byStatus.assigned+stats.byStatus.confirmed+stats.byStatus.completed,sub:"מתוך "+stats.total,c:"#059669",bg:"#ECFDF5"},
-                {l:"ממתינים",v:stats.byStatus.pending,sub:`${stats.noAvail} ללא זמינות`,c:"#D97706",bg:"#FFF7ED"},
-                {l:"ביטלו",v:stats.byStatus.declined,sub:"יש לגייס",c:"#DC2626",bg:"#FEF2F2"},
+                {l:"ממתינים",v:stats.byStatus.pending,sub:stats.noAvail+" ללא זמינות",c:"#D97706",bg:"#FFF7ED"},
+                {l:"ביטלו",v:stats.byStatus.declined,sub:"לגייס חלופה",c:"#DC2626",bg:"#FEF2F2"},
               ].map(k=>(
                 <div key={k.l} style={{background:k.bg,borderRadius:10,padding:"12px 14px"}}>
                   <div style={{fontSize:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
@@ -981,48 +976,79 @@ function App() {
               ))}
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            {/* CSS Bar Charts */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:13,marginBottom:13}}>
+              {/* Status chart */}
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
-                <h3 style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:T.text}}>סטטוסים</h3>
-                <ResponsiveContainer width="100%" height={190}>
-                  <PieChart>
-                    <Pie data={Object.entries(stats.byStatus).filter(([,v])=>v>0).map(([k,v])=>({name:STATUS_META[k].label,value:v,key:k}))} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({name,value})=>`${name}:${value}`} fontSize={10}>
-                      {Object.entries(stats.byStatus).filter(([,v])=>v>0).map(([k])=><Cell key={k} fill={STATUS_META[k].dot}/>)}
-                    </Pie>
-                    <Tooltip/>
-                  </PieChart>
-                </ResponsiveContainer>
+                <h3 style={{margin:"0 0 12px",fontSize:13,color:T.text}}>סטטוסים</h3>
+                {Object.entries(STATUS_META).map(([k,m])=>{
+                  const v=stats.byStatus[k]||0;
+                  const pct=stats.total>0?Math.round(v/stats.total*100):0;
+                  return(
+                    <div key={k} style={{marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                        <span style={{fontSize:11,color:T.text,display:"flex",alignItems:"center",gap:5}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:m.dot,display:"inline-block"}}/>
+                          {m.label}
+                        </span>
+                        <span style={{fontSize:11,fontWeight:700,color:m.text}}>{v}</span>
+                      </div>
+                      <div style={{background:T.tablehead,borderRadius:4,height:8}}>
+                        <div style={{background:m.dot,height:8,borderRadius:4,width:pct+"%",transition:"width .5s"}}/>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* By day chart */}
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
-                <h3 style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:T.text}}>שיבוצים לפי יום</h3>
-                <ResponsiveContainer width="100%" height={190}>
-                  <BarChart data={stats.byDay} margin={{top:0,right:8,left:-20,bottom:0}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                    <XAxis dataKey="day" fontSize={10} tick={{fill:T.textMuted}}/>
-                    <YAxis fontSize={10} tick={{fill:T.textMuted}} allowDecimals={false}/>
-                    <Tooltip contentStyle={{background:T.surface,border:`1px solid ${T.border}`,color:T.text}}/>
-                    <Bar dataKey="count" fill={T.accent} radius={[4,4,0,0]} name="נבדקים"/>
-                  </BarChart>
-                </ResponsiveContainer>
+                <h3 style={{margin:"0 0 12px",fontSize:13,color:T.text}}>שיבוצים לפי יום</h3>
+                {stats.byDay.map(({day,count})=>{
+                  const max=Math.max(...stats.byDay.map(d=>d.count),1);
+                  const pct=Math.round(count/max*100);
+                  return(
+                    <div key={day} style={{marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                        <span style={{fontSize:11,color:T.text}}>יום {day}</span>
+                        <span style={{fontSize:11,fontWeight:700,color:T.accent}}>{count}</span>
+                      </div>
+                      <div style={{background:T.tablehead,borderRadius:4,height:8}}>
+                        <div style={{background:T.accent,height:8,borderRadius:4,width:pct+"%",transition:"width .5s"}}/>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+
+            {/* By location + progress */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:13}}>
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
-                <h3 style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:T.text}}>לפי מיקום</h3>
-                <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={stats.byLoc} layout="vertical" margin={{top:0,right:8,left:10,bottom:0}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                    <XAxis type="number" fontSize={10} tick={{fill:T.textMuted}} allowDecimals={false}/>
-                    <YAxis type="category" dataKey="name" fontSize={10} tick={{fill:T.textMuted}} width={45}/>
-                    <Tooltip contentStyle={{background:T.surface,border:`1px solid ${T.border}`,color:T.text}}/>
-                    <Bar dataKey="count" radius={[0,4,4,0]} name="נבדקים">
-                      {stats.byLoc.map((_,i)=><Cell key={i} fill={LOC_COLORS[i%LOC_COLORS.length].chart}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <h3 style={{margin:"0 0 12px",fontSize:13,color:T.text}}>לפי מיקום</h3>
+                {stats.byLocation.map((loc,i)=>{
+                  const max=Math.max(...stats.byLocation.map(l=>l.count),1);
+                  const pct=Math.round(loc.count/max*100);
+                  const c=LOC_COLORS[i%LOC_COLORS.length];
+                  return(
+                    <div key={loc.name} style={{marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                        <span style={{fontSize:11,color:T.text,display:"flex",alignItems:"center",gap:5}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:c.dot,display:"inline-block"}}/>
+                          {loc.name}
+                        </span>
+                        <span style={{fontSize:11,fontWeight:700,color:c.text}}>{loc.count}</span>
+                      </div>
+                      <div style={{background:T.tablehead,borderRadius:4,height:8}}>
+                        <div style={{background:c.dot,height:8,borderRadius:4,width:pct+"%",transition:"width .5s"}}/>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
-                <h3 style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:T.text}}>התקדמות לעבר יעד</h3>
+                <h3 style={{margin:"0 0 12px",fontSize:13,color:T.text}}>התקדמות ({settings.totalTarget})</h3>
                 {[
                   {l:"השלימו",v:stats.byStatus.completed,c:"#059669"},
                   {l:"אישרו",v:stats.byStatus.confirmed,c:"#D97706"},
@@ -1035,7 +1061,7 @@ function App() {
                       <span style={{fontSize:11,fontWeight:700,color:r.c}}>{r.v}/{settings.totalTarget}</span>
                     </div>
                     <div style={{background:T.tablehead,borderRadius:4,height:7}}>
-                      <div style={{background:r.c,height:7,borderRadius:4,width:`${Math.min(100,r.v/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
+                      <div style={{background:r.c,height:7,borderRadius:4,width:Math.min(100,r.v/settings.totalTarget*100)+"%",transition:"width .5s"}}/>
                     </div>
                   </div>
                 ))}
@@ -1044,7 +1070,6 @@ function App() {
           </div>
         )}
 
-        {/* ══ EMAILS ════════════════════════════════════════════════════════════ */}
         {tab==="emails"&&(
           <div>
             <div style={{background:"#FFF7ED",border:"1px solid #FDE68A",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#92400E"}}>
@@ -1251,7 +1276,7 @@ function App() {
               <p>לשיתוף בזמן אמת — ראה מדריך Google Sheets</p>
             </div>
             <div style={{marginTop:16,padding:"8px 14px",background:T.tablehead,borderRadius:8,fontSize:11,color:T.textFaint}}>
-              נבנה עם React + Recharts • {new Date().getFullYear()}
+              נבנה עם React • {new Date().getFullYear()}
             </div>
           </div>
         </ModalShell>
@@ -1450,7 +1475,7 @@ function LocModal({loc,T,onSave,onClose}) {
 }
 
 
-    ReactDOM.render(React.createElement(App), document.getElementById('root'));
+    ReactDOM.render(React.createElement(App), document.getElementById("root"));
   </script>
 </body>
 </html>
