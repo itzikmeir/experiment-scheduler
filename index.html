@@ -729,12 +729,13 @@ function App() {
     let src=participants;
     if(chartFilter.status) src=src.filter(p=>p.status===chartFilter.status);
     if(chartFilter.location) src=src.filter(p=>p.assigned?.locationId===parseInt(chartFilter.location));
-    const byStatus={};Object.keys(statusMeta).forEach(s=>byStatus[s]=0);
-    participants.forEach(p=>byStatus[p.status]=(byStatus[p.status]||0)+1);
-    const byDay=DAYS.map(d=>({day:dayNames[d],count:src.filter(p=>p.assigned?.day===d).length}));
+    const byStatus={pending:0,assigned:0,confirmed:0,completed:0,declined:0};
+    participants.forEach(p=>{if(byStatus[p.status]!==undefined)byStatus[p.status]++;});
+    const dn={"א":"ראשון","ב":"שני","ג":"שלישי","ד":"רביעי","ה":"חמישי","ו":"שישי"};
+    const byDay=DAYS.map(d=>({day:dn[d]||d,count:src.filter(p=>p.assigned?.day===d).length}));
     const byLoc=locations.map(l=>({name:l.name,count:src.filter(p=>p.assigned?.locationId===l.id).length}));
     const byGender=[{name:"גבר",count:src.filter(p=>p.gender==="גבר").length},{name:"אישה",count:src.filter(p=>p.gender==="אישה").length}];
-    return{byStatus,byDay,byLoc,byGender,noAvail:participants.filter(p=>Object.values(p.availability).every(s=>s.length===0)).length,total:participants.length};
+    return{byStatus,byDay,byLoc,byLocation:byLoc,byGender,noAvail:participants.filter(p=>Object.values(p.availability||{}).every(s=>s.length===0)).length,total:participants.length};
   },[participants,locations,chartFilter]);
 
   // ── Email builder ──────────────────────────────────────────────────────────
@@ -812,11 +813,11 @@ function App() {
           {/* CENTER: completed progress */}
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
             <div style={{fontSize:22,fontWeight:900,lineHeight:1,letterSpacing:"-0.5px"}}>
-              {stats.byStatus.completed}<span style={{fontSize:13,opacity:0.6,fontWeight:400}}>/{settings.totalTarget}</span>
+              {(stats.byStatus?.completed||0)}<span style={{fontSize:13,opacity:0.6,fontWeight:400}}>/{settings.totalTarget}</span>
             </div>
             <div style={{fontSize:9,opacity:0.6,letterSpacing:"0.5px",textTransform:"uppercase"}}>{L("completed")}</div>
             <div style={{background:"rgba(255,255,255,0.2)",borderRadius:3,height:3,width:70}}>
-              <div style={{background:"#34D399",height:3,borderRadius:3,width:`${Math.min(100,stats.byStatus.completed/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
+              <div style={{background:"#34D399",height:3,borderRadius:3,width:`${Math.min(100,(stats.byStatus?.completed||0)/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
             </div>
           </div>
 
@@ -861,7 +862,7 @@ function App() {
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"6px 22px"}}>
         <div style={{maxWidth:1500,margin:"0 auto",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
           {/* Stats — completed moved to header, show others here */}
-          {[{l:L("statReg"),v:stats.total,c:T.accent},{l:L("statAssigned"),v:stats.byStatus.assigned,c:"#059669"},{l:L("statConfirmed"),v:stats.byStatus.confirmed,c:"#D97706"},{l:L("statDeclined"),v:stats.byStatus.declined,c:"#DC2626"}].map(s=>(
+          {[{l:L("statReg"),v:stats.total,c:T.accent},{l:L("statAssigned"),v:(stats.byStatus?.assigned||0),c:"#059669"},{l:L("statConfirmed"),v:(stats.byStatus?.confirmed||0),c:"#D97706"},{l:L("statDeclined"),v:(stats.byStatus?.declined||0),c:"#DC2626"}].map(s=>(
             <div key={s.l} style={{textAlign:"center"}}>
               <div style={{fontSize:17,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div>
               <div style={{fontSize:9,color:T.textFaint,marginTop:1}}>{s.l}</div>
@@ -1506,10 +1507,10 @@ function App() {
             {/* KPI Cards */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
               {[
-                {l:"יעד",v:`${stats.byStatus.completed}/${settings.totalTarget}`,sub:`${Math.round(stats.byStatus.completed/settings.totalTarget*100)}%`,c:"#4338CA",bg:"#EEF2FF"},
-                {l:L("statAssigned"),v:stats.byStatus.assigned+stats.byStatus.confirmed+stats.byStatus.completed,sub:"מתוך "+stats.total,c:"#059669",bg:"#ECFDF5"},
-                {l:"ממתינים",v:stats.byStatus.pending,sub:stats.noAvail+" ללא זמינות",c:"#D97706",bg:"#FFF7ED"},
-                {l:L("statDeclined"),v:stats.byStatus.declined,sub:"לגייס חלופה",c:"#DC2626",bg:"#FEF2F2"},
+                {l:"יעד",v:`${(stats.byStatus?.completed||0)}/${settings.totalTarget}`,sub:`${Math.round((stats.byStatus?.completed||0)/settings.totalTarget*100)}%`,c:"#4338CA",bg:"#EEF2FF"},
+                {l:L("statAssigned"),v:(stats.byStatus?.assigned||0)+(stats.byStatus?.confirmed||0)+(stats.byStatus?.completed||0),sub:"מתוך "+stats.total,c:"#059669",bg:"#ECFDF5"},
+                {l:"ממתינים",v:(stats.byStatus?.pending||0),sub:stats.noAvail+" ללא זמינות",c:"#D97706",bg:"#FFF7ED"},
+                {l:L("statDeclined"),v:(stats.byStatus?.declined||0),sub:"לגייס חלופה",c:"#DC2626",bg:"#FEF2F2"},
               ].map(k=>(
                 <div key={k.l} style={{background:k.bg,borderRadius:10,padding:"12px 14px"}}>
                   <div style={{fontSize:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
@@ -1525,7 +1526,7 @@ function App() {
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
                 <h3 style={{margin:"0 0 12px",fontSize:13,color:T.text}}>סטטוסים</h3>
                 {Object.entries(statusMeta).map(([k,m])=>{
-                  const v=stats.byStatus[k]||0;
+                  const v=(stats.byStatus?.[k]||0)||0;
                   const pct=stats.total>0?Math.round(v/stats.total*100):0;
                   return(
                     <div key={k} style={{marginBottom:8}}>
@@ -1547,8 +1548,8 @@ function App() {
               {/* By day chart */}
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
                 <h3 style={{margin:"0 0 12px",fontSize:13,color:T.text}}>שיבוצים לפי יום</h3>
-                {stats.byDay.map(({day,count})=>{
-                  const max=Math.max(...stats.byDay.map(d=>d.count),1);
+                {(stats.byDay||[]).map(({day,count})=>{
+                  const max=Math.max(...(stats.byDay||[]).map(d=>d.count),1);
                   const pct=Math.round(count/max*100);
                   return(
                     <div key={day} style={{marginBottom:8}}>
@@ -1569,8 +1570,8 @@ function App() {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:13}}>
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
                 <h3 style={{margin:"0 0 12px",fontSize:13,color:T.text}}>לפי מיקום</h3>
-                {stats.byLocation.map((loc,i)=>{
-                  const max=Math.max(...stats.byLocation.map(l=>l.count),1);
+                {(stats.byLocation||[]).map((loc,i)=>{
+                  const max=Math.max(...(stats.byLocation||[]).map(l=>l.count),1);
                   const pct=Math.round(loc.count/max*100);
                   const c=LOC_COLORS[i%LOC_COLORS.length];
                   return(
@@ -1593,10 +1594,10 @@ function App() {
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
                 <h3 style={{margin:"0 0 12px",fontSize:13,color:T.text}}>התקדמות ({settings.totalTarget})</h3>
                 {[
-                  {l:L("completed"),v:stats.byStatus.completed,c:"#059669"},
-                  {l:L("statConfirmed"),v:stats.byStatus.confirmed,c:"#D97706"},
-                  {l:L("statAssigned"),v:stats.byStatus.assigned,c:T.accent},
-                  {l:"ממתינים",v:stats.byStatus.pending,c:"#9CA3AF"},
+                  {l:L("completed"),v:(stats.byStatus?.completed||0),c:"#059669"},
+                  {l:L("statConfirmed"),v:(stats.byStatus?.confirmed||0),c:"#D97706"},
+                  {l:L("statAssigned"),v:(stats.byStatus?.assigned||0),c:T.accent},
+                  {l:"ממתינים",v:(stats.byStatus?.pending||0),c:"#9CA3AF"},
                 ].map(r=>(
                   <div key={r.l} style={{marginBottom:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
