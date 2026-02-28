@@ -356,6 +356,7 @@ function App() {
   const [changelog,setChangelog]       = useState(()=>saved?.changelog||[]);
   const [darkMode,setDarkMode]         = useState(()=>saved?.darkMode||false);
   const [lang,setLang]                 = useState(()=>saved?.lang||"he");
+  const [langConfirm,setLangConfirm]     = useState(null); // pending lang to switch to
   const L = (key) => LANG[lang]?.[key] ?? LANG.he[key] ?? key;
   const [history,setHistory] = useState([]);
   const [future,setFuture]   = useState([]);
@@ -420,7 +421,7 @@ function App() {
   const [selected,setSelected]   = useState(new Set());
   const [sortCol,setSortCol]     = useState("name");
   const [sortDir,setSortDir]     = useState("asc");
-  const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[]});
+  const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[]});
   const [colMenu,setColMenu]       = useState(null); // {col, x, y}
   const [rowEmailMenu,setRowEmailMenu] = useState(null); // {pid, x, y}
   const [emailModal,setEmailModal] = useState(null);
@@ -439,6 +440,29 @@ function App() {
 
   // Persist locally
   useEffect(()=>{saveState({participants,locations,settings,changelog,darkMode,lang});},[participants,locations,settings,changelog,darkMode,lang]);
+  
+  // Auto-sync to Sheets every 60s if there are recent changes
+  const lastSyncRef = React.useRef(null);
+  const participantsRef = React.useRef(participants);
+  useEffect(()=>{participantsRef.current=participants;},[participants]);
+  useEffect(()=>{
+    const interval = setInterval(()=>{
+      // Only auto-save if last sync was > 55s ago or never
+      const now = Date.now();
+      if(lastSyncRef.current && now - lastSyncRef.current < 55000) return;
+      if(syncStatus==="syncing") return;
+      setSyncStatus("syncing");
+      gsSaveAll({participants:participantsRef.current,locations,settings,user:settings.currentUser})
+        .then(r=>{
+          if(r?.error) { setSyncStatus("error"); return; }
+          setSyncStatus("ok");
+          setLastSync(new Date());
+          lastSyncRef.current = Date.now();
+        })
+        .catch(()=>setSyncStatus("error"));
+    }, 60000);
+    return ()=>clearInterval(interval);
+  },[]);
   useEffect(()=>{
     document.documentElement.setAttribute("dir", lang==="en"?"ltr":"rtl");
     document.documentElement.setAttribute("lang", lang);
@@ -674,6 +698,7 @@ function App() {
       if(filters.gender.length>0 && !filters.gender.includes(p.gender||"")) return false;
       if(filters.location.length>0 && !filters.location.includes(String(p.assigned?.locationId||""))) return false;
       if(filters.day.length>0 && !filters.day.includes(p.assigned?.day||"")) return false;
+      if(filters.avail&&filters.avail.length>0 && !filters.avail.some(d=>(p.availability||{})[d]?.length>0)) return false;
       if(filters.slot.length>0 && !filters.slot.some(s=>
         (p.assigned?.slot||"").includes(s)||Object.values(p.availability||{}).flat().some(a=>a.includes(s))
       )) return false;
@@ -766,8 +791,8 @@ function App() {
                     {icon:"⚙️",label:L("menuSettings"),action:()=>{setModal("settings");setMenuOpen(false);}},
                     {icon:"🌐",label:lang==="he"?"English":"עברית",action:()=>{
                       const next=lang==="he"?"en":"he";
-                      setLang(next);setMenuOpen(false);
-                      showToast(next==="en"?"🌐 Switched to English — names & availability stay in Hebrew":"🌐 עברה לעברית");
+                      setMenuOpen(false);
+                      setLangConfirm(next);
                     }},
                     {icon:"ℹ️",label:L("menuAbout"),action:()=>{setModal("about");setMenuOpen(false);}},
                   ].map(item=>(
@@ -831,13 +856,6 @@ function App() {
           </div>
         </div>
       </div>
-
-      {/* Language warning */}
-      {lang==="en"&&(
-        <div style={{background:"#FFF7ED",borderBottom:"1px solid #FDE68A",padding:"4px 22px",fontSize:11,color:"#92400E",textAlign:"center"}}>
-          ⚠️ {L("langWarning")}
-        </div>
-      )}
 
       {/* ── Global bar: stats + import/export + user ── */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"6px 22px"}}>
@@ -1129,8 +1147,8 @@ function App() {
               <select value={filters.assigned} onChange={e=>setFilters(f=>({...f,assigned:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
                 <option value="">{L("filterAssigned")}</option><option value="yes">{L("filterYes")}</option><option value="no">{L("filterNo")}</option>
               </select>
-              {(filters.name||filters.assigned||filters.status.length>0||filters.gender.length>0||filters.location.length>0||filters.day.length>0||filters.slot.length>0||filters.locPref.length>0||filters.age.length>0)&&(
-                <button onClick={()=>setFilters({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[]})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{L("clearAll")}</button>
+              {(filters.name||filters.assigned||filters.status.length>0||filters.gender.length>0||filters.location.length>0||filters.day.length>0||filters.slot.length>0||filters.locPref.length>0||filters.age.length>0||filters.avail.length>0)&&(
+                <button onClick={()=>setFilters({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[]})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{L("clearAll")}</button>
               )}
             </div>
 
@@ -1165,7 +1183,10 @@ function App() {
                               <button onClick={e=>{
                                 e.stopPropagation();
                                 const r=e.currentTarget.getBoundingClientRect();
-                                setColMenu(isOpen?null:{col,fkey,options,x:r.left,y:r.bottom+4});
+                                // Use left for LTR, clamp so dropdown doesn't go off-screen right
+                                const dropW=190;
+                                const bestLeft=Math.min(r.left, window.innerWidth-dropW-8);
+                                setColMenu(isOpen?null:{col,fkey,options,left:Math.max(4,bestLeft),y:r.bottom+4});
                               }} style={{
                                 background:selected_vals.length>0?"#4338CA":T.surface,
                                 color:selected_vals.length>0?"white":T.textMuted,
@@ -1177,7 +1198,7 @@ function App() {
                         );
                       };
                       const slotOpts=[{v:"בוקר (08:00-12:00)",l:L("slotMorning")},{v:"צהריים (12:00-18:00)",l:L("slotAfternoon")}];
-                      const dayOpts=DAYS.map(d=>({v:d,l:`יום ${dayNames[d]}`}));
+                      const dayOpts=DAYS.map(d=>({v:d,l:lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:d}));
                       const locOpts=locations.map(l=>({v:String(l.id),l:l.name}));
                       const statusOpts=Object.entries(statusMeta).map(([v,m])=>({v,l:m.label}));
                       const genderOpts=[{v:"גבר",l:L("genderM")},{v:"אישה",l:L("genderF")},{v:"אחר",l:L("genderO")}];
@@ -1185,15 +1206,18 @@ function App() {
                       const ageOpts=[...new Set(participants.map(p=>String(p.age||"")).filter(Boolean))].sort((a,b)=>parseInt(a)-parseInt(b)).map(v=>({v,l:v}));
                       const availOpts=[...new Set(participants.flatMap(p=>Object.entries(p.availability||{}).filter(([,s])=>s.length>0).map(([d,])=>`יום ${dayNames[d]||d}`)))].sort().map(v=>({v:v.replace("יום ",""),l:v}));
                       return (<>
-                        <ExcelTh col="age"     label="גיל"         fkey="age"     options={ageOpts}/>
-                        <ExcelTh col="gender"  label="מגדר"        fkey="gender"  options={genderOpts}/>
-                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colAvail")}</th>
-                        <ExcelTh col="assigned_day"  label="יום"   fkey="day"     options={dayOpts}/>
-                        <ExcelTh col="assigned_slot" label="משמרת" fkey="slot"    options={slotOpts}/>
-                        <ExcelTh col="assigned_loc"  label="מיקום" fkey="location" options={locOpts}/>
+                        <ExcelTh col="age"     label={L("colAge")}         fkey="age"     options={ageOpts}/>
+                        <ExcelTh col="gender"  label={L("colGender")}        fkey="gender"  options={genderOpts}/>
+                        (()=>{
+                          const availDayOpts = DAYS.map(d=>({v:d, l:lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:d}));
+                          return <ExcelTh col="avail" label={L("colAvail")} fkey="avail" options={availDayOpts}/>;
+                        })()
+                        <ExcelTh col="assigned_day"  label={L("colDay")}   fkey="day"     options={dayOpts}/>
+                        <ExcelTh col="assigned_slot" label={L("colSlot")} fkey="slot"    options={slotOpts}/>
+                        <ExcelTh col="assigned_loc"  label={L("colLocation")} fkey="location" options={locOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colRoom")}</th>
-                        <ExcelTh col="status"  label="סטטוס"       fkey="status"  options={statusOpts}/>
-                        <ExcelTh col="locPref" label="העדפת מיקום" fkey="locPref" options={locPrefOpts}/>
+                        <ExcelTh col="status"  label={L("colStatus")}       fkey="status"  options={statusOpts}/>
+                        <ExcelTh col="locPref" label={L("colLocPref")} fkey="locPref" options={locPrefOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colNotes")}</th>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colActions")}</th>
                       </>);
@@ -1319,7 +1343,7 @@ function App() {
                             {p.email&&(
                               <button title={lang==="en"?"Send email":"שלח מייל"} onClick={e=>{
                                 const r=e.currentTarget.getBoundingClientRect();
-                                setRowEmailMenu(rowEmailMenu?.pid===p.id?null:{pid:p.id,x:r.left,y:r.bottom+4,p});
+                                setRowEmailMenu(rowEmailMenu?.pid===p.id?null:{pid:p.id,x:r.left,right:window.innerWidth-r.right,y:r.bottom+4,p});
                               }} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer",fontWeight:700}}>
                                 ✉️▾
                               </button>
@@ -1988,7 +2012,7 @@ function App() {
       {rowEmailMenu&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setRowEmailMenu(null)}/>
-          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",[lang==="en"?"left":"right"]:rowEmailMenu.x,top:rowEmailMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",[lang==="en"?"left":"right"]:lang==="en"?rowEmailMenu.x:rowEmailMenu.right,top:rowEmailMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
             {(()=>{
               const p=rowEmailMenu.p;
               const opts=[
@@ -2022,22 +2046,24 @@ function App() {
       {colMenu&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setColMenu(null)}/>
-          <div style={{position:"fixed",[lang==="en"?"left":"right"]:colMenu.x,top:colMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:180,maxHeight:320,overflowY:"auto",padding:"6px 0"}} onClick={e=>e.stopPropagation()}>
-            <div style={{padding:"6px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:6}}>
-              <button onClick={()=>{toggleSort(colMenu.col);}} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="asc"?800:400}}>
-                ↑ סדר עולה
-              </button>
-              <button onClick={()=>{if(sortCol===colMenu.col)setSortDir("desc");else{setSortCol(colMenu.col);setSortDir("desc");}}} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="desc"?800:400}}>
-                ↓ סדר יורד
-              </button>
-            </div>
+          <div style={{position:"fixed",left:colMenu.left,top:colMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:190,maxHeight:340,overflowY:"auto",padding:"6px 0"}} onClick={e=>e.stopPropagation()}>
+            {colMenu.col!=="avail"&&(
+              <div style={{padding:"6px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:6}}>
+                <button onClick={()=>toggleSort(colMenu.col)} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="asc"?800:400}}>
+                  {L("sortAsc")}
+                </button>
+                <button onClick={()=>{if(sortCol===colMenu.col)setSortDir("desc");else{setSortCol(colMenu.col);setSortDir("desc");}}} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="desc"?800:400}}>
+                  {L("sortDesc")}
+                </button>
+              </div>
+            )}
             <div style={{padding:"5px 12px",borderBottom:`1px solid ${T.border}`}}>
               <label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12,color:T.text}}>
                 <input type="checkbox"
                   checked={(filters[colMenu.fkey]||[]).length===0}
                   onChange={()=>setFilters(f=>({...f,[colMenu.fkey]:[]}))}
                   style={{cursor:"pointer"}}/>
-                <strong>הכל</strong>
+                <strong>{L("filterAll")}</strong>
               </label>
             </div>
             {colMenu.options.map(opt=>{
@@ -2052,7 +2078,7 @@ function App() {
                       });
                     }} style={{cursor:"pointer"}}/>
                     {opt.l}
-                    <span style={{marginRight:"auto",fontSize:10,color:T.textFaint}}>
+                    <span style={{marginInlineStart:"auto",fontSize:10,color:T.textFaint}}>
                       ({participants.filter(p=>{
                         const fkey=colMenu.fkey;
                         if(fkey==="status") return p.status===opt.v;
@@ -2062,6 +2088,7 @@ function App() {
                         if(fkey==="slot") return (p.assigned?.slot||"").includes(opt.v)||Object.values(p.availability||{}).flat().some(a=>a.includes(opt.v));
                         if(fkey==="locPref") return (p.locPref||[]).map(String).includes(opt.v);
                         if(fkey==="age") return String(p.age||"")===opt.v;
+                        if(fkey==="avail") return (p.availability||{})[opt.v]?.length>0;
                         return false;
                       }).length})
                     </span>
@@ -2072,12 +2099,38 @@ function App() {
             {(filters[colMenu.fkey]||[]).length>0&&(
               <div style={{padding:"6px 12px",borderTop:`1px solid ${T.border}`,marginTop:4}}>
                 <button onClick={()=>setFilters(f=>({...f,[colMenu.fkey]:[]}))} style={{width:"100%",background:"#FEF2F2",color:"#DC2626",border:"none",borderRadius:5,padding:"5px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
-                  ✕ נקה סינון עמודה
+                  {L("clearColFilter")}
                 </button>
               </div>
             )}
           </div>
         </>
+      )}
+
+      {/* Language switch confirmation */}
+      {langConfirm&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:3100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"white",borderRadius:14,padding:28,maxWidth:380,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.3)",textAlign:"center",fontFamily:"Arial,sans-serif"}}>
+            <div style={{fontSize:36,marginBottom:12}}>🌐</div>
+            <h3 style={{margin:"0 0 10px",fontSize:17,fontWeight:800,color:"#1E1B4B"}}>
+              {langConfirm==="en"?"Switch to English?":"לעבור לעברית?"}
+            </h3>
+            <p style={{fontSize:13,color:"#6B7280",margin:"0 0 20px",lineHeight:1.6}}>
+              {langConfirm==="en"
+                ? "The app interface will switch to English (LTR layout).
+Note: participant names, availability, and location names will remain in Hebrew as they are stored data."
+                : "ממשק האפליקציה יעבור לעברית (פריסת RTL)."}
+            </p>
+            <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+              <button onClick={()=>setLangConfirm(null)} style={{padding:"9px 22px",borderRadius:8,border:"1px solid #D1D5DB",background:"white",cursor:"pointer",fontSize:13,fontWeight:600,color:"#374151",fontFamily:"Arial,sans-serif"}}>
+                {langConfirm==="en"?"Cancel":"ביטול"}
+              </button>
+              <button onClick={()=>{setLang(langConfirm);setLangConfirm(null);showToast(langConfirm==="en"?"🌐 Switched to English":"🌐 עברית");}} style={{padding:"9px 22px",borderRadius:8,border:"none",background:"#4338CA",color:"white",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"Arial,sans-serif"}}>
+                {langConfirm==="en"?"Switch to English ✓":"עבור לעברית ✓"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {toast&&<div style={{position:"fixed",bottom:20,right:22,background:toast.type==="error"?"#DC2626":"#1E1B4B",color:"white",padding:"10px 16px",borderRadius:8,fontSize:13,fontWeight:600,zIndex:3000,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",animation:"slideUp .25s ease"}}>{toast.msg}</div>}
