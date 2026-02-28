@@ -8,6 +8,9 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: "Segoe UI", "Arial Hebrew", Arial, sans-serif; }
     #loading { display:flex;align-items:center;justify-content:center;height:100vh;font-size:18px;color:#4338CA; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
   </style>
   <script src="https://unpkg.com/react@17.0.2/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@17.0.2/umd/react-dom.production.min.js"></script>
@@ -96,13 +99,13 @@ const THEME = {
   light: {
     bg:"#F7F8FC", surface:"#FFFFFF", border:"#E5E7EB", text:"#1A1D2E",
     textMuted:"#6B7280", textFaint:"#9CA3AF", headerBg:"linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)",
-    rowEven:"#FFFFFF", rowOdd:"#FAFAFA", rowSel:"#F5F3FF", inputBg:"#FFFFFF",
+    rowEven:"#FFFFFF", rowOdd:"#F3F4FA", rowSel:"#EDE9FE", inputBg:"#FFFFFF",
     tablehead:"#F8F9FF", accent:"#4338CA",
   },
   dark: {
     bg:"#0F1117", surface:"#1E2130", border:"#2D3148", text:"#E8EAFF",
     textMuted:"#8B92C0", textFaint:"#555D85", headerBg:"linear-gradient(135deg,#0A0820,#13103A,#1D1880)",
-    rowEven:"#1E2130", rowOdd:"#181C2B", rowSel:"#252A45", inputBg:"#252A45",
+    rowEven:"#1E2130", rowOdd:"#161929", rowSel:"#252A45", inputBg:"#252A45",
     tablehead:"#181C2B", accent:"#7C82FF",
   }
 };
@@ -240,6 +243,7 @@ function App() {
 
   // ── Sync state ────────────────────────────────────────────────────────────
   const [syncStatus,setSyncStatus] = useState("idle"); // idle | syncing | ok | error
+  const [importStatus,setImportStatus] = useState(null); // null | {state:"loading"|"ok"|"error", msg:string}
   const [syncMsg,setSyncMsg]       = useState("");
   const [lastSync,setLastSync]     = useState(null);
   const syncTimerRef               = useRef(null);
@@ -386,36 +390,37 @@ function App() {
 
   // ── CSV import ─────────────────────────────────────────────────────────────
   function handleFile(file) {
+    setImportStatus({state:"loading", msg:"קורא את הקובץ..."});
     const reader=new FileReader();
     reader.onload=e=>{
-      const rows=parseCSVRows(e.target.result);
-      let nextId=newId(participants);
-      const toAdd=[], toUpdate=[], skipped=[];
-      rows.forEach(row=>{
-        const p=parseRow(row,nextId++);
-        if(!p.name) return;
-        const dup=participants.find(ex=>dupReason(p,ex));
-        if(dup) {
-          // Auto-merge: update availability and contact info but keep assignment/status
-          toUpdate.push({id:dup.id, patch:{
-            availability:p.availability,
-            email:p.email||dup.email,
-            phone:p.phone||dup.phone,
-            age:p.age||dup.age,
-            gender:p.gender||dup.gender,
-          }});
-          skipped.push(p.name);
+      try {
+        const rows=parseCSVRows(e.target.result);
+        let nextId=newId(participants);
+        const newOnes=[], conflicts=[];
+        rows.forEach(row=>{
+          const p=parseRow(row,nextId++);
+          if(!p.name) return;
+          const dups=participants.filter(ex=>dupReason(p,ex));
+          if(dups.length>0) conflicts.push({incoming:p, existing:dups, reason:dupReason(p,dups[0])});
+          else newOnes.push(p);
+        });
+        setImportStatus(null);
+        if(conflicts.length>0) {
+          setDupModal({conflicts, index:0, newOnes, resolved:[]});
         } else {
-          toAdd.push(p);
+          setParticipants(prev=>[...prev,...newOnes]);
+          addLog("יבוא CSV",`יובאו ${newOnes.length} משתתפים`);
+          setImportStatus({state:"ok", msg:`✅ יובאו ${newOnes.length} משתתפים`});
+          setTimeout(()=>setImportStatus(null),4000);
         }
-      });
-      setParticipants(prev=>{
-        let updated=[...prev];
-        toUpdate.forEach(({id,patch})=>{updated=updated.map(p=>p.id===id?{...p,...patch}:p);});
-        return [...updated,...toAdd];
-      });
-      addLog("יבוא CSV",`נוספו ${toAdd.length}, עודכנו ${toUpdate.length}`);
-      showToast(`✅ נוספו ${toAdd.length} חדשים, עודכנו ${toUpdate.length}`);
+      } catch(err) {
+        setImportStatus({state:"error", msg:`שגיאה: ${err.message}`});
+        setTimeout(()=>setImportStatus(null),5000);
+      }
+    };
+    reader.onerror=()=>{
+      setImportStatus({state:"error", msg:"שגיאה בקריאת הקובץ"});
+      setTimeout(()=>setImportStatus(null),5000);
     };
     reader.readAsText(file,"UTF-8");
   }
@@ -430,8 +435,12 @@ function App() {
     const toAdd=[...newOnes,...newR.filter(r=>r.action==="add").map(r=>r.p)];
     setParticipants(prev=>[...prev,...toAdd]);
     setDupModal(null);
-    addLog("יבוא CSV",`יובאו ${toAdd.length}, מוזגו ${newR.filter(r=>r.action==="merge").length}`);
-    showToast(`✅ ${toAdd.length} נוספו`);
+    const merged=newR.filter(r=>r.action==="merge").length;
+    const replaced=newR.filter(r=>r.action==="replace").length;
+    const skipped=newR.filter(r=>r.action==="skip").length;
+    addLog("יבוא CSV",`נוספו ${toAdd.length}, מוזגו ${merged}, הוחלפו ${replaced}`);
+    setImportStatus({state:"ok", msg:`✅ נוספו ${toAdd.length} | מוזגו ${merged} | הוחלפו ${replaced} | דולגו ${skipped}`});
+    setTimeout(()=>setImportStatus(null),5000);
   }
 
   // ── Export ─────────────────────────────────────────────────────────────────
@@ -639,26 +648,60 @@ function App() {
                 </div>
               )}
             </div>
-            <button onClick={()=>fileRef.current?.click()} style={{background:T.accent,color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>📂 יבוא CSV</button>
-            <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{handleFile(e.target.files[0]);e.target.value="";}}/>
-            <button onClick={()=>{
-              setSyncStatus("syncing");
-              fetch(`${GS_URL}?action=importFromForm`)
-                .then(r=>r.json())
-                .then(d=>{
-                  if(d.error) throw new Error(d.error);
-                  showToast(`✅ נוספו ${d.added}, עודכנו ${d.updated} מהטופס`);
-                  // Reload all data from sheets
-                  return fetch(`${GS_URL}?action=getAll`).then(r=>r.json());
-                })
-                .then(data=>{
-                  if(data.participants?.length) setParticipants(data.participants);
-                  setSyncStatus("ok"); setLastSync(new Date());
-                })
-                .catch(e=>{setSyncStatus("error");showToast("שגיאה: "+e.message,"error");});
-            }} style={{background:"#059669",color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>
-              📋 יבוא מ-Sheets
-            </button>          </div>
+            {/* Import buttons + status indicator */}
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <button onClick={()=>fileRef.current?.click()}
+                disabled={importStatus?.state==="loading"}
+                style={{background:T.accent,color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",opacity:importStatus?.state==="loading"?0.6:1}}>
+                📂 יבוא CSV
+              </button>
+              <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{handleFile(e.target.files[0]);e.target.value="";}}/>
+              <button onClick={()=>{
+                setImportStatus({state:"loading", msg:"מייבא מ-Google Sheets..."});
+                fetch(`${GS_URL}?action=importFromForm`)
+                  .then(r=>r.json())
+                  .then(d=>{
+                    if(d.error) throw new Error(d.error);
+                    return fetch(`${GS_URL}?action=getAll`).then(r=>r.json()).then(data=>{
+                      if(data.participants?.length) setParticipants(data.participants);
+                      setSyncStatus("ok"); setLastSync(new Date());
+                      setImportStatus({state:"ok", msg:`✅ נוספו ${d.added}, עודכנו ${d.updated}`});
+                      setTimeout(()=>setImportStatus(null),4000);
+                    });
+                  })
+                  .catch(e=>{
+                    setImportStatus({state:"error", msg:`שגיאה: ${e.message}`});
+                    setTimeout(()=>setImportStatus(null),5000);
+                  });
+              }}
+                disabled={importStatus?.state==="loading"}
+                style={{background:"#059669",color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",opacity:importStatus?.state==="loading"?0.6:1}}>
+                📋 יבוא מ-Sheets
+              </button>
+
+              {/* Import status indicator */}
+              {importStatus&&(
+                <div style={{
+                  display:"flex",alignItems:"center",gap:7,
+                  padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:600,
+                  background:importStatus.state==="loading"?"#EEF2FF":importStatus.state==="ok"?"#ECFDF5":"#FEF2F2",
+                  color:importStatus.state==="loading"?"#4338CA":importStatus.state==="ok"?"#059669":"#DC2626",
+                  border:`1px solid ${importStatus.state==="loading"?"#C7D4FF":importStatus.state==="ok"?"#A7F3D0":"#FECACA"}`,
+                  transition:"all .3s",
+                }}>
+                  {importStatus.state==="loading"&&(
+                    <span style={{
+                      display:"inline-block",width:13,height:13,border:"2px solid #C7D4FF",
+                      borderTopColor:"#4338CA",borderRadius:"50%",
+                      animation:"spin .7s linear infinite",flexShrink:0
+                    }}/>
+                  )}
+                  {importStatus.state==="ok"&&<span>✅</span>}
+                  {importStatus.state==="error"&&<span>⚠️</span>}
+                  <span>{importStatus.msg}</span>
+                </div>
+              )}
+            </div>          </div>
         </div>
       </div>
 
@@ -1405,26 +1448,115 @@ function App() {
 
       {/* Duplicate resolution */}
       {dupModal&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          <div style={{background:T.surface,borderRadius:13,padding:22,maxWidth:480,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.3)"}}>
-            <h3 style={{margin:"0 0 5px",fontSize:14,color:T.text}}>⚠️ כפול — {dupModal.index+1}/{dupModal.conflicts.length}</h3>
-            {(()=>{const{incoming,existing,reason}=dupModal.conflicts[dupModal.index];return(<>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,margin:"12px 0"}}>
-                {[{l:"📥 נכנס",p:incoming,bg:"#EEF2FF"},{l:"✅ קיים",p:existing[0],bg:"#F0FDF4"}].map(({l,p,bg})=>(
-                  <div key={l} style={{background:bg,borderRadius:7,padding:10}}>
-                    <div style={{fontSize:9,fontWeight:700,marginBottom:4,color:"#6B7280"}}>{l}</div>
-                    <div style={{fontSize:12,fontWeight:700}}>{p.name}</div>
-                    <div style={{fontSize:10,color:"#6B7280"}}>{p.email}</div>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:T.surface,borderRadius:16,padding:24,maxWidth:600,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.35)",maxHeight:"90vh",overflowY:"auto"}}>
+            
+            {/* Header */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div>
+                <h3 style={{margin:0,fontSize:16,color:T.text}}>⚠️ נמצא כפול</h3>
+                <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>
+                  {dupModal.index+1} מתוך {dupModal.conflicts.length} קונפליקטים
+                </div>
+              </div>
+              <div style={{display:"flex",gap:4}}>
+                {dupModal.conflicts.map((_,i)=>(
+                  <div key={i} style={{width:8,height:8,borderRadius:"50%",background:i===dupModal.index?T.accent:T.border}}/>
+                ))}
+              </div>
+            </div>
+
+            {(()=>{
+              const {incoming, existing, reason} = dupModal.conflicts[dupModal.index];
+              const ex = existing[0];
+              
+              // Field-by-field comparison
+              const fields = [
+                {label:"שם",        a:incoming.name,  b:ex.name},
+                {label:"אימייל",    a:incoming.email, b:ex.email},
+                {label:"טלפון",     a:incoming.phone, b:ex.phone},
+                {label:"גיל",       a:incoming.age,   b:ex.age},
+                {label:"מגדר",      a:incoming.gender,b:ex.gender},
+                {label:"נוסף",      a:incoming.importedAt?tsToStr(incoming.importedAt):"",b:ex.importedAt?tsToStr(ex.importedAt):""},
+                {label:"סטטוס",     a:"",             b:STATUS_META[ex.status]?.label||ex.status},
+                {label:"שיבוץ",     a:"",             b:ex.assigned?`יום ${DAY_NAMES[ex.assigned.day]} ${ex.assigned.slot?.includes("בוקר")?"בוקר":"צהריים"}`:"אין"},
+              ];
+
+              return (
+                <>
+                  {/* Match reason badge */}
+                  <div style={{background:"#FFF7ED",border:"1px solid #FDE68A",borderRadius:6,padding:"5px 10px",fontSize:11,color:"#92400E",marginBottom:14,display:"inline-flex",alignItems:"center",gap:5}}>
+                    <span>🔍</span> זוהה כפול לפי: <strong>{reason}</strong>
                   </div>
-                ))}
-              </div>
-              <div style={{background:"#FFF7ED",border:"1px solid #FDE68A",borderRadius:5,padding:"5px 9px",fontSize:11,color:"#92400E",marginBottom:10}}>זוהה לפי: <strong>{reason}</strong></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-                {[{a:"skip",l:"⏭ דלג"},{a:"merge",l:"🔀 מזג"},{a:"replace",l:"🔁 החלף"},{a:"add",l:"➕ הוסף"}].map(b=>(
-                  <button key={b.a} onClick={()=>resolveDup(b.a)} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>{b.l}</button>
-                ))}
-              </div>
-            </>);})()}
+
+                  {/* Side-by-side comparison */}
+                  <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr",gap:1,borderRadius:8,overflow:"hidden",border:`1px solid ${T.border}`,marginBottom:16,fontSize:12}}>
+                    {/* Header row */}
+                    <div style={{background:T.tablehead,padding:"7px 10px",fontWeight:700,fontSize:11,color:T.textMuted}}></div>
+                    <div style={{background:"#EEF2FF",padding:"7px 10px",fontWeight:700,color:"#4338CA",textAlign:"center"}}>📥 מהקובץ (חדש)</div>
+                    <div style={{background:"#F0FDF4",padding:"7px 10px",fontWeight:700,color:"#059669",textAlign:"center"}}>✅ במערכת (קיים)</div>
+                    
+                    {fields.map(({label,a,b})=>{
+                      const diff = a && b && a!==b;
+                      return (
+                        <React.Fragment key={label}>
+                          <div style={{background:T.tablehead,padding:"6px 10px",fontWeight:600,color:T.textMuted,fontSize:11,display:"flex",alignItems:"center"}}>{label}</div>
+                          <div style={{background:diff?"#FEF3C7":"#EEF2FF22",padding:"6px 10px",color:T.text,borderTop:`1px solid ${T.border}22`}}>{a||<span style={{color:T.textFaint}}>—</span>}</div>
+                          <div style={{background:diff?"#FEF3C7":"#F0FDF422",padding:"6px 10px",color:T.text,borderTop:`1px solid ${T.border}22`}}>{b||<span style={{color:T.textFaint}}>—</span>}</div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    {[
+                      {a:"skip",    icon:"⏭", label:"דלג — אל תשנה כלום",      desc:"שמור את הקיים, התעלם מהחדש",    color:"#6B7280", bg:T.tablehead},
+                      {a:"merge",   icon:"🔀", label:"מזג — שמור שיבוץ וסטטוס", desc:"עדכן זמינות ופרטים, שמור שיבוץ", color:"#D97706", bg:"#FFF7ED"},
+                      {a:"replace", icon:"🔁", label:"החלף — הכל מהקובץ",        desc:"מחק קיים, שים חדש במקומו",       color:"#DC2626", bg:"#FEF2F2"},
+                      {a:"add",     icon:"➕", label:"הוסף — כנסיון נפרד",       desc:"שמור את שניהם",                  color:"#059669", bg:"#F0FDF4"},
+                    ].map(b=>(
+                      <button key={b.a} onClick={()=>resolveDup(b.a)} style={{
+                        background:b.bg, color:b.color, border:`1.5px solid ${b.color}33`,
+                        padding:"10px 12px", borderRadius:9, cursor:"pointer",
+                        fontFamily:"inherit", textAlign:"right",
+                      }}>
+                        <div style={{fontSize:13,fontWeight:700}}>{b.icon} {b.label}</div>
+                        <div style={{fontSize:10,opacity:0.75,marginTop:2}}>{b.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Apply to all */}
+                  {dupModal.conflicts.length > 1 && (
+                    <div style={{marginTop:12,display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap"}}>
+                      <span style={{fontSize:11,color:T.textMuted,alignSelf:"center"}}>החל על כל הכפולים:</span>
+                      {["skip","merge","replace"].map(a=>(
+                        <button key={a} onClick={()=>{
+                          const actions={skip:"⏭ דלג",merge:"🔀 מזג",replace:"🔁 החלף"};
+                          const conflicts=dupModal.conflicts;
+                          const resolved=[];
+                          let updatedParts=[...participants];
+                          conflicts.forEach(({incoming,existing})=>{
+                            resolved.push({action:a,name:incoming.name,p:incoming});
+                            if(a==="replace") updatedParts=updatedParts.map(p=>p.id===existing[0].id?{...incoming,id:p.id}:p);
+                            else if(a==="merge") updatedParts=updatedParts.map(p=>p.id===existing[0].id?{...p,availability:incoming.availability,email:incoming.email||p.email,phone:incoming.phone||p.phone}:p);
+                          });
+                          const toAdd=[...dupModal.newOnes];
+                          setParticipants([...updatedParts,...toAdd]);
+                          setDupModal(null);
+                          addLog("יבוא CSV",`הוחל "${a}" על ${conflicts.length} כפולים`);
+                          setImportStatus({state:"ok",msg:`✅ טופל — ${toAdd.length} נוספו, ${conflicts.length} כפולים`});
+                          setTimeout(()=>setImportStatus(null),4000);
+                        }} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"4px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
+                          {{skip:"⏭ דלג לכולם",merge:"🔀 מזג הכל",replace:"🔁 החלף הכל"}[a]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
