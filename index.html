@@ -1622,7 +1622,7 @@ function App() {
             {/* ── Manual broadcast composer ── */}
             <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:16,marginBottom:16}}>
               <h3 style={{margin:"0 0 10px",fontSize:13,color:T.text}}>✍️ הודעה חופשית לנבדקים</h3>
-              <ManualEmailComposer participants={participants} T={T} sendViaGmail={sendViaGmail} GS_URL={GS_URL}/>
+              <ManualEmailComposer participants={participants} T={T} sendViaGmail={sendViaGmail} GS_URL={GS_URL} L={L} lang={lang}/>
             </div>
 
             {/* ── Thank you to completed ── */}
@@ -2139,7 +2139,9 @@ function App() {
 }
 
 // ── Modal shell ───────────────────────────────────────────────────────────────
-function ManualEmailComposer({participants, T, sendViaGmail, GS_URL}) {
+function ManualEmailComposer({participants, T, sendViaGmail, GS_URL, L, lang}) {
+  if(!L) L=(k)=>k;
+  if(!lang) lang="he";
   const [subject, setSubject] = React.useState("");
   const [body, setBody] = React.useState("");
   const [targets, setTargets] = React.useState("all"); // "all" | "assigned" | "selected"
