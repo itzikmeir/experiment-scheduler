@@ -553,12 +553,13 @@ function App() {
     <div dir="rtl" style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);}}>
 
       {/* ── Header ── */}
-      <div style={{background:T.headerBg,padding:"14px 22px",color:"white",position:"sticky",top:0,zIndex:50,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
+      <div style={{background:T.headerBg,padding:"8px 22px",color:"white",position:"sticky",top:0,zIndex:50,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
         <div style={{maxWidth:1500,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:14}}>
-            {/* Hamburger menu */}
+
+          {/* LEFT: Hamburger + title */}
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{position:"relative"}}>
-              <button onClick={e=>{e.stopPropagation();setMenuOpen(v=>!v);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:8,padding:"7px 10px",cursor:"pointer",fontSize:18,lineHeight:1}}>☰</button>
+              <button onClick={e=>{e.stopPropagation();setMenuOpen(v=>!v);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:7,padding:"5px 9px",cursor:"pointer",fontSize:16,lineHeight:1}}>☰</button>
               {menuOpen&&(
                 <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 12px 40px rgba(0,0,0,0.2)",zIndex:200,minWidth:200,overflow:"hidden"}}>
                   {[
@@ -577,86 +578,70 @@ function App() {
               )}
             </div>
             <div>
-              <h1 style={{margin:0,fontSize:18,fontWeight:800}}>{APP_NAME}</h1>
-              <p style={{margin:0,opacity:0.6,fontSize:11}}>{settings.experimentName}</p>
+              <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1}}>{APP_NAME}</h1>
+              <p style={{margin:0,opacity:0.55,fontSize:10,marginTop:2}}>{settings.experimentName}</p>
             </div>
           </div>
 
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            {/* Location legend */}
-            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {locations.map((loc,i)=>{const c=LOC_COLORS[i%LOC_COLORS.length];return(
-                <span key={loc.id} style={{background:"rgba(255,255,255,0.13)",borderRadius:20,padding:"3px 9px",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{width:7,height:7,borderRadius:"50%",background:c.dot,display:"inline-block"}}/>
-                  {loc.name}
-                </span>);
-              })}
+          {/* CENTER: completed progress */}
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+            <div style={{fontSize:22,fontWeight:900,lineHeight:1,letterSpacing:"-0.5px"}}>
+              {stats.byStatus.completed}<span style={{fontSize:13,opacity:0.6,fontWeight:400}}>/{settings.totalTarget}</span>
             </div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
-              {/* Sheets sync bar */}
-              <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,0.1)",borderRadius:7,padding:"4px 8px",flexWrap:"wrap",justifyContent:"flex-end"}}>
-                {/* Status dot */}
-                <span style={{fontSize:11}}>
-                  {syncStatus==="syncing"&&<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>}
-                  {syncStatus==="ok"&&"☁️"}
-                  {(syncStatus==="error"||syncStatus==="idle")&&"💾"}
-                </span>
-                <span style={{fontSize:10,color:"rgba(255,255,255,0.85)",fontWeight:600}}>
-                  {syncStatus==="ok"?`Sheets${lastSync?" "+lastSync.getHours()+":"+String(lastSync.getMinutes()).padStart(2,"0"):""}`:syncStatus==="syncing"?"...":"מקומי"}
-                </span>
-                {/* Reload from Sheets */}
-                <button title="טען מחדש מ-Sheets" onClick={()=>{
-                  setSyncStatus("syncing");setSyncMsg("טוען...");
-                  gsGetAll().then(data=>{
-                    if(data.error) throw new Error(data.error);
-                    if(data.participants?.length) setParticipants(data.participants);
-                    if(data.locations?.length)    setLocations(data.locations);
-                    if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
-                    setSyncStatus("ok");setSyncMsg("טעון");setLastSync(new Date());
-                    showToast("✅ נטען מ-Sheets");
-                  }).catch(e=>{setSyncStatus("error");showToast("שגיאה: "+e.message,"error");});
-                }} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",color:"white",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
-                  ↻ טען
-                </button>
-                {/* Explicit save to Sheets — only on demand */}
-                <button title="שמור כל הנתונים ל-Sheets" onClick={()=>{
-                  if(!window.confirm("זה ישכתב את כל נתוני ה-Sheets עם המצב הנוכחי. להמשיך?")) return;
-                  setSyncStatus("syncing");setSyncMsg("שומר...");
-                  gsSaveAll({participants,locations,settings,user:settings.currentUser})
-                    .then(r=>{
-                      if(r.error) throw new Error(r.error);
-                      setSyncStatus("ok");setSyncMsg("נשמר");setLastSync(new Date());
-                      showToast("✅ נשמר ל-Sheets");
-                    })
-                    .catch(e=>{setSyncStatus("error");showToast("שגיאת שמירה: "+e.message,"error");});
-                }} style={{background:"rgba(255,255,255,0.9)",border:"none",color:"#4338CA",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:800}}>
-                  💾 שמור
-                </button>
-              </div>
-              {/* Progress pill */}
-              <div style={{background:"rgba(255,255,255,0.12)",borderRadius:9,padding:"6px 13px",textAlign:"center"}}>
-                <div style={{fontSize:19,fontWeight:900,lineHeight:1}}>{stats.byStatus.completed}/{settings.totalTarget}</div>
-                <div style={{fontSize:9,opacity:0.65,marginTop:1}}>השלימו</div>
-                <div style={{marginTop:3,background:"rgba(255,255,255,0.2)",borderRadius:3,height:4,width:80}}>
-                  <div style={{background:"#34D399",height:4,borderRadius:3,width:`${Math.min(100,stats.byStatus.completed/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
-                </div>
-              </div>
+            <div style={{fontSize:9,opacity:0.6,letterSpacing:"0.5px",textTransform:"uppercase"}}>השלימו</div>
+            <div style={{background:"rgba(255,255,255,0.2)",borderRadius:3,height:3,width:70}}>
+              <div style={{background:"#34D399",height:3,borderRadius:3,width:`${Math.min(100,stats.byStatus.completed/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
             </div>
+          </div>
+
+          {/* RIGHT: sync controls */}
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
+            <span style={{fontSize:10,color:"rgba(255,255,255,0.7)"}}>
+              {syncStatus==="syncing"&&<span style={{display:"inline-block",width:8,height:8,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",marginLeft:3}}/>}
+              {syncStatus==="ok"&&`☁️ ${lastSync?lastSync.getHours()+":"+String(lastSync.getMinutes()).padStart(2,"0"):"Sheets"}`}
+              {(syncStatus==="error"||syncStatus==="idle")&&"💾 מקומי"}
+            </span>
+            <button title="טען מחדש מ-Sheets" onClick={()=>{
+              setSyncStatus("syncing");
+              gsGetAll().then(data=>{
+                if(data.error) throw new Error(data.error);
+                if(data.participants?.length) setParticipants(data.participants);
+                if(data.locations?.length)    setLocations(data.locations);
+                if(data.settings&&Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
+                setSyncStatus("ok");setLastSync(new Date());
+                showToast("✅ נטען מ-Sheets");
+              }).catch(e=>{setSyncStatus("error");showToast("שגיאה: "+e.message,"error");});
+            }} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",color:"white",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
+              ↻ טען
+            </button>
+            <button title="שמור ל-Sheets" onClick={()=>{
+              if(!window.confirm("ישכתב את כל נתוני ה-Sheets. להמשיך?")) return;
+              setSyncStatus("syncing");
+              gsSaveAll({participants,locations,settings,user:settings.currentUser})
+                .then(r=>{
+                  if(r.error) throw new Error(r.error);
+                  setSyncStatus("ok");setLastSync(new Date());
+                  showToast("✅ נשמר ל-Sheets");
+                })
+                .catch(e=>{setSyncStatus("error");showToast("שגיאת שמירה: "+e.message,"error");});
+            }} style={{background:"rgba(255,255,255,0.9)",border:"none",color:"#4338CA",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:800}}>
+              💾 שמור
+            </button>
           </div>
         </div>
       </div>
 
       {/* ── Global bar: stats + import/export + user ── */}
-      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"8px 22px"}}>
-        <div style={{maxWidth:1500,margin:"0 auto",display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
-          {/* Stats */}
-          {[{l:"נרשמו",v:stats.total,c:T.accent},{l:"שובצו",v:stats.byStatus.assigned,c:"#059669"},{l:"אישרו",v:stats.byStatus.confirmed,c:"#D97706"},{l:"השלימו",v:stats.byStatus.completed,c:T.textMuted},{l:"ביטלו",v:stats.byStatus.declined,c:"#DC2626"}].map(s=>(
+      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"6px 22px"}}>
+        <div style={{maxWidth:1500,margin:"0 auto",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+          {/* Stats — completed moved to header, show others here */}
+          {[{l:"נרשמו",v:stats.total,c:T.accent},{l:"שובצו",v:stats.byStatus.assigned,c:"#059669"},{l:"אישרו",v:stats.byStatus.confirmed,c:"#D97706"},{l:"ביטלו",v:stats.byStatus.declined,c:"#DC2626"}].map(s=>(
             <div key={s.l} style={{textAlign:"center"}}>
-              <div style={{fontSize:19,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div>
+              <div style={{fontSize:17,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div>
               <div style={{fontSize:9,color:T.textFaint,marginTop:1}}>{s.l}</div>
             </div>
           ))}
-          <div style={{width:1,height:28,background:T.border}}/>
+          <div style={{width:1,height:24,background:T.border}}/>
           {/* Global actions */}
           <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center",marginRight:"auto"}}>
             <span style={{fontSize:11,color:T.textMuted,background:T.tablehead,padding:"4px 10px",borderRadius:6,display:"flex",alignItems:"center",gap:5}}>
