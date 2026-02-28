@@ -502,6 +502,7 @@ function App() {
   const [dupModal,setDupModal]     = useState(null);
   const [exportMenu,setExportMenu] = useState(false);
   const [bulkEmailOpen,setBulkEmailOpen] = useState(false);
+  const [freeMailModal,setFreeMailModal] = useState(false);
   const [chartFilter,setChartFilter] = useState({status:"",location:""});
   const [weekOffset,setWeekOffset] = useState(0);
   const [calMode,setCalMode]       = useState("week");
@@ -1204,6 +1205,12 @@ function App() {
                                 </button>
                               );
                             })}
+                            {/* Free-write option */}
+                            <button onClick={()=>{setBulkEmailOpen(false);setFreeMailModal(true);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"#F0FDF4",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#166534",fontWeight:700}}>
+                              <span>✍️</span>
+                              <span style={{flex:1}}>{lang==="en"?"Free write...":"הודעה חופשית..."}</span>
+                              <span style={{fontSize:10,color:"#16a34a",background:"#DCFCE7",borderRadius:10,padding:"1px 7px"}}>{selList.filter(p=>p.email).length}</span>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -2206,8 +2213,145 @@ function App() {
         </div>
       )}
 
+      {/* Free-write email to selected */}
+      {freeMailModal&&(
+        <FreeMailModal
+          recipients={selList.filter(p=>p.email)}
+          T={T} L={L} lang={lang}
+          sendViaGmail={sendViaGmail}
+          onClose={()=>setFreeMailModal(false)}
+        />
+      )}
+
       {toast&&<div style={{position:"fixed",bottom:20,right:22,background:toast.type==="error"?"#DC2626":"#1E1B4B",color:"white",padding:"10px 16px",borderRadius:8,fontSize:13,fontWeight:600,zIndex:3000,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",animation:"slideUp .25s ease"}}>{toast.msg}</div>}
       <style>{`@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+    </div>
+  );
+}
+
+// ── Free-write email modal (from assignments tab selection) ───────────────────
+function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
+  if(!L) L=(k)=>k;
+  if(!lang) lang="he";
+  const [subject, setSubject] = React.useState("");
+  const [body, setBody] = React.useState("");
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiMode, setAiMode] = React.useState(null);
+  const [sent, setSent] = React.useState(false);
+
+  const callAI = async (mode) => {
+    if(!body.trim()) return;
+    setAiLoading(true); setAiMode(mode);
+    try {
+      const prompt = mode==="rewrite"
+        ? (lang==="en"
+            ? `Rewrite the following message clearly and professionally, preserve the intent:\n\n${body}`
+            : `שכתב את ההודעה הבאה בצורה ברורה ומקצועית, שמור על כוונת ההודעה:\n\n${body}`)
+        : (lang==="en"
+            ? `Fix spelling and grammar in the following message, return only the corrected text:\n\n${body}`
+            : `בדוק ותקן שגיאות כתיב ודקדוק בהודעה הבאה, החזר רק את הטקסט המתוקן:\n\n${body}`);
+      const res = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+      });
+      const data = await res.json();
+      const text = data.content?.find(c=>c.type==="text")?.text||"";
+      if(text) setBody(text);
+    } catch(e){console.error(e);}
+    setAiLoading(false); setAiMode(null);
+  };
+
+  const inputStyle = {width:"100%",padding:"8px 11px",border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box"};
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:T.surface,borderRadius:14,padding:24,maxWidth:560,width:"100%",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,0.35)"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div>
+            <h3 style={{margin:0,fontSize:15,color:T.text,fontWeight:800}}>
+              ✍️ {lang==="en"?"Free Email to Selected":"הודעה חופשית לנבחרים"}
+            </h3>
+            <p style={{margin:"4px 0 0",fontSize:11,color:T.textMuted}}>
+              {lang==="en"
+                ? `${recipients.length} recipient${recipients.length!==1?"s":""} · opens a Gmail tab per person`
+                : `${recipients.length} נמענים · נפתח חלון Gmail לכל אחד`}
+            </p>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted,lineHeight:1}}>×</button>
+        </div>
+
+        {/* Recipients chips */}
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:14,padding:"8px 10px",background:T.tablehead,borderRadius:8,border:`1px solid ${T.border}`,maxHeight:80,overflowY:"auto"}}>
+          {recipients.map(p=>(
+            <span key={p.id} style={{background:T.surface,color:T.accent,border:`1px solid ${T.border}`,borderRadius:12,padding:"2px 9px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>
+              {p.name}
+            </span>
+          ))}
+        </div>
+
+        {/* Subject */}
+        <div style={{marginBottom:10}}>
+          <label style={{display:"block",fontSize:11,color:T.textMuted,fontWeight:700,marginBottom:4}}>
+            {lang==="en"?"Subject":"נושא"}
+          </label>
+          <input value={subject} onChange={e=>setSubject(e.target.value)}
+            placeholder={lang==="en"?"Email subject...":"נושא ההודעה..."}
+            style={inputStyle}/>
+        </div>
+
+        {/* Body */}
+        <div style={{marginBottom:12}}>
+          <label style={{display:"block",fontSize:11,color:T.textMuted,fontWeight:700,marginBottom:4}}>
+            {lang==="en"?"Message":"הודעה"}
+          </label>
+          <textarea value={body} onChange={e=>setBody(e.target.value)}
+            placeholder={lang==="en"?"Write your message here...":"כתוב את ההודעה כאן..."}
+            rows={7} style={{...inputStyle,resize:"vertical",lineHeight:1.65}}/>
+        </div>
+
+        {/* AI buttons */}
+        <div style={{display:"flex",gap:7,marginBottom:16,flexWrap:"wrap"}}>
+          <button onClick={()=>callAI("proofread")} disabled={aiLoading||!body.trim()} style={{
+            background:aiMode==="proofread"?"#7C3AED":"#EDE9FE",color:aiMode==="proofread"?"white":"#5B21B6",
+            border:"none",borderRadius:6,padding:"5px 13px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700,
+            opacity:!body.trim()||( aiLoading&&aiMode!=="proofread")?0.45:1
+          }}>
+            {aiLoading&&aiMode==="proofread"?"⏳ ...":L("btnProofread")}
+          </button>
+          <button onClick={()=>callAI("rewrite")} disabled={aiLoading||!body.trim()} style={{
+            background:aiMode==="rewrite"?"#7C3AED":"#EDE9FE",color:aiMode==="rewrite"?"white":"#5B21B6",
+            border:"none",borderRadius:6,padding:"5px 13px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700,
+            opacity:!body.trim()||(aiLoading&&aiMode!=="rewrite")?0.45:1
+          }}>
+            {aiLoading&&aiMode==="rewrite"?"⏳ ...":L("btnRewrite")}
+          </button>
+          <span style={{marginInlineStart:"auto",fontSize:11,color:T.textMuted,alignSelf:"center"}}>
+            {lang==="en"?`${recipients.length} tabs will open`:`יפתחו ${recipients.length} חלונות`}
+          </span>
+        </div>
+
+        {/* Send / Cancel */}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{padding:"8px 20px",borderRadius:8,border:`1px solid ${T.border}`,background:T.tablehead,color:T.text,cursor:"pointer",fontSize:13,fontFamily:"inherit",fontWeight:600}}>
+            {L("btnCancel")}
+          </button>
+          <button
+            disabled={!subject.trim()||!body.trim()||sent}
+            onClick={()=>{
+              recipients.forEach(p=>sendViaGmail(subject,body,p.email));
+              setSent(true);
+              setTimeout(onClose,1200);
+            }}
+            style={{padding:"8px 22px",borderRadius:8,border:"none",background:sent?"#059669":"#4338CA",color:"white",cursor:subject.trim()&&body.trim()&&!sent?"pointer":"default",fontSize:13,fontFamily:"inherit",fontWeight:700,opacity:subject.trim()&&body.trim()?1:0.5,transition:"background .3s"}}
+          >
+            {sent
+              ? (lang==="en"?"✓ Sent!":"✓ נשלח!")
+              : `📤 ${lang==="en"?"Send to":"שלח ל-"} ${recipients.length}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
