@@ -257,7 +257,8 @@ function App() {
   const [selected,setSelected]   = useState(new Set());
   const [sortCol,setSortCol]     = useState("name");
   const [sortDir,setSortDir]     = useState("asc");
-  const [filters,setFilters]     = useState({name:"",status:"",location:"",day:"",gender:"",assigned:""});
+  const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[]});
+  const [colMenu,setColMenu]       = useState(null); // {col, x, y}
   const [emailModal,setEmailModal] = useState(null);
   const [toast,setToast]           = useState(null);
   const [dupModal,setDupModal]     = useState(null);
@@ -374,7 +375,18 @@ function App() {
   // ── Add / Edit participant ─────────────────────────────────────────────────
   function saveParticipant(p) {
     if(!p.id) {
-      const np={...p,id:newId(participants)};
+      const np={...p,id:newId(participants),importedAt:Date.now()};
+      // Check for duplicates before adding
+      const dups=participants.filter(ex=>dupReason(np,ex));
+      if(dups.length>0) {
+        setDupModal({conflicts:[{incoming:np,existing:dups,reason:dupReason(np,dups[0])}],index:0,newOnes:[],resolved:[],onDone:(action)=>{
+          if(action==="add"){setParticipants(prev=>[...prev,np]);addLog("הוספה ידנית",`נוסף: ${np.name}`);}
+          else if(action==="replace"){setParticipants(prev=>prev.map(q=>q.id===dups[0].id?{...np,id:q.id}:q));addLog("החלפה ידנית",`הוחלף: ${np.name}`);}
+          else if(action==="merge"){setParticipants(prev=>prev.map(q=>q.id===dups[0].id?{...q,...np,id:q.id,assigned:q.assigned,status:q.status}:q));addLog("מיזוג ידני",`מוזג: ${np.name}`);}
+          setModal(null);setEditP(null);
+        }});
+        return;
+      }
       setParticipants(prev=>[...prev,np]);
       addLog("הוספה ידנית",`נוסף: ${np.name}`);
       showToast(`✅ ${np.name} נוסף`);
@@ -442,6 +454,12 @@ function App() {
     else if(action==="merge") setParticipants(prev=>prev.map(p=>p.id===existing[0].id?{...p,availability:incoming.availability,email:incoming.email||p.email}:p));
     const next=index+1;
     if(next<conflicts.length){setDupModal({...dupModal,index:next,resolved:newR});return;}
+    // If this was a manual-add dup check, call onDone callback
+    if(dupModal.onDone) {
+      setDupModal(null);
+      dupModal.onDone(action);
+      return;
+    }
     const toAdd=[...newOnes,...newR.filter(r=>r.action==="add").map(r=>r.p)];
     setParticipants(prev=>[...prev,...toAdd]);
     setDupModal(null);
@@ -478,14 +496,21 @@ function App() {
 
   // ── Sort & filter ──────────────────────────────────────────────────────────
   const sortedFiltered = useMemo(()=>{
-    let list=[...participants];
-    if(filters.name) list=list.filter(p=>p.name.includes(filters.name)||p.email.includes(filters.name));
-    if(filters.status) list=list.filter(p=>p.status===filters.status);
-    if(filters.gender) list=list.filter(p=>p.gender===filters.gender);
-    if(filters.assigned==="yes") list=list.filter(p=>p.assigned);
-    if(filters.assigned==="no") list=list.filter(p=>!p.assigned);
-    if(filters.location) list=list.filter(p=>p.assigned?.locationId===parseInt(filters.location));
-    if(filters.day) list=list.filter(p=>p.assigned?.day===filters.day);
+    let list=[...participants].filter(p=>{
+      if(filters.name && !p.name.includes(filters.name) && !(p.email||"").includes(filters.name)) return false;
+      if(filters.assigned==="yes" && !p.assigned) return false;
+      if(filters.assigned==="no" && p.assigned) return false;
+      if(filters.status.length>0 && !filters.status.includes(p.status)) return false;
+      if(filters.gender.length>0 && !filters.gender.includes(p.gender||"")) return false;
+      if(filters.location.length>0 && !filters.location.includes(String(p.assigned?.locationId||""))) return false;
+      if(filters.day.length>0 && !filters.day.includes(p.assigned?.day||"")) return false;
+      if(filters.slot.length>0 && !filters.slot.some(s=>
+        (p.assigned?.slot||"").includes(s)||Object.values(p.availability||{}).flat().some(a=>a.includes(s))
+      )) return false;
+      if(filters.locPref.length>0 && !filters.locPref.some(lp=>(p.locPref||[]).map(String).includes(String(lp)))) return false;
+      if(filters.age.length>0 && !filters.age.includes(String(p.age||""))) return false;
+      return true;
+    });
     list.sort((a,b)=>{
       let va=a[sortCol]||"", vb=b[sortCol]||"";
       if(sortCol==="age") {va=parseInt(va)||0;vb=parseInt(vb)||0;return sortDir==="asc"?va-vb:vb-va;}
@@ -565,9 +590,9 @@ function App() {
                   {[
                     {icon:"📖",label:"הדרכה ועזרה",action:()=>{setModal("help");setMenuOpen(false);}},
                     {icon:"📋",label:"לוג שינויים",action:()=>{setModal("changelog");setMenuOpen(false);}},
-                    {icon:"🌙",label:darkMode?"מצב בהיר":"מצב כהה",action:()=>{setDarkMode(v=>!v);setMenuOpen(false);}},
+                    {icon:darkMode?"☀️":"🌙",label:darkMode?"מצב בהיר":"מצב כהה",action:()=>{setDarkMode(v=>!v);setMenuOpen(false);}},
                     {icon:"✉️",label:"הגדרות Gmail",action:()=>{setModal("gmail");setMenuOpen(false);}},
-                    {icon:"⚙️",label:"הגדרות",action:()=>{setTab("settings");setMenuOpen(false);}},
+                    {icon:"⚙️",label:"הגדרות",action:()=>{setModal("settings");setMenuOpen(false);}},
                     {icon:"ℹ️",label:"אודות",action:()=>{setModal("about");setMenuOpen(false);}},
                   ].map(item=>(
                     <button key={item.label} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"right",padding:"11px 16px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
@@ -578,7 +603,7 @@ function App() {
               )}
             </div>
             <div>
-              <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1}}>{APP_NAME}</h1>
+              <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"Arial,sans-serif"}}>{APP_NAME}</h1>
               <p style={{margin:0,opacity:0.55,fontSize:10,marginTop:2}}>{settings.experimentName}</p>
             </div>
           </div>
@@ -726,7 +751,7 @@ function App() {
       {/* ── Tabs ── */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"0 22px"}}>
         <div style={{maxWidth:1500,margin:"0 auto",display:"flex"}}>
-          {[{id:"assignments",l:"📋 שיבוצים"},{id:"calendar",l:"📅 לוח"},{id:"charts",l:"📊 גרפים"},{id:"emails",l:"✉️ מיילים"},{id:"locations",l:"📍 מיקומים"},{id:"settings",l:"⚙️ הגדרות"}].map(t=>(
+          {[{id:"assignments",l:"📋 שיבוצים"},{id:"calendar",l:"📅 לוח"},{id:"charts",l:"📊 גרפים"},{id:"emails",l:"✉️ מיילים"},{id:"locations",l:"📍 מיקומים"}].map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:400,color:tab===t.id?T.accent:T.textMuted,borderBottom:tab===t.id?`2px solid ${T.accent}`:"2px solid transparent",fontFamily:"inherit",transition:"color .2s"}}>
               {t.l}
             </button>
@@ -875,27 +900,11 @@ function App() {
             <div style={{display:"flex",gap:7,marginBottom:8,flexWrap:"wrap",alignItems:"center",background:T.surface,padding:"8px 12px",borderRadius:10,border:`1px solid ${T.border}`}}>
               <input placeholder="🔍 חיפוש שם / מייל" value={filters.name} onChange={e=>setFilters(f=>({...f,name:e.target.value}))}
                 style={{padding:"5px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:140}}/>
-              <select value={filters.status} onChange={e=>setFilters(f=>({...f,status:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
-                <option value="">כל הסטטוסים</option>
-                {Object.entries(STATUS_META).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
-              </select>
-              <select value={filters.gender} onChange={e=>setFilters(f=>({...f,gender:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
-                <option value="">כל המגדרים</option>
-                <option value="גבר">גבר</option><option value="אישה">אישה</option>
-              </select>
               <select value={filters.assigned} onChange={e=>setFilters(f=>({...f,assigned:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
                 <option value="">שובצו/לא</option><option value="yes">שובצו</option><option value="no">לא שובצו</option>
               </select>
-              <select value={filters.day} onChange={e=>setFilters(f=>({...f,day:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
-                <option value="">כל הימים</option>
-                {DAYS.map(d=><option key={d} value={d}>יום {DAY_NAMES[d]}</option>)}
-              </select>
-              <select value={filters.location} onChange={e=>setFilters(f=>({...f,location:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
-                <option value="">כל המיקומים</option>
-                {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-              {Object.values(filters).some(Boolean)&&(
-                <button onClick={()=>setFilters({name:"",status:"",location:"",day:"",gender:"",assigned:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ נקה סינון</button>
+              {(filters.name||filters.assigned||filters.status.length>0||filters.gender.length>0||filters.location.length>0||filters.day.length>0||filters.slot.length>0||filters.locPref.length>0||filters.age.length>0)&&(
+                <button onClick={()=>setFilters({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[]})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ נקה הכל</button>
               )}
             </div>
 
@@ -910,14 +919,60 @@ function App() {
                         setSelected(prev=>{const n=new Set(prev);ids.forEach(id=>allOn?n.delete(id):n.add(id));return n;});
                       }} style={{cursor:"pointer"}}/>
                     </th>
-                    {[{k:"name",l:"שם"},{k:"email",l:"אימייל"},{k:"age",l:"גיל"},{k:"gender",l:"מגדר"}].map(h=>(
+                    {[{k:"name",l:"שם"},{k:"email",l:"אימייל"}].map(h=>(
                       <th key={h.k} onClick={()=>toggleSort(h.k)} style={{padding:"8px 10px",textAlign:"right",fontSize:11,color:T.textMuted,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>
                         <SortIcon col={h.k}/>{h.l}
                       </th>
                     ))}
-                    {["זמינות","יום","משמרת","מיקום","חדר","סטטוס","העדפת מיקום","הערות","פעולות"].map(h=>(
-                      <th key={h} style={{padding:"8px 10px",textAlign:"right",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
+                    {(()=>{
+                      // Excel-style column header: sort + filter dropdown
+                      const ExcelTh = ({col, label, options, fkey, valFn}) => {
+                        const active = (filters[fkey]||[]).length > 0 || sortCol===col;
+                        const isOpen = colMenu?.col===col;
+                        const selected_vals = filters[fkey]||[];
+                        return (
+                          <th style={{padding:"4px 6px",textAlign:"right",fontSize:11,color:active?T.accent:T.textMuted,fontWeight:700,whiteSpace:"nowrap",position:"relative",userSelect:"none"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:2}}>
+                              <span onClick={()=>toggleSort(col)} style={{cursor:"pointer",flex:1}}>
+                                <SortIcon col={col}/>{label}
+                              </span>
+                              <button onClick={e=>{
+                                e.stopPropagation();
+                                const r=e.currentTarget.getBoundingClientRect();
+                                setColMenu(isOpen?null:{col,fkey,options,x:r.left,y:r.bottom+4});
+                              }} style={{
+                                background:selected_vals.length>0?"#4338CA":T.surface,
+                                color:selected_vals.length>0?"white":T.textMuted,
+                                border:`1px solid ${selected_vals.length>0?"#4338CA":T.border}`,
+                                borderRadius:3,padding:"1px 4px",cursor:"pointer",fontSize:9,fontFamily:"inherit",fontWeight:700,lineHeight:1
+                              }}>▼{selected_vals.length>0?` ${selected_vals.length}`:""}</button>
+                            </div>
+                          </th>
+                        );
+                      };
+                      const slotOpts=[{v:"בוקר",l:"בוקר"},{v:"צהריים",l:"צהריים"}];
+                      const dayOpts=DAYS.map(d=>({v:d,l:`יום ${DAY_NAMES[d]}`}));
+                      const locOpts=locations.map(l=>({v:String(l.id),l:l.name}));
+                      const statusOpts=Object.entries(STATUS_META).map(([v,m])=>({v,l:m.label}));
+                      const genderOpts=[{v:"גבר",l:"גבר"},{v:"אישה",l:"אישה"},{v:"אחר",l:"אחר"}];
+                      const locPrefOpts=locations.map(l=>({v:String(l.id),l:l.name}));
+                      const ageOpts=[...new Set(participants.map(p=>String(p.age||"")).filter(Boolean))].sort((a,b)=>parseInt(a)-parseInt(b)).map(v=>({v,l:v}));
+                      const availOpts=[...new Set(participants.flatMap(p=>Object.entries(p.availability||{}).filter(([,s])=>s.length>0).map(([d,])=>`יום ${DAY_NAMES[d]||d}`)))].sort().map(v=>({v:v.replace("יום ",""),l:v}));
+                      return (<>
+                        <ExcelTh col="age"     label="גיל"         fkey="age"     options={ageOpts}/>
+                        <ExcelTh col="gender"  label="מגדר"        fkey="gender"  options={genderOpts}/>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>זמינות</th>
+                        <ExcelTh col="assigned_day"  label="יום"   fkey="day"     options={dayOpts}/>
+                        <ExcelTh col="assigned_slot" label="משמרת" fkey="slot"    options={slotOpts}/>
+                        <ExcelTh col="assigned_loc"  label="מיקום" fkey="location" options={locOpts}/>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>חדר</th>
+                        <ExcelTh col="status"  label="סטטוס"       fkey="status"  options={statusOpts}/>
+                        <ExcelTh col="locPref" label="העדפת מיקום" fkey="locPref" options={locPrefOpts}/>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>הערות</th>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>פעולות</th>
+                      </>);
+                    })()}
+                  </tr>
                   </tr>
                 </thead>
                 <tbody>
@@ -1303,6 +1358,42 @@ function App() {
             <div style={{background:"#FFF7ED",border:"1px solid #FDE68A",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#92400E"}}>
               📬 <strong>Gmail:</strong> לחיצה על "שלח" פותחת Gmail Compose עם הנוסח מוכן. לשליחה ישירה דרך API — הגדר ב-<button onClick={()=>setModal("gmail")} style={{background:"none",border:"none",cursor:"pointer",color:"#D97706",fontWeight:700,fontFamily:"inherit",textDecoration:"underline"}}>הגדרות Gmail</button>.
             </div>
+
+            {/* ── Manual broadcast composer ── */}
+            <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:16,marginBottom:16}}>
+              <h3 style={{margin:"0 0 10px",fontSize:13,color:T.text}}>✍️ הודעה חופשית לנבדקים</h3>
+              <ManualEmailComposer participants={participants} T={T} sendViaGmail={sendViaGmail} GS_URL={GS_URL}/>
+            </div>
+
+            {/* ── Thank you to completed ── */}
+            {participants.filter(p=>p.status==="completed").length>0&&(
+              <div style={{background:"#F0FDF4",border:"1px solid #A7F3D0",borderRadius:12,padding:16,marginBottom:16}}>
+                <h3 style={{margin:"0 0 6px",fontSize:13,color:"#166534"}}>🙏 תודה למשתתפים שהשלימו</h3>
+                <p style={{margin:"0 0 10px",fontSize:11,color:"#16a34a"}}>{participants.filter(p=>p.status==="completed").length} משתתפים השלימו את הניסוי</p>
+                <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+                  {participants.filter(p=>p.status==="completed").map(p=>(
+                    <div key={p.id} style={{background:"white",border:"1px solid #A7F3D0",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:12,fontWeight:700,color:"#166534"}}>{p.name}</span>
+                      <button onClick={()=>{
+                        const subj=`תודה על השתתפותך בניסוי — ${settings.experimentName}`;
+                        const body=`שלום ${p.name},\n\nתודה רבה על השתתפותך בניסוי "${settings.experimentName}".\nהשתתפותך חשובה מאוד למחקר שלנו ואנו מעריכים את הזמן והמאמץ שהשקעת.\n\nבברכה,\n${settings.currentUser}`;
+                        sendViaGmail(subj,body,p.email);
+                      }} style={{background:"#059669",color:"white",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
+                        ✉️ שלח תודה
+                      </button>
+                    </div>
+                  ))}
+                  <button onClick={()=>{
+                    const ps=participants.filter(p=>p.status==="completed"&&p.email);
+                    const body=ps.map(p=>`─── ${p.name} | ${p.email} ───\nנושא: תודה על השתתפותך בניסוי\n\nשלום ${p.name},\n\nתודה רבה על השתתפותך בניסוי "${settings.experimentName}".\nהשתתפותך חשובה מאוד למחקר שלנו.\n\nבברכה,\n${settings.currentUser}\n`).join("\n═══════════════\n\n");
+                    setEmailModal({subject:"תודה — שליחה לכולם",body,type:"bulk"});
+                  }} style={{background:"#059669",color:"white",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",alignSelf:"center"}}>
+                    📨 שלח תודה לכולם
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
               {[{title:"📨 הזמנות",filter:p=>p.assigned,type:"invitation",color:"#4338CA"},
                 {title:"⚠️ עדכון זמינות",filter:p=>Object.values(p.availability).every(s=>s.length===0),type:"noAvailability",color:"#DC2626"}].map(card=>{
@@ -1374,10 +1465,13 @@ function App() {
         )}
 
         {/* ══ SETTINGS ══════════════════════════════════════════════════════════ */}
-        {tab==="settings"&&(
-          <div style={{maxWidth:480}}>
-            <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:20}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,color:T.text}}>הגדרות ניסוי</h3>
+        {modal==="settings"&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)setModal(null);}}>
+          <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:480,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <h3 style={{margin:0,fontSize:15,color:T.text}}>⚙️ הגדרות ניסוי</h3>
+              <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
+            </div>
               {[{k:"experimentName",l:"שם הניסוי"},{k:"researcherName",l:"שם החוקר"},{k:"duration",l:"משך סשן"},{k:"currentUser",l:"משתמש נוכחי (לוג)"},{k:"baseDate",l:"תאריך התחלה",type:"date"}].map(f=>(
                 <div key={f.k} style={{marginBottom:11}}>
                   <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{f.l}</label>
@@ -1397,6 +1491,7 @@ function App() {
                 <button onClick={()=>{const i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.participants)setParticipants(d.participants);if(d.locations)setLocations(d.locations);if(d.settings)setSettings(d.settings);if(d.changelog)setChangelog(d.changelog);showToast("✅ שוחזר");}catch{showToast("שגיאה","error");}};r.readAsText(f);};i.click();}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>⬆️ יבוא JSON</button>
               </div>
             </div>
+          </div>
           </div>
         )}
       </div>
@@ -1654,6 +1749,68 @@ function App() {
       )}
 
       {/* Toast */}
+      {/* Excel-style column filter dropdown */}
+      {colMenu&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setColMenu(null)}/>
+          <div style={{position:"fixed",left:colMenu.x,top:colMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:180,maxHeight:320,overflowY:"auto",padding:"6px 0"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"6px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:6}}>
+              <button onClick={()=>{toggleSort(colMenu.col);}} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="asc"?800:400}}>
+                ↑ סדר עולה
+              </button>
+              <button onClick={()=>{if(sortCol===colMenu.col)setSortDir("desc");else{setSortCol(colMenu.col);setSortDir("desc");}}} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="desc"?800:400}}>
+                ↓ סדר יורד
+              </button>
+            </div>
+            <div style={{padding:"5px 12px",borderBottom:`1px solid ${T.border}`}}>
+              <label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12,color:T.text}}>
+                <input type="checkbox"
+                  checked={(filters[colMenu.fkey]||[]).length===0}
+                  onChange={()=>setFilters(f=>({...f,[colMenu.fkey]:[]}))}
+                  style={{cursor:"pointer"}}/>
+                <strong>הכל</strong>
+              </label>
+            </div>
+            {colMenu.options.map(opt=>{
+              const active=(filters[colMenu.fkey]||[]).includes(opt.v);
+              return(
+                <div key={opt.v} style={{padding:"4px 12px"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12,color:T.text}}>
+                    <input type="checkbox" checked={active} onChange={()=>{
+                      setFilters(f=>{
+                        const cur=f[colMenu.fkey]||[];
+                        return {...f,[colMenu.fkey]:active?cur.filter(x=>x!==opt.v):[...cur,opt.v]};
+                      });
+                    }} style={{cursor:"pointer"}}/>
+                    {opt.l}
+                    <span style={{marginRight:"auto",fontSize:10,color:T.textFaint}}>
+                      ({participants.filter(p=>{
+                        const fkey=colMenu.fkey;
+                        if(fkey==="status") return p.status===opt.v;
+                        if(fkey==="gender") return p.gender===opt.v;
+                        if(fkey==="location") return String(p.assigned?.locationId||"")===opt.v;
+                        if(fkey==="day") return p.assigned?.day===opt.v;
+                        if(fkey==="slot") return (p.assigned?.slot||"").includes(opt.v)||Object.values(p.availability||{}).flat().some(a=>a.includes(opt.v));
+                        if(fkey==="locPref") return (p.locPref||[]).map(String).includes(opt.v);
+                        if(fkey==="age") return String(p.age||"")===opt.v;
+                        return false;
+                      }).length})
+                    </span>
+                  </label>
+                </div>
+              );
+            })}
+            {(filters[colMenu.fkey]||[]).length>0&&(
+              <div style={{padding:"6px 12px",borderTop:`1px solid ${T.border}`,marginTop:4}}>
+                <button onClick={()=>setFilters(f=>({...f,[colMenu.fkey]:[]}))} style={{width:"100%",background:"#FEF2F2",color:"#DC2626",border:"none",borderRadius:5,padding:"5px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
+                  ✕ נקה סינון עמודה
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {toast&&<div style={{position:"fixed",bottom:20,right:22,background:toast.type==="error"?"#DC2626":"#1E1B4B",color:"white",padding:"10px 16px",borderRadius:8,fontSize:13,fontWeight:600,zIndex:3000,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",animation:"slideUp .25s ease"}}>{toast.msg}</div>}
       <style>{`@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
@@ -1661,6 +1818,113 @@ function App() {
 }
 
 // ── Modal shell ───────────────────────────────────────────────────────────────
+function ManualEmailComposer({participants, T, sendViaGmail, GS_URL}) {
+  const [subject, setSubject] = React.useState("");
+  const [body, setBody] = React.useState("");
+  const [targets, setTargets] = React.useState("all"); // "all" | "assigned" | "selected"
+  const [selected, setSelected] = React.useState(new Set());
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiMode, setAiMode] = React.useState(null); // "rewrite" | "proofread"
+
+  const getRecipients = () => {
+    if(targets==="all") return participants.filter(p=>p.email);
+    if(targets==="assigned") return participants.filter(p=>p.email&&p.assigned);
+    if(targets==="completed") return participants.filter(p=>p.email&&p.status==="completed");
+    return participants.filter(p=>p.email&&selected.has(p.id));
+  };
+
+  const callAI = async (mode) => {
+    if(!body.trim()) return;
+    setAiLoading(true); setAiMode(mode);
+    try {
+      const prompt = mode==="rewrite"
+        ? `שכתב את ההודעה הבאה בצורה ברורה ומקצועית בעברית, שמור על כוונת ההודעה:\n\n${body}`
+        : `בדוק ותקן שגיאות כתיב ודקדוק בהודעה הבאה בעברית, החזר רק את הטקסט המתוקן:\n\n${body}`;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+      });
+      const data = await res.json();
+      const text = data.content?.find(c=>c.type==="text")?.text||"";
+      if(text) setBody(text);
+    } catch(e) { console.error(e); }
+    setAiLoading(false); setAiMode(null);
+  };
+
+  const recipients = getRecipients();
+
+  return (
+    <div>
+      {/* Target selector */}
+      <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+        {[{v:"all",l:`כולם (${participants.filter(p=>p.email).length})`},
+          {v:"assigned",l:`משובצים (${participants.filter(p=>p.email&&p.assigned).length})`},
+          {v:"completed",l:`השלימו (${participants.filter(p=>p.email&&p.status==="completed").length})`},
+          {v:"selected",l:"בחירה ידנית"},
+        ].map(opt=>(
+          <button key={opt.v} onClick={()=>setTargets(opt.v)} style={{
+            background:targets===opt.v?"#4338CA":T.tablehead,
+            color:targets===opt.v?"white":T.textMuted,
+            border:`1px solid ${targets===opt.v?"#4338CA":T.border}`,
+            borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:targets===opt.v?700:400
+          }}>{opt.l}</button>
+        ))}
+      </div>
+
+      {/* Manual selection */}
+      {targets==="selected"&&(
+        <div style={{maxHeight:120,overflowY:"auto",border:`1px solid ${T.border}`,borderRadius:7,padding:6,marginBottom:10,display:"flex",flexWrap:"wrap",gap:4}}>
+          {participants.filter(p=>p.email).map(p=>(
+            <button key={p.id} onClick={()=>setSelected(s=>{const n=new Set(s);n.has(p.id)?n.delete(p.id):n.add(p.id);return n;})} style={{
+              background:selected.has(p.id)?"#EEF2FF":T.tablehead,
+              color:selected.has(p.id)?"#4338CA":T.textMuted,
+              border:`1px solid ${selected.has(p.id)?"#C7D4FF":T.border}`,
+              borderRadius:5,padding:"2px 8px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:selected.has(p.id)?700:400
+            }}>{selected.has(p.id)?"✓ ":""}{p.name}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Subject */}
+      <input value={subject} onChange={e=>setSubject(e.target.value)} placeholder="נושא ההודעה..."
+        style={{width:"100%",padding:"7px 10px",border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",marginBottom:8}}/>
+
+      {/* Body */}
+      <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="כתוב את ההודעה כאן..."
+        rows={5} style={{width:"100%",padding:"8px 10px",border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,resize:"vertical",boxSizing:"border-box",lineHeight:1.6}}/>
+
+      {/* AI + Send buttons */}
+      <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap",alignItems:"center"}}>
+        <button onClick={()=>callAI("proofread")} disabled={aiLoading||!body.trim()} style={{
+          background:aiMode==="proofread"?"#7C3AED":"#EDE9FE",color:aiMode==="proofread"?"white":"#5B21B6",
+          border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700,
+          opacity:aiLoading&&aiMode!=="proofread"?0.5:1
+        }}>
+          {aiLoading&&aiMode==="proofread"?"⏳ ...":"✍️ תיקון כתיב (AI)"}
+        </button>
+        <button onClick={()=>callAI("rewrite")} disabled={aiLoading||!body.trim()} style={{
+          background:aiMode==="rewrite"?"#7C3AED":"#EDE9FE",color:aiMode==="rewrite"?"white":"#5B21B6",
+          border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700,
+          opacity:aiLoading&&aiMode!=="rewrite"?0.5:1
+        }}>
+          {aiLoading&&aiMode==="rewrite"?"⏳ ...":"🔄 שכתוב (AI)"}
+        </button>
+        <div style={{marginRight:"auto",fontSize:11,color:T.textMuted}}>{recipients.length} נמענים</div>
+        <button onClick={()=>{
+          if(!subject.trim()||!body.trim()||recipients.length===0) return;
+          recipients.forEach(p=>sendViaGmail(subject, `שלום ${p.name},\n\n${body}`, p.email));
+        }} disabled={!subject.trim()||!body.trim()||recipients.length===0} style={{
+          background:subject&&body&&recipients.length>0?"#059669":"#9CA3AF",
+          color:"white",border:"none",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700
+        }}>
+          📨 שלח ל-{recipients.length} נמענים
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ModalShell({title,T,onClose,children,wide}) {
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
