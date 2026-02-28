@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>מנהל ניסוי</title>
   <style>
+select option { background: inherit; }
+select:disabled, input:disabled { opacity: 0.6; }
+[data-dark="true"] select { background: #1E2238; color: #F0F2FF; }
+[data-dark="true"] select option { background: #1E2238; color: #F0F2FF; }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; }
     #loading { display:flex;align-items:center;justify-content:center;height:100vh;font-size:18px;color:#4338CA; }
@@ -78,6 +83,39 @@ const LANG = {
     dupAdd:"➕", dupAddDesc:"הוסף — כנסיון נפרד", dupAddSub:"שמור את שניהם",
     dupApplyAll:"החל על כל הכפולים:", dupSkipAll:"⏭ דלג לכולם", dupMergeAll:"🔀 מזג הכל", dupReplaceAll:"🔁 החלף הכל",
     addLocation:"+ הוסף מיקום",
+    // header
+    userIcon:"👤", selectedCount:"נבחרו", allParticipants:"כל הנבדקים",
+    // undo
+    undoBtn:"↩ בטל", redoBtn:"↪ חזור", undoNothing:"אין מה לבטל",
+    // calendar
+    calWeek:"📅 שבועי", calMonth:"📆 חודשי",
+    calCurrentWeek:"שבוע נוכחי", calToday:L("calToday"),
+    calSlotLabel:"{L("calSlotLabel")}", calParticipants:"נבדקים",
+    // charts
+    chartFilter:L("chartFilter"), chartAllStatuses:L("chartAllStatuses"), chartAllLocations:L("chartAllLocations"),
+    chartClear:"✕ נקה", chartTarget:"יעד", chartPending:"ממתינים",
+    chartNoAvail:"ללא זמינות", chartReplace:"לגייס חלופה",
+    chartStatuses:L("chartStatuses"), chartByDay:L("chartByDay"),
+    chartByLoc:L("chartByLoc"), chartProgress:"התקדמות",
+    // email tab
+    emailInvite:"📨 הזמנה", emailReminder:"🔔 תזכורת",
+    emailAll:"כולם", emailAssigned:"משובצים", emailCompleted:"השלימו", emailManual:"בחירה ידנית",
+    emailCompleteCount:"משתתפים השלימו את הניסוי",
+    emailSendThanksAll:"📨 שלח תודה לכולם",
+    emailTargetSelect:L("emailTargetSelect"), emailSubject:L("emailSubject"), emailBody:L("emailBody"),
+    emailSend:L("emailSend"), emailSelectManual:L("emailSelectManual"),
+    // locations tab
+    locAssigned:"משובצים", locRooms:L("locRooms"), locEdit:"✏️", locDelete:"🗑",
+    locNameLabel:L("locNameLabel"), locRoomsLabel:"חדרים (אנטר להוסיף)",
+    locAddRoom:"+ הוסף חדר", locSave:"💾 שמור",
+    // settings
+    settingExpName:"שם הניסוי", settingResearcher:"שם החוקר",
+    settingDuration:"משך סשן", settingUser:"משתמש נוכחי (לוג)",
+    settingBaseDate:"תאריך התחלה", settingTarget:"יעד",
+    settingParallel:"במקביל", settingMaxDay:"מקס׳/יום",
+    settingExportJSON:"⬇️ ייצא JSON", settingImportJSON:"⬆️ יבוא JSON",
+    // table dropdowns
+    dayDash:L("dayDash"),
   },
   en: {
     appName:"Experiment Manager", appSub:"Route Planning Experiment with AI",
@@ -129,6 +167,39 @@ const LANG = {
     dupAdd:"➕", dupAddDesc:"Add — as separate", dupAddSub:"Keep both entries",
     dupApplyAll:"Apply to all duplicates:", dupSkipAll:"⏭ Skip all", dupMergeAll:"🔀 Merge all", dupReplaceAll:"🔁 Replace all",
     addLocation:"+ Add Location",
+    // header
+    userIcon:"👤", selectedCount:"selected", allParticipants:"All participants",
+    // undo
+    undoBtn:"↩ Undo", redoBtn:"↪ Redo", undoNothing:"Nothing to undo",
+    // calendar
+    calWeek:"📅 Weekly", calMonth:"📆 Monthly",
+    calCurrentWeek:"Current week", calToday:"Today",
+    calSlotLabel:"Shift/Location", calParticipants:"Participants",
+    // charts
+    chartFilter:"Filter:", chartAllStatuses:"All statuses", chartAllLocations:"All locations",
+    chartClear:"✕ Clear", chartTarget:"Target", chartPending:"Pending",
+    chartNoAvail:"no availability", chartReplace:"needs replacement",
+    chartStatuses:"Statuses", chartByDay:"Assignments by Day",
+    chartByLoc:"By Location", chartProgress:"Progress",
+    // email tab
+    emailInvite:"📨 Invite", emailReminder:"🔔 Reminder",
+    emailAll:"All", emailAssigned:"Assigned", emailCompleted:"Completed", emailManual:"Manual selection",
+    emailCompleteCount:"participants completed the experiment",
+    emailSendThanksAll:"📨 Send thanks to all",
+    emailTargetSelect:"Select recipients", emailSubject:"Subject", emailBody:"Message body",
+    emailSend:"📤 Send", emailSelectManual:"Select recipients manually:",
+    // locations tab
+    locAssigned:"assigned", locRooms:"Rooms", locEdit:"✏️", locDelete:"🗑",
+    locNameLabel:"Location name", locRoomsLabel:"Rooms (Enter to add)",
+    locAddRoom:"+ Add room", locSave:"💾 Save",
+    // settings
+    settingExpName:"Experiment Name", settingResearcher:"Researcher Name",
+    settingDuration:"Session Duration", settingUser:"Current User (log)",
+    settingBaseDate:"Start Date", settingTarget:"Target",
+    settingParallel:"Parallel", settingMaxDay:"Max/Day",
+    settingExportJSON:"⬇️ Export JSON", settingImportJSON:"⬆️ Import JSON",
+    // table dropdowns
+    dayDash:"— Day —",
   }
 };
 
@@ -215,12 +286,14 @@ const THEME = {
     textMuted:"#6B7280", textFaint:"#9CA3AF", headerBg:"linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)",
     rowEven:"#FFFFFF", rowOdd:"#EEF0F8", rowSel:"#EDE9FE", inputBg:"#FFFFFF",
     tablehead:"#F8F9FF", accent:"#4338CA",
+    disabledBg:"#F3F4F6", disabledText:"#9CA3AF", disabledBorder:"#E5E7EB",
   },
   dark: {
-    bg:"#0F1117", surface:"#1E2130", border:"#2D3148", text:"#E8EAFF",
-    textMuted:"#8B92C0", textFaint:"#555D85", headerBg:"linear-gradient(135deg,#0A0820,#13103A,#1D1880)",
-    rowEven:"#1A1E2E", rowOdd:"#13162A", rowSel:"#252A45", inputBg:"#252A45",
-    tablehead:"#181C2B", accent:"#7C82FF",
+    bg:"#0B0D17", surface:"#161929", border:"#374162", text:"#F0F2FF",
+    textMuted:"#A8B0D8", textFaint:"#6B7299", headerBg:"linear-gradient(135deg,#0A0820,#13103A,#1D1880)",
+    rowEven:"#161929", rowOdd:"#111422", rowSel:"#2A2F52", inputBg:"#1E2238",
+    tablehead:"#1A1E32", accent:"#8B92FF",
+    disabledBg:"#1A1E32", disabledText:"#6B7299", disabledBorder:"#374162",
   }
 };
 
@@ -872,7 +945,7 @@ function App() {
           {/* Global actions */}
           <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center",marginRight:"auto"}}>
             <span style={{fontSize:11,color:T.textMuted,background:T.tablehead,padding:"4px 10px",borderRadius:6,display:"flex",alignItems:"center",gap:5}}>
-              👤 {settings.currentUser}
+              {L("userIcon")} {settings.currentUser}
             </span>
             <div style={{position:"relative"}}>
               <button onClick={e=>{e.stopPropagation();setExportMenu(v=>!v);}} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:600}}>
@@ -881,7 +954,7 @@ function App() {
               {exportMenu&&(
                 <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",zIndex:200,minWidth:180}}>
                   <div style={{padding:"6px 12px",fontSize:10,color:T.textFaint,borderBottom:`1px solid ${T.border}`}}>
-                    {selected.size>0?`${selected.size} נבחרו`:"כל הנבדקים"}
+                    {selected.size>0?`${selected.size} ${L("selectedCount")}`:`${L("allParticipants")}`}
                   </div>
                   {[{l:"📋 כל הנתונים",f:"all"},{l:"📧 מיילים בלבד",f:"email"},{l:"📱 טלפונים בלבד",f:"phone"}].map(i=>(
                     <button key={i.f} onClick={()=>doExport(i.f)} style={{display:"block",width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>{i.l}</button>
@@ -972,7 +1045,7 @@ function App() {
               {/* Row 1: always-visible actions */}
               <div style={{display:"flex",gap:7,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
                 {/* Undo / Redo */}
-                <button onClick={undo} disabled={!history.length} title={lang==="en"?"Undo":"בטל"} style={{background:T.tablehead,color:history.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:history.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:history.length?1:0.4}} title={undoLabel?`${lang==="en"?"Undo":"בטל"}: ${undoLabel}`:(lang==="en"?"Nothing to undo":"אין מה לבטל")}>
+                <button onClick={undo} disabled={!history.length} title={lang==="en"?"Undo":"בטל"} style={{background:T.tablehead,color:history.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:history.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:history.length?1:0.4}} title={undoLabel?`${L("undoBtn")}: ${undoLabel}`:L("undoNothing")}>
                   ↩{undoLabel?<span style={{fontSize:9,marginRight:3,color:T.textMuted,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-block",verticalAlign:"middle"}}>{undoLabel}</span>:null}
                 </button>
                 <button onClick={redo} disabled={!future.length} title={lang==="en"?"Redo":"בצע שוב"} style={{background:T.tablehead,color:future.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:future.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:future.length?1:0.4}}>
@@ -997,7 +1070,7 @@ function App() {
               {/* Row 2: bulk operations — shown only when rows are selected */}
               {selected.size>0&&(
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",background:T.rowSel,border:`1px solid ${T.accent}44`,borderRadius:9,padding:"8px 12px"}}>
-                  <span style={{fontSize:11,fontWeight:700,color:T.accent,minWidth:80}}>📌 {selected.size} נבחרו:</span>
+                  <span style={{fontSize:11,fontWeight:700,color:T.accent,minWidth:80}}>📌 {selected.size} {L("selectedCount")}:</span>
 
                   {/* Auto-assign selected */}
                   {selCanAutoAssign&&(
@@ -1265,7 +1338,7 @@ function App() {
                             if(!day){clearA(p.id);return;}
                             const slot=p.availability[day]?.[0]||SLOTS[0];
                             assignP(p.id,day,slot,locations[0]?.id||null,locations[0]?.rooms[0]||"");
-                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.inputBg,color:p.assigned?T.accent:T.text,cursor:"pointer",minWidth:75}}>
+                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.inputBg,color:p.assigned?T.accent:T.text,cursor:"pointer",width:90,minWidth:90}}>
                             <option value="">— יום —</option>
                             {DAYS.map(d=><option key={d} value={d}>{p.availability[d]?.length>0?"✓ ":"  "}יום {dayNames[d]}</option>)}
                           </select>
@@ -1273,7 +1346,7 @@ function App() {
                         {/* Slot */}
                         <td style={{padding:"4px 5px"}}>
                           <select value={p.assigned?.slot||""} disabled={!p.assigned} onChange={e=>updP(p.id,{assigned:{...p.assigned,slot:e.target.value}})}
-                            style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.tablehead,color:p.assigned?T.accent:T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:85,opacity:p.assigned?1:0.5}}>
+                            style={{padding:"3px 4px",border:`1px solid ${p.assigned?T.border:T.disabledBorder||T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.disabledBg||T.tablehead,color:p.assigned?T.accent:T.disabledText||T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:90}}>
                             {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</option>)}
                           </select>
                         </td>
@@ -1370,7 +1443,7 @@ function App() {
               <div style={{display:"flex",background:T.tablehead,borderRadius:8,overflow:"hidden",border:`1px solid ${T.border}`}}>
                 {["week","month"].map(m=>(
                   <button key={m} onClick={()=>setCalMode(m)} style={{padding:"7px 14px",border:"none",background:calMode===m?T.accent:"transparent",color:calMode===m?"white":T.textMuted,cursor:"pointer",fontSize:12,fontWeight:calMode===m?700:400,fontFamily:"inherit",transition:"all .2s"}}>
-                    {m==="week"?"📅 שבועי":"📆 חודשי"}
+                    {m==="week"?L("calWeek"):L("calMonth")}
                   </button>
                 ))}
               </div>
@@ -1379,7 +1452,7 @@ function App() {
                   <button onClick={()=>setWeekOffset(w=>w-1)} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:14,color:T.text}}>‹</button>
                   <span style={{fontSize:12,fontWeight:600,color:T.text,minWidth:190,textAlign:"center"}}>
                     {weekDates[0]&&`${fmtDate(weekDates[0])} – ${fmtDate(weekDates[5])}`}
-                    {weekOffset===0&&<span style={{color:T.accent,fontSize:10,marginRight:5}}>(שבוע נוכחי)</span>}
+                    {weekOffset===0&&<span style={{color:T.accent,fontSize:10,marginRight:5}}>{L("calCurrentWeek")}</span>}
                   </span>
                   <button onClick={()=>setWeekOffset(w=>w+1)} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:14,color:T.text}}>›</button>
                   <button onClick={()=>setWeekOffset(0)} style={{background:T.tablehead,border:"none",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,color:T.textMuted,fontFamily:"inherit"}}>היום</button>
@@ -1399,15 +1472,15 @@ function App() {
                 <table style={{width:"100%",borderCollapse:"separate",borderSpacing:4,minWidth:700}}>
                   <thead>
                     <tr>
-                      <th style={{width:90,fontSize:10,color:T.textFaint,textAlign:"right",paddingBottom:4}}>משמרת/מיקום</th>
+                      <th style={{width:90,fontSize:10,color:T.textFaint,textAlign:"right",paddingBottom:4}}>{L("calSlotLabel")}</th>
                       {DAYS.map((day,di)=>{
                         const date=weekDates[di];
                         const isToday=date&&date.toDateString()===new Date().toDateString();
                         return(
                           <th key={day} style={{padding:"7px",background:isToday?T.rowSel:T.surface,borderRadius:8,border:`1px solid ${isToday?T.accent:T.border}`,textAlign:"center",fontSize:12,fontWeight:700,color:isToday?T.accent:T.text}}>
-                            <div>יום {dayNames[day]}</div>
+                            <div>{L("dayPrefix")}{dayNames[day]}</div>
                             {date&&<div style={{fontSize:9,color:T.textFaint,fontWeight:400}}>{fmtDate(date)}</div>}
-                            <div style={{fontSize:9,color:"#059669",fontWeight:600,marginTop:1}}>{participants.filter(p=>p.assigned?.day===day).length} נבדקים</div>
+                            <div style={{fontSize:9,color:"#059669",fontWeight:600,marginTop:1}}>{participants.filter(p=>p.assigned?.day===day).length} {L("calParticipants")}</div>
                           </th>
                         );
                       })}
@@ -1416,7 +1489,7 @@ function App() {
                   <tbody>
                     {SLOTS.map(slot=>locations.map((loc,li)=>(
                       <tr key={`${slot}_${loc.id}`}>
-                        {li===0&&<td rowSpan={locations.length} style={{verticalAlign:"top",paddingTop:10,fontSize:10,color:T.textFaint}}>{slot.includes("בוקר")?"🌅 בוקר":"☀️ צהריים"}</td>}
+                        {li===0&&<td rowSpan={locations.length} style={{verticalAlign:"top",paddingTop:10,fontSize:10,color:T.textFaint}}>{slot.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</td>}
                         {DAYS.map(day=>{
                           const people=participants.filter(p=>p.assigned?.day===day&&p.assigned?.slot===slot&&p.assigned?.locationId===loc.id);
                           const isFull=people.length>=settings.perSlot;
@@ -1501,16 +1574,16 @@ function App() {
                 <option value="">כל המיקומים</option>
                 {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
-              {(chartFilter.status||chartFilter.location)&&<button onClick={()=>setChartFilter({status:"",location:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"4px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ נקה</button>}
+              {(chartFilter.status||chartFilter.location)&&<button onClick={()=>setChartFilter({status:"",location:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"4px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{L("chartClear")}</button>}
             </div>
 
             {/* KPI Cards */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
               {[
-                {l:"יעד",v:`${(stats.byStatus?.completed||0)}/${settings.totalTarget}`,sub:`${Math.round((stats.byStatus?.completed||0)/settings.totalTarget*100)}%`,c:"#4338CA",bg:"#EEF2FF"},
+                {l:L("chartTarget"),v:`${(stats.byStatus?.completed||0)}/${settings.totalTarget}`,sub:`${Math.round((stats.byStatus?.completed||0)/settings.totalTarget*100)}%`,c:"#4338CA",bg:"#EEF2FF"},
                 {l:L("statAssigned"),v:(stats.byStatus?.assigned||0)+(stats.byStatus?.confirmed||0)+(stats.byStatus?.completed||0),sub:"מתוך "+stats.total,c:"#059669",bg:"#ECFDF5"},
-                {l:"ממתינים",v:(stats.byStatus?.pending||0),sub:stats.noAvail+" ללא זמינות",c:"#D97706",bg:"#FFF7ED"},
-                {l:L("statDeclined"),v:(stats.byStatus?.declined||0),sub:"לגייס חלופה",c:"#DC2626",bg:"#FEF2F2"},
+                {l:L("chartPending"),v:(stats.byStatus?.pending||0),sub:stats.noAvail+" "+L("chartNoAvail"),c:"#D97706",bg:"#FFF7ED"},
+                {l:L("statDeclined"),v:(stats.byStatus?.declined||0),sub:L("chartReplace"),c:"#DC2626",bg:"#FEF2F2"},
               ].map(k=>(
                 <div key={k.l} style={{background:k.bg,borderRadius:10,padding:"12px 14px"}}>
                   <div style={{fontSize:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
@@ -1597,7 +1670,7 @@ function App() {
                   {l:L("completed"),v:(stats.byStatus?.completed||0),c:"#059669"},
                   {l:L("statConfirmed"),v:(stats.byStatus?.confirmed||0),c:"#D97706"},
                   {l:L("statAssigned"),v:(stats.byStatus?.assigned||0),c:T.accent},
-                  {l:"ממתינים",v:(stats.byStatus?.pending||0),c:"#9CA3AF"},
+                  {l:L("chartPending"),v:(stats.byStatus?.pending||0),c:"#9CA3AF"},
                 ].map(r=>(
                   <div key={r.l} style={{marginBottom:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
@@ -1630,7 +1703,7 @@ function App() {
             {participants.filter(p=>p.status==="completed").length>0&&(
               <div style={{background:"#F0FDF4",border:"1px solid #A7F3D0",borderRadius:12,padding:16,marginBottom:16}}>
                 <h3 style={{margin:"0 0 6px",fontSize:13,color:"#166534"}}>🙏 תודה למשתתפים שהשלימו</h3>
-                <p style={{margin:"0 0 10px",fontSize:11,color:"#16a34a"}}>{participants.filter(p=>p.status==="completed").length} משתתפים השלימו את הניסוי</p>
+                <p style={{margin:"0 0 10px",fontSize:11,color:"#16a34a"}}>{participants.filter(p=>p.status==="completed").length} {L("emailCompleteCount")</p>
                 <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
                   {participants.filter(p=>p.status==="completed").map(p=>(
                     <div key={p.id} style={{background:"white",border:"1px solid #A7F3D0",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
@@ -1684,8 +1757,8 @@ function App() {
                       {loc&&<><span>·</span><span style={{background:lc.bg,color:lc.text,borderRadius:3,padding:"0 4px",fontSize:9,fontWeight:700}}>{loc.name}</span></>}
                     </div>
                     <div style={{display:"flex",gap:5}}>
-                      <button onClick={()=>sendViaGmail(buildEmail(p,"invitation").subject,buildEmail(p,"invitation").body,p.email)} style={{background:"#EEF2FF",color:"#4338CA",border:"none",padding:"3px 8px",borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>📨 הזמנה</button>
-                      <button onClick={()=>sendViaGmail(buildEmail(p,"reminder").subject,buildEmail(p,"reminder").body,p.email)} style={{background:"#FFF7ED",color:"#D97706",border:"none",padding:"3px 8px",borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>🔔 תזכורת</button>
+                      <button onClick={()=>sendViaGmail(buildEmail(p,"invitation").subject,buildEmail(p,"invitation").body,p.email)} style={{background:"#EEF2FF",color:"#4338CA",border:"none",padding:"3px 8px",borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>{L("emailInvite")}</button>
+                      <button onClick={()=>sendViaGmail(buildEmail(p,"reminder").subject,buildEmail(p,"reminder").body,p.email)} style={{background:"#FFF7ED",color:"#D97706",border:"none",padding:"3px 8px",borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>{L("emailReminder")}</button>
                     </div>
                   </div>
                 );
@@ -1711,10 +1784,10 @@ function App() {
                       </div>
                       <div style={{display:"flex",gap:5}}>
                         <button onClick={()=>setModal({type:"editLoc",loc:{...loc,rooms:[...loc.rooms]}})} style={{background:c.bg,color:c.text,border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>✏️</button>
-                        <button onClick={()=>{if(window.confirm("למחוק?")) setLocations(p=>p.filter(l=>l.id!==loc.id));}} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑</button>
+                        <button onClick={()=>{if(window.confirm(lang==="en"?"Delete?":"למחוק?")) setLocations(p=>p.filter(l=>l.id!==loc.id));}} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑</button>
                       </div>
                     </div>
-                    <div style={{fontSize:11,color:T.textMuted,marginBottom:8}}>{n} משובצים</div>
+                    <div style={{fontSize:11,color:T.textMuted,marginBottom:8}}>{n} {L("locAssigned")}</div>
                     <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                       {loc.rooms.map(r=><span key={r} style={{background:c.bg,color:c.text,borderRadius:5,padding:"2px 7px",fontSize:11,fontWeight:600}}>{r}</span>)}
                     </div>
@@ -1733,14 +1806,14 @@ function App() {
                 <h3 style={{margin:0,fontSize:15,color:T.text}}>{L("settingsTitle")}</h3>
                 <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
               </div>
-              {[{k:"experimentName",l:"שם הניסוי"},{k:"researcherName",l:"שם החוקר"},{k:"duration",l:"משך סשן"},{k:"currentUser",l:"משתמש נוכחי (לוג)"},{k:"baseDate",l:"תאריך התחלה",type:"date"}].map(f=>(
+              {[{k:"experimentName",l:L("settingExpName")},{k:"researcherName",l:L("settingResearcher")},{k:"duration",l:L("settingDuration")},{k:"currentUser",l:L("settingUser")},{k:"baseDate",l:L("settingBaseDate"),type:"date"}].map(f=>(
                 <div key={f.k} style={{marginBottom:11}}>
                   <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{f.l}</label>
                   <input type={f.type||"text"} value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))} style={{width:"100%",padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit",boxSizing:"border-box",background:T.inputBg,color:T.text}}/>
                 </div>
               ))}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:4}}>
-                {[{k:"totalTarget",l:"יעד"},{k:"perSlot",l:"במקביל"},{k:"maxPerDay",l:"מקס׳/יום"}].map(f=>(
+                {[{k:"totalTarget",l:L("settingTarget")},{k:"perSlot",l:L("settingParallel")},{k:"maxPerDay",l:L("settingMaxDay")}].map(f=>(
                   <div key={f.k}>
                     <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{f.l}</label>
                     <input type="number" min={1} value={settings[f.k]} onChange={e=>setSettings(s=>({...s,[f.k]:parseInt(e.target.value)||1}))} style={{width:"100%",padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit",boxSizing:"border-box",background:T.inputBg,color:T.text}}/>
@@ -1748,8 +1821,8 @@ function App() {
                 ))}
               </div>
               <div style={{marginTop:14,borderTop:`1px solid ${T.border}`,paddingTop:12,display:"flex",gap:8}}>
-                <button onClick={()=>{const blob=new Blob([JSON.stringify({participants,locations,settings,changelog},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="experiment_backup.json";a.click();}} style={{background:T.accent,color:"white",border:"none",padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>⬇️ ייצא JSON</button>
-                <button onClick={()=>{const i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.participants)setParticipants(d.participants);if(d.locations)setLocations(d.locations);if(d.settings)setSettings(d.settings);if(d.changelog)setChangelog(d.changelog);showToast("✅ שוחזר");}catch{showToast("שגיאה","error");}};r.readAsText(f);};i.click();}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>⬆️ יבוא JSON</button>
+                <button onClick={()=>{const blob=new Blob([JSON.stringify({participants,locations,settings,changelog},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="experiment_backup.json";a.click();}} style={{background:T.accent,color:"white",border:"none",padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{L("settingExportJSON")}</button>
+                <button onClick={()=>{const i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.participants)setParticipants(d.participants);if(d.locations)setLocations(d.locations);if(d.settings)setSettings(d.settings);if(d.changelog)setChangelog(d.changelog);showToast("✅ שוחזר");}catch{showToast("שגיאה","error");}};r.readAsText(f);};i.click();}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{L("settingImportJSON")}</button>
               </div>
             </div>
           </div>
@@ -1764,7 +1837,7 @@ function App() {
 
       {/* Location add/edit */}
       {(modal==="addLoc"||modal?.type==="editLoc")&&(
-        <LocModal loc={modal?.type==="editLoc"?modal.loc:{id:null,name:"",rooms:[]}} T={T}
+        <LocModal loc={modal?.type==="editLoc"?modal.loc:{id:null,name:"",rooms:[]}} T={T} L={L} lang={lang}
           onSave={l=>{if(l.id){setLocations(p=>p.map(x=>x.id===l.id?l:x));}else{setLocations(p=>[...p,{...l,id:newId(locations)}]);}setModal(null);}}
           onClose={()=>setModal(null)}/>
       )}
@@ -2182,10 +2255,10 @@ function ManualEmailComposer({participants, T, sendViaGmail, GS_URL, L, lang}) {
     <div>
       {/* Target selector */}
       <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
-        {[{v:"all",l:`כולם (${participants.filter(p=>p.email).length})`},
-          {v:"assigned",l:`משובצים (${participants.filter(p=>p.email&&p.assigned).length})`},
-          {v:"completed",l:`השלימו (${participants.filter(p=>p.email&&p.status==="completed").length})`},
-          {v:"selected",l:"בחירה ידנית"},
+        {[{v:"all",l:`${L("emailAll")} (${participants.filter(p=>p.email).length})`},
+          {v:"assigned",l:`${L("emailAssigned")} (${participants.filter(p=>p.email&&p.assigned).length})`},
+          {v:"completed",l:`${L("emailCompleted")} (${participants.filter(p=>p.email&&p.status==="completed").length})`},
+          {v:"selected",l:L("emailManual")},
         ].map(opt=>(
           <button key={opt.v} onClick={()=>setTargets(opt.v)} style={{
             background:targets===opt.v?"#4338CA":T.tablehead,
@@ -2383,7 +2456,9 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
 }
 
 // ── Location modal ────────────────────────────────────────────────────────────
-function LocModal({loc,T,onSave,onClose}) {
+function LocModal({L,lang,loc,T,onSave,onClose}) {
+  if(!L) L=(k)=>k;
+  if(!lang) lang="he";
   const [name,setName]=useState(loc.name||"");
   const [rooms,setRooms]=useState(loc.rooms||[]);
   const [nr,setNr]=useState("");
@@ -2397,7 +2472,7 @@ function LocModal({loc,T,onSave,onClose}) {
           <input value={name} onChange={e=>setName(e.target.value)} style={{...inputStyle,width:"100%",boxSizing:"border-box"}} placeholder="נמל, הר, אוניברסיטה…"/>
         </div>
         <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontSize:11,fontWeight:600,color:T.textMuted,marginBottom:6}}>חדרים</label>
+          <label style={{display:"block",fontSize:11,fontWeight:600,color:T.textMuted,marginBottom:6}}>{L("locRooms")}</label>
           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>
             {rooms.map(r=><span key={r} style={{background:"#EEF2FF",color:"#4338CA",borderRadius:5,padding:"2px 7px",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>{r}<button onClick={()=>setRooms(p=>p.filter(x=>x!==r))} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:12,padding:0}}>×</button></span>)}
           </div>
