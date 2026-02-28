@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>מנהל ניסוי</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+    const { useState, useMemo, useEffect, useRef, useCallback } = React;
+    const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } = Recharts;
+
+
+// ─── Version ──────────────────────────────────────────────────────────────────
+const APP_VERSION = "5.0.0";
+const APP_NAME = "מנהל ניסוי";
+
+// ─── Storage ──────────────────────────────────────────────────────────────────
+const SK = "exp_v5";
+const loadState = () => { try { const r = localStorage.getItem(SK); return r ? JSON.parse(r) : null; } catch { return null; } };
+const saveState = (s) => { try { localStorage.setItem(SK, JSON.stringify(s)); } catch {} };
+
+// ─── Google Sheets Sync ───────────────────────────────────────────────────────
+const GS_URL = "https://script.google.com/macros/s/AKfycbyuFJwANd8oR3S5fR_w5J2Qm4dZgvvgPQIwIhgV3wlajt6ZLTDi_a1djDwh5LsKbW0U/exec";
+
+async function gsGetAll() {
+  const res = await fetch(`${GS_URL}?action=getAll`);
+  if (!res.ok) throw new Error("Network error " + res.status);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+// ─── Seed data ────────────────────────────────────────────────────────────────
+const SEED = [{"name":"יריב איצקוביץ'","email":"Yarivitzko@gmail.com","phone":"0547829570","age":"29","gender":"גבר","availability":{"א":[],"ב":[],"ג":[],"ד":["בוקר (08:00-12:00)"],"ה":[],"ו":[]}},{"name":"דודו בחבוט","email":"Dudub987@gmail.com","phone":"0505949885","age":"26","gender":"גבר","availability":{"א":[],"ב":["צהריים (12:00-18:00)"],"ג":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ד":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"מוחמד שלאעטה","email":"mshalata79@gmail.com","phone":"0547425877","age":"24","gender":"גבר","availability":{"א":[],"ב":[],"ג":[],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"רימא חנגר","email":"reema.kh99@gmail.com","phone":"0547972793","age":"22","gender":"אישה","availability":{"א":[],"ב":["צהריים (12:00-18:00)"],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":[],"ו":[]}},{"name":"חן הוכשטט","email":"chen100h@gmail.com","phone":"0542863524","age":"34","gender":"גבר","availability":{"א":[],"ב":[],"ג":[],"ד":[],"ה":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"]}},{"name":"שרה אגבריה","email":"Ag.saraosh@gmail.com","phone":"0549939105","age":"24","gender":"אישה","availability":{"א":[],"ב":[],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"נגה הררי","email":"Nogush212@gmail.com","phone":"052-3262666","age":"26","gender":"אישה","availability":{"א":[],"ב":[],"ג":["צהריים (12:00-18:00)"],"ד":[],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"רנת קרימוב","email":"Karmant8@gmail.com","phone":"0549409320","age":"35","gender":"גבר","availability":{"א":["צהריים (12:00-18:00)"],"ב":[],"ג":[],"ד":[],"ה":["בוקר (08:00-12:00)"],"ו":["צהריים (12:00-18:00)"]}},{"name":"דריה גליקמן","email":"","phone":"0528759788","age":"25","gender":"אישה","availability":{"א":["צהריים (12:00-18:00)"],"ב":["צהריים (12:00-18:00)"],"ג":[],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"אליסה קולסניק","email":"kolesnikalisa29@gmail.com","phone":"0559635724","age":"28","gender":"אישה","availability":{"א":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ב":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ג":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ד":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ה":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"]}},{"name":"גאורגי דורוגוי","email":"gdorogoy@gmail.com","phone":"0586838206","age":"19","gender":"גבר","availability":{"א":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ב":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ג":[],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)"]}},{"name":"נור אדביה","email":"Nouredbia@gmail.com","phone":"058-7676773","age":"26","gender":"אישה","availability":{"א":["צהריים (12:00-18:00)"],"ב":["בוקר (08:00-12:00)"],"ג":["בוקר (08:00-12:00)"],"ד":["בוקר (08:00-12:00)"],"ה":["בוקר (08:00-12:00)"],"ו":["בוקר (08:00-12:00)"]}},{"name":"ראיה זובידאת","email":"raya.zubidat2002@gmail.com","phone":"0522096678","age":"23","gender":"אישה","availability":{"א":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ב":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ג":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ד":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ה":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"]}},{"name":"שאדה עיסאווי","email":"esawishada@gmail.com","phone":"0584886401","age":"22","gender":"אישה","availability":{"א":["בוקר (08:00-12:00)"],"ב":["בוקר (08:00-12:00)"],"ג":["בוקר (08:00-12:00)"],"ד":["בוקר (08:00-12:00)"],"ה":["בוקר (08:00-12:00)"],"ו":[]}},{"name":"הילה שק","email":"hillashek@gmail.com","phone":"0546444179","age":"23","gender":"אישה","availability":{"א":[],"ב":[],"ג":[],"ד":[],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"דניאל פייגר","email":"daniellefaiger@gmail.com","phone":"0533356876","age":"21","gender":"אישה","availability":{"א":[],"ב":[],"ג":[],"ד":[],"ה":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"]}},{"name":"אלאא יוסף","email":"ay1260127@gmail.com","phone":"0522201826","age":"22","gender":"אישה","availability":{"א":[],"ב":["צהריים (12:00-18:00)"],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":[],"ו":[]}},{"name":"ליאן טרביה","email":"Layan.tarabeih@gmail.com","phone":"0505990406","age":"23","gender":"אישה","availability":{"א":["צהריים (12:00-18:00)"],"ב":["צהריים (12:00-18:00)"],"ג":[],"ד":[],"ה":[],"ו":["בוקר (08:00-12:00)"]}},{"name":"כרמל בר","email":"Carmel2882@gmail.com","phone":"0548103777","age":"32","gender":"אישה","availability":{"א":[],"ב":[],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)"]}},{"name":"אלן ווקר","email":"ajwecker@gmail.com","phone":"0546476275","age":"65","gender":"גבר","availability":{"א":[],"ב":[],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":[],"ו":[]}},{"name":"עידן הלפרן","email":"idanhalpern@gmail.com","phone":"0526708800","age":"23","gender":"גבר","availability":{"א":["צהריים (12:00-18:00)"],"ב":["צהריים (12:00-18:00)"],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"מלאק דראושה","email":"mlkdrr7@icloud.com","phone":"0547419334","age":"21","gender":"אישה","availability":{"א":["צהריים (12:00-18:00)"],"ב":["צהריים (12:00-18:00)"],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":["צהריים (12:00-18:00)"]}}];
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const DAYS = ["א","ב","ג","ד","ה","ו"];
+const DAY_NAMES = {"א":"ראשון","ב":"שני","ג":"שלישי","ד":"רביעי","ה":"חמישי","ו":"שישי"};
+const SLOTS = ["בוקר (08:00-12:00)","צהריים (12:00-18:00)"];
+const DAY_SUB = {"א":"יום א","ב":"יום ב","ג":"יום ג","ד":"יום ד","ה":"יום ה","ו":"יום ו"};
+const HEBREW_MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+
+const STATUS_META = {
+  pending:   { label:"ממתין",  dot:"#4B6BFB", bg:"#F0F4FF", text:"#4B6BFB", border:"#C7D4FF" },
+  assigned:  { label:"שובץ",   dot:"#059669", bg:"#ECFDF5", text:"#059669", border:"#A7F3D0" },
+  confirmed: { label:"אישר",   dot:"#D97706", bg:"#FFF7ED", text:"#D97706", border:"#FDE68A" },
+  completed: { label:"השלים", dot:"#6B7280", bg:"#F3F4F6", text:"#374151", border:"#D1D5DB" },
+  declined:  { label:"ביטל",  dot:"#DC2626", bg:"#FEF2F2", text:"#DC2626", border:"#FECACA" },
+};
+const LOC_COLORS = [
+  {bg:"#EEF2FF",text:"#4338CA",border:"#C7D4FF",dot:"#4338CA",chart:"#4338CA"},
+  {bg:"#FFF7ED",text:"#C2410C",border:"#FED7AA",dot:"#EA580C",chart:"#EA580C"},
+  {bg:"#F0FDF4",text:"#166534",border:"#A7F3D0",dot:"#16A34A",chart:"#16A34A"},
+  {bg:"#FDF4FF",text:"#7E22CE",border:"#E9D5FF",dot:"#9333EA",chart:"#9333EA"},
+];
+
+// ─── Dark mode tokens ─────────────────────────────────────────────────────────
+const THEME = {
+  light: {
+    bg:"#F7F8FC", surface:"#FFFFFF", border:"#E5E7EB", text:"#1A1D2E",
+    textMuted:"#6B7280", textFaint:"#9CA3AF", headerBg:"linear-gradient(135deg,#1E1B4B,#312E81,#4338CA)",
+    rowEven:"#FFFFFF", rowOdd:"#FAFAFA", rowSel:"#F5F3FF", inputBg:"#FFFFFF",
+    tablehead:"#F8F9FF", accent:"#4338CA",
+  },
+  dark: {
+    bg:"#0F1117", surface:"#1E2130", border:"#2D3148", text:"#E8EAFF",
+    textMuted:"#8B92C0", textFaint:"#555D85", headerBg:"linear-gradient(135deg,#0A0820,#13103A,#1D1880)",
+    rowEven:"#1E2130", rowOdd:"#181C2B", rowSel:"#252A45", inputBg:"#252A45",
+    tablehead:"#181C2B", accent:"#7C82FF",
+  }
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const norm = s => (s||"").toLowerCase().replace(/[-\s]/g,"");
+const dupReason = (a,b) => {
+  if(a.email && norm(a.email)===norm(b.email)) return "אימייל";
+  if(a.phone && a.phone.length>5 && norm(a.phone)===norm(b.phone)) return "טלפון";
+  if(norm(a.name)===norm(b.name) && a.name.length>1) return "שם";
+  return null;
+};
+const fmtDate = d => `${d.getDate()}/${d.getMonth()+1}`;
+const tsToStr = ts => { const d=new Date(ts); return `${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
+const newId = arr => Math.max(0,...arr.map(x=>x.id||0))+1;
+
+function parseCSVRows(text) {
+  const lines = text.split("\n").filter(Boolean);
+  if(lines.length<2) return [];
+  const headers = lines[0].split(",").map(h=>h.replace(/"/g,"").trim());
+  return lines.slice(1).map(line=>{
+    const vals=line.split(",").map(v=>v.replace(/"/g,"").trim());
+    const obj={}; headers.forEach((h,i)=>obj[h]=vals[i]||""); return obj;
+  });
+}
+function parseRow(row,id) {
+  const g=s=>{const k=Object.keys(row).find(k=>k.includes(s));return k?(row[k]||"").toString().trim():"";};
+  const avail={};
+  DAYS.forEach(d=>{const raw=g(DAY_SUB[d]);avail[d]=raw?raw.split(",").map(x=>x.trim()).filter(Boolean):[];});
+  return {id,name:g("שם מלא")||g("שם"),email:g("אימייל")||g("Email")||g("email"),phone:g("טלפון"),age:g("גיל"),gender:g("מגדר"),availability:avail,assigned:null,status:"pending",notes:"",importedAt:Date.now()};
+}
+function exportCSV(rows,filename) {
+  if(!rows.length) return;
+  const headers=Object.keys(rows[0]);
+  const csv=[headers.join(","),...rows.map(r=>headers.map(h=>`"${(r[h]||"").toString().replace(/"/g,'""')}"`).join(","))].join("\n");
+  const dataUri="data:text/csv;charset=utf-8,\uFEFF"+encodeURIComponent(csv);
+  const a=document.createElement("a");
+  a.href=dataUri;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// Empty participant template
+const emptyP = () => ({
+  id:null,name:"",email:"",phone:"",age:"",gender:"",
+  availability:{א:[],ב:[],ג:[],ד:[],ה:[],ו:[]},
+  assigned:null,status:"pending",notes:"",importedAt:Date.now()
+});
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const saved = loadState();
+  const [participants,setParticipants] = useState(()=>saved?.participants||SEED.map((p,i)=>({...p,id:i,assigned:null,status:"pending",notes:"",importedAt:0})));
+  const [locations,setLocations]       = useState(()=>saved?.locations||[{id:1,name:"נמל",rooms:["כיתה א","כיתה ב"]},{id:2,name:"הר",rooms:["חדר 1"]}]);
+  const [settings,setSettings]         = useState(()=>saved?.settings||{perSlot:1,maxPerDay:6,totalTarget:30,experimentName:"ניסוי תכנון מסלול נסיעה עם AI",researcherName:"החוקר",duration:"90 דקות",baseDate:new Date().toISOString().split("T")[0],gmailToken:"",currentUser:"חוקר 1"});
+  const [changelog,setChangelog]       = useState(()=>saved?.changelog||[]);
+  const [darkMode,setDarkMode]         = useState(()=>saved?.darkMode||false);
+
+  // ── Sync state ────────────────────────────────────────────────────────────
+  const [syncStatus,setSyncStatus] = useState("idle"); // idle | syncing | ok | error
+  const [syncMsg,setSyncMsg]       = useState("");
+  const [lastSync,setLastSync]     = useState(null);
+  const syncTimerRef               = useRef(null);
+
+  // UI state
+  const [tab,setTab]             = useState("assignments");
+  const [menuOpen,setMenuOpen]   = useState(false);
+  const [modal,setModal]         = useState(null); // "help"|"about"|"changelog"|"settings"|"gmail"|"addEdit"
+  const [editP,setEditP]         = useState(null); // participant being added/edited
+  const [selected,setSelected]   = useState(new Set());
+  const [sortCol,setSortCol]     = useState("name");
+  const [sortDir,setSortDir]     = useState("asc");
+  const [filters,setFilters]     = useState({name:"",status:"",location:"",day:"",gender:"",assigned:""});
+  const [emailModal,setEmailModal] = useState(null);
+  const [toast,setToast]           = useState(null);
+  const [dupModal,setDupModal]     = useState(null);
+  const [exportMenu,setExportMenu] = useState(false);
+  const [chartFilter,setChartFilter] = useState({status:"",location:""});
+  const [weekOffset,setWeekOffset] = useState(0);
+  const [calMode,setCalMode]       = useState("week");
+  const [calMonth,setCalMonth]     = useState(()=>{const n=new Date();return{y:n.getFullYear(),m:n.getMonth()};});
+  const [gmailConnected,setGmailConnected] = useState(false);
+  const fileRef = useRef();
+
+  const T = darkMode ? THEME.dark : THEME.light;
+
+  // Persist locally
+  useEffect(()=>{saveState({participants,locations,settings,changelog,darkMode});},[participants,locations,settings,changelog,darkMode]);
+
+  // ── Load from Sheets on startup ───────────────────────────────────────────
+  useEffect(()=>{
+    setSyncStatus("syncing");setSyncMsg("טוען מ-Google Sheets...");
+    gsGetAll()
+      .then(data=>{
+        if(data.error) throw new Error(data.error);
+        if(data.participants?.length) setParticipants(data.participants);
+        if(data.locations?.length)    setLocations(data.locations);
+        if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
+        if(data.researchers?.length)  ; // could store if needed
+        setSyncStatus("ok");setSyncMsg("מסונכרן");setLastSync(new Date());
+      })
+      .catch(err=>{
+        setSyncStatus("error");setSyncMsg("לא מחובר לשיטס — עובד מקומית");
+        console.warn("Sheets load failed:",err);
+      });
+  },[]);
+
+  // ── Auto-save to Sheets (debounced 3s after any change) ───────────────────
+  useEffect(()=>{
+    if(syncStatus==="syncing") return;
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current=setTimeout(()=>{
+      setSyncStatus("syncing");setSyncMsg("שומר...");
+      gsSaveAll({participants,locations,settings,user:settings.currentUser})
+        .then(r=>{
+          if(r.error) throw new Error(r.error);
+          setSyncStatus("ok");setSyncMsg("נשמר");setLastSync(new Date());
+        })
+        .catch(()=>{setSyncStatus("error");setSyncMsg("שגיאת שמירה");});
+    },3000);
+    return ()=>clearTimeout(syncTimerRef.current);
+  },[participants,locations,settings]);
+
+  const showToast=(msg,type="ok")=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
+
+  const locById = useMemo(()=>{const m={};locations.forEach(l=>m[l.id]=l);return m;},[locations]);
+  const locColor = id=>LOC_COLORS[(locations.findIndex(l=>l.id===id)||0)%LOC_COLORS.length];
+
+  // ── Changelog ──────────────────────────────────────────────────────────────
+  const addLog = useCallback((action,details)=>{
+    const entry={id:Date.now(),ts:Date.now(),user:settings.currentUser,action,details};
+    setChangelog(prev=>[entry,...prev].slice(0,500));
+  },[settings.currentUser]);
+
+  // ── Participant mutations ──────────────────────────────────────────────────
+  const updP = useCallback((id,patch,logMsg)=>{
+    setParticipants(prev=>prev.map(p=>p.id===id?{...p,...patch}:p));
+    if(logMsg) addLog("עדכון",logMsg);
+    // Sync single row to Sheets immediately (fast path)
+    gsUpdateP(id, patch, settings.currentUser)
+      .then(()=>{setSyncStatus("ok");setSyncMsg("נשמר");setLastSync(new Date());})
+      .catch(()=>{setSyncStatus("error");setSyncMsg("שגיאת שמירה");});
+  },[addLog, settings.currentUser]);
+
+  const assignP = (id,day,slot,locationId,room)=>{
+    const p=participants.find(x=>x.id===id);
+    updP(id,{assigned:{day,slot,locationId,room},status:"assigned"},`שיבוץ ${p?.name} ← יום ${DAY_NAMES[day]} ${slot.includes("בוקר")?"בוקר":"צהריים"} @ ${locById[locationId]?.name||""}`);
+  };
+  const clearA = id=>{
+    const p=participants.find(x=>x.id===id);
+    updP(id,{assigned:null,status:"pending"},`ניקוי שיבוץ: ${p?.name}`);
+  };
+
+  // ── Auto-assign ────────────────────────────────────────────────────────────
+  function autoAssign(ids) {
+    const updated=participants.map(p=>({...p}));
+    const cnt={};
+    updated.filter(p=>p.assigned).forEach(p=>{const k=`${p.assigned.day}_${p.assigned.slot}_${p.assigned.locationId}`;cnt[k]=(cnt[k]||0)+1;});
+    const queue=updated.filter(p=>(ids?ids.has(p.id):!p.assigned)&&Object.values(p.availability).some(s=>s.length>0))
+      .sort((a,b)=>Object.values(a.availability).flat().length-Object.values(b.availability).flat().length);
+    let n=0;
+    queue.forEach(p=>{
+      outer:for(const day of DAYS){
+        if(updated.filter(u=>u.assigned?.day===day).length>=settings.maxPerDay) continue;
+        for(const slot of p.availability[day]||[]){
+          for(const loc of locations){
+            const k=`${day}_${slot}_${loc.id}`;
+            if((cnt[k]||0)<settings.perSlot){
+              const idx=updated.findIndex(u=>u.id===p.id);
+              updated[idx].assigned={day,slot,locationId:loc.id,room:loc.rooms[0]||""};
+              updated[idx].status="assigned";cnt[k]=(cnt[k]||0)+1;n++;break outer;
+            }
+          }
+        }
+      }
+    });
+    setParticipants(updated);
+    addLog("שיבוץ אוטומטי",`שובצו ${n} משתתפים`);
+    showToast(`⚡ שובצו ${n} משתתפים`);
+  }
+
+  // ── Clear assignments ──────────────────────────────────────────────────────
+  function clearAssignments(ids) {
+    const count = ids ? ids.size : participants.filter(p=>p.assigned).length;
+    if(!window.confirm(`לנקות ${count} שיבוצים?`)) return;
+    setParticipants(prev=>prev.map(p=>(ids?ids.has(p.id):true)&&p.assigned?{...p,assigned:null,status:"pending"}:p));
+    addLog("ניקוי שיבוצים",`נוקו ${count} שיבוצים ע"י ${settings.currentUser}`);
+    showToast(`🗑 נוקו ${count} שיבוצים`);
+  }
+
+  // ── Add / Edit participant ─────────────────────────────────────────────────
+  function saveParticipant(p) {
+    if(!p.id) {
+      const np={...p,id:newId(participants)};
+      setParticipants(prev=>[...prev,np]);
+      addLog("הוספה ידנית",`נוסף: ${np.name}`);
+      showToast(`✅ ${np.name} נוסף`);
+    } else {
+      updP(p.id,p,`עריכה: ${p.name}`);
+      showToast(`✅ ${p.name} עודכן`);
+    }
+    setModal(null);setEditP(null);
+  }
+
+  // ── CSV import ─────────────────────────────────────────────────────────────
+  function handleFile(file) {
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const rows=parseCSVRows(e.target.result);
+      let nextId=newId(participants);
+      const newOnes=[],conflicts=[];
+      rows.forEach(row=>{
+        const p=parseRow(row,nextId++);
+        if(!p.name) return;
+        const dups=participants.filter(ex=>dupReason(p,ex));
+        if(dups.length>0) conflicts.push({incoming:p,existing:dups,reason:dupReason(p,dups[0])});
+        else newOnes.push(p);
+      });
+      if(conflicts.length>0) setDupModal({conflicts,index:0,newOnes,resolved:[]});
+      else{setParticipants(prev=>[...prev,...newOnes]);addLog("יבוא CSV",`יובאו ${newOnes.length} משתתפים`);showToast(`✅ יובאו ${newOnes.length}`);}
+    };
+    reader.readAsText(file,"UTF-8");
+  }
+  function resolveDup(action) {
+    const {conflicts,index,newOnes,resolved}=dupModal;
+    const {incoming,existing}=conflicts[index];
+    const newR=[...resolved,{action,name:incoming.name,p:incoming}];
+    if(action==="replace") setParticipants(prev=>prev.map(p=>p.id===existing[0].id?{...incoming,id:p.id,assigned:p.assigned,status:p.status}:p));
+    else if(action==="merge") setParticipants(prev=>prev.map(p=>p.id===existing[0].id?{...p,availability:incoming.availability,email:incoming.email||p.email}:p));
+    const next=index+1;
+    if(next<conflicts.length){setDupModal({...dupModal,index:next,resolved:newR});return;}
+    const toAdd=[...newOnes,...newR.filter(r=>r.action==="add").map(r=>r.p)];
+    setParticipants(prev=>[...prev,...toAdd]);
+    setDupModal(null);
+    addLog("יבוא CSV",`יובאו ${toAdd.length}, מוזגו ${newR.filter(r=>r.action==="merge").length}`);
+    showToast(`✅ ${toAdd.length} נוספו`);
+  }
+
+  // ── Export ─────────────────────────────────────────────────────────────────
+  function doExport(field) {
+    const list=selected.size>0?participants.filter(p=>selected.has(p.id)):participants;
+    const map={
+      all: p=>({שם:p.name,אימייל:p.email||"",טלפון:p.phone||"",גיל:p.age||"",מגדר:p.gender||"",יום:p.assigned?DAY_NAMES[p.assigned.day]:"",משמרת:p.assigned?.slot||"",מיקום:p.assigned?locById[p.assigned.locationId]?.name||"":"",חדר:p.assigned?.room||"",סטטוס:STATUS_META[p.status].label,הערות:p.notes||""}),
+      email: p=>({שם:p.name,אימייל:p.email||""}),
+      phone: p=>({שם:p.name,טלפון:p.phone||""}),
+    };
+    exportCSV(list.map(map[field]),`${field}_export.csv`);
+    setExportMenu(false);
+  }
+  function doExportJSON() {
+    const json=JSON.stringify({participants,locations,settings,changelog},null,2);
+    const dataUri="data:application/json;charset=utf-8,"+encodeURIComponent(json);
+    const a=document.createElement("a");
+    a.href=dataUri;
+    a.download="experiment_backup.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast("✅ JSON exported");
+  }
+
+  // ── Sort & filter ──────────────────────────────────────────────────────────
+  const sortedFiltered = useMemo(()=>{
+    let list=[...participants];
+    if(filters.name) list=list.filter(p=>p.name.includes(filters.name)||p.email.includes(filters.name));
+    if(filters.status) list=list.filter(p=>p.status===filters.status);
+    if(filters.gender) list=list.filter(p=>p.gender===filters.gender);
+    if(filters.assigned==="yes") list=list.filter(p=>p.assigned);
+    if(filters.assigned==="no") list=list.filter(p=>!p.assigned);
+    if(filters.location) list=list.filter(p=>p.assigned?.locationId===parseInt(filters.location));
+    if(filters.day) list=list.filter(p=>p.assigned?.day===filters.day);
+    list.sort((a,b)=>{
+      let va=a[sortCol]||"", vb=b[sortCol]||"";
+      if(sortCol==="age") {va=parseInt(va)||0;vb=parseInt(vb)||0;return sortDir==="asc"?va-vb:vb-va;}
+      va=va.toString().toLowerCase();vb=vb.toString().toLowerCase();
+      return sortDir==="asc"?va.localeCompare(vb,"he"):vb.localeCompare(va,"he");
+    });
+    return list;
+  },[participants,filters,sortCol,sortDir]);
+
+  const toggleSort = col=>{if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortCol(col);setSortDir("asc");}};
+  const SortIcon = ({col})=>sortCol===col?<span style={{fontSize:10,marginRight:2}}>{sortDir==="asc"?"↑":"↓"}</span>:<span style={{fontSize:10,marginRight:2,opacity:0.3}}>↕</span>;
+
+  // ── Selection ──────────────────────────────────────────────────────────────
+  const toggleSel = id=>{setSelected(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});};
+  const selList = participants.filter(p=>selected.has(p.id));
+  const selHasAssigned = selList.some(p=>p.assigned);
+  const selCanAutoAssign = selList.some(p=>!p.assigned&&Object.values(p.availability).some(s=>s.length>0));
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  const stats = useMemo(()=>{
+    let src=participants;
+    if(chartFilter.status) src=src.filter(p=>p.status===chartFilter.status);
+    if(chartFilter.location) src=src.filter(p=>p.assigned?.locationId===parseInt(chartFilter.location));
+    const byStatus={};Object.keys(STATUS_META).forEach(s=>byStatus[s]=0);
+    participants.forEach(p=>byStatus[p.status]=(byStatus[p.status]||0)+1);
+    const byDay=DAYS.map(d=>({day:DAY_NAMES[d],count:src.filter(p=>p.assigned?.day===d).length}));
+    const byLoc=locations.map(l=>({name:l.name,count:src.filter(p=>p.assigned?.locationId===l.id).length}));
+    const byGender=[{name:"גבר",count:src.filter(p=>p.gender==="גבר").length},{name:"אישה",count:src.filter(p=>p.gender==="אישה").length}];
+    return{byStatus,byDay,byLoc,byGender,noAvail:participants.filter(p=>Object.values(p.availability).every(s=>s.length===0)).length,total:participants.length};
+  },[participants,locations,chartFilter]);
+
+  // ── Email builder ──────────────────────────────────────────────────────────
+  function buildEmail(p,type="invitation") {
+    const loc=p.assigned?(locById[p.assigned.locationId]?.name||""):"";
+    const room=p.assigned?.room||"";
+    const day=p.assigned?`יום ${DAY_NAMES[p.assigned.day]}`:"—";
+    const slot=p.assigned?p.assigned.slot.replace("בוקר (08:00-12:00)","08:00–12:00").replace("צהריים (12:00-18:00)","12:00–18:00"):"—";
+    if(type==="invitation") return{subject:`הזמנה לניסוי – ${settings.experimentName}`,body:`שלום ${p.name},\n\nשמחנו להזמין אותך לניסוי "${settings.experimentName}"!\n\n📅 יום: ${day}\n⏰ שעות: ${slot}\n📍 מיקום: ${loc}${room?` – ${room}`:""}\n⏱ משך: ${settings.duration}\n\nאנא אשר/י הגעה במענה למייל זה.\n\nבברכה,\n${settings.researcherName}`};
+    if(type==="reminder") return{subject:`תזכורת – ${settings.experimentName}`,body:`שלום ${p.name},\n\nתזכורת: ${day} | ${slot} | ${loc}${room?` – ${room}`:""}\n\nמחכים לראותך!\n\nבברכה,\n${settings.researcherName}`};
+    return{subject:`עדכון זמינות – ${settings.experimentName}`,body:`שלום ${p.name},\n\nלא מצאנו זמן מתאים. האם תוכל/י לעדכן ימים נוספים?\n\nבברכה,\n${settings.researcherName}`};
+  }
+
+  // ── Gmail OAuth (mailto fallback in artifact) ──────────────────────────────
+  function sendViaGmail(subject,body,to) {
+    // In an artifact we cannot use OAuth directly — we open Gmail compose with prefill
+    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,"_blank");
+    addLog("מייל",`נשלח מייל ל: ${to}`);
+  }
+
+  // ── Calendar ───────────────────────────────────────────────────────────────
+  function getWeekDates(offset) {
+    const base=new Date(settings.baseDate);
+    base.setDate(base.getDate()+offset*7);
+    const day=base.getDay();
+    const sun=new Date(base);sun.setDate(base.getDate()-day);
+    return Array.from({length:6},(_,i)=>{const x=new Date(sun);x.setDate(sun.getDate()+i);return x;});
+  }
+  const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset,settings.baseDate]);
+
+  // ── CSS vars via style tag ─────────────────────────────────────────────────
+  const baseStyle={fontFamily:"'Segoe UI','Arial Hebrew',Arial,sans-serif",background:T.bg,minHeight:"100vh",color:T.text,transition:"background .3s,color .3s"};
+
+  // ══════════════════════════════════════════════════════════════════════════
+  return (
+    <div dir="rtl" style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);}}>
+
+      {/* ── Header ── */}
+      <div style={{background:T.headerBg,padding:"14px 22px",color:"white",position:"sticky",top:0,zIndex:50,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
+        <div style={{maxWidth:1500,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            {/* Hamburger menu */}
+            <div style={{position:"relative"}}>
+              <button onClick={e=>{e.stopPropagation();setMenuOpen(v=>!v);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:8,padding:"7px 10px",cursor:"pointer",fontSize:18,lineHeight:1}}>☰</button>
+              {menuOpen&&(
+                <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 12px 40px rgba(0,0,0,0.2)",zIndex:200,minWidth:200,overflow:"hidden"}}>
+                  {[
+                    {icon:"📖",label:"הדרכה ועזרה",action:()=>{setModal("help");setMenuOpen(false);}},
+                    {icon:"📋",label:"לוג שינויים",action:()=>{setModal("changelog");setMenuOpen(false);}},
+                    {icon:"🌙",label:darkMode?"מצב בהיר":"מצב כהה",action:()=>{setDarkMode(v=>!v);setMenuOpen(false);}},
+                    {icon:"✉️",label:"הגדרות Gmail",action:()=>{setModal("gmail");setMenuOpen(false);}},
+                    {icon:"⚙️",label:"הגדרות",action:()=>{setTab("settings");setMenuOpen(false);}},
+                    {icon:"ℹ️",label:"אודות",action:()=>{setModal("about");setMenuOpen(false);}},
+                  ].map(item=>(
+                    <button key={item.label} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"right",padding:"11px 16px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
+                      <span>{item.icon}</span>{item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <h1 style={{margin:0,fontSize:18,fontWeight:800}}>{APP_NAME}</h1>
+              <p style={{margin:0,opacity:0.6,fontSize:11}}>{settings.experimentName}</p>
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            {/* Location legend */}
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {locations.map((loc,i)=>{const c=LOC_COLORS[i%LOC_COLORS.length];return(
+                <span key={loc.id} style={{background:"rgba(255,255,255,0.13)",borderRadius:20,padding:"3px 9px",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:c.dot,display:"inline-block"}}/>
+                  {loc.name}
+                </span>);
+              })}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
+              {/* Sync indicator */}
+              <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.1)",borderRadius:7,padding:"4px 10px"}}>
+                <span style={{fontSize:11}}>
+                  {syncStatus==="syncing"&&"⏳"}
+                  {syncStatus==="ok"&&"☁️"}
+                  {syncStatus==="error"&&"💾"}
+                  {syncStatus==="idle"&&"💾"}
+                </span>
+                <span style={{fontSize:10,color:"rgba(255,255,255,0.85)",fontWeight:600}}>
+                  {syncStatus==="ok"?"שמור בענן":syncStatus==="syncing"?"שומר...":"שמור מקומית"}
+                </span>
+                {lastSync&&syncStatus==="ok"&&<span style={{fontSize:9,opacity:0.5}}>{lastSync.getHours()}:{String(lastSync.getMinutes()).padStart(2,"0")}</span>}
+                {/* Manual share button */}
+                <button onClick={()=>{
+                  const json=JSON.stringify({participants,locations,settings,changelog},null,2);
+                  navigator.clipboard.writeText(json).then(()=>showToast("📋 JSON הועתק — הדבק לשותף")).catch(()=>showToast("השתמש בייצוא JSON","err"));
+                }} title="העתק JSON לשיתוף" style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
+                  שתף
+                </button>
+              </div>
+              {/* Progress pill */}
+              <div style={{background:"rgba(255,255,255,0.12)",borderRadius:9,padding:"6px 13px",textAlign:"center"}}>
+                <div style={{fontSize:19,fontWeight:900,lineHeight:1}}>{stats.byStatus.completed}/{settings.totalTarget}</div>
+                <div style={{fontSize:9,opacity:0.65,marginTop:1}}>השלימו</div>
+                <div style={{marginTop:3,background:"rgba(255,255,255,0.2)",borderRadius:3,height:4,width:80}}>
+                  <div style={{background:"#34D399",height:4,borderRadius:3,width:`${Math.min(100,stats.byStatus.completed/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Global bar: stats + import/export + user ── */}
+      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"8px 22px"}}>
+        <div style={{maxWidth:1500,margin:"0 auto",display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
+          {/* Stats */}
+          {[{l:"נרשמו",v:stats.total,c:T.accent},{l:"שובצו",v:stats.byStatus.assigned,c:"#059669"},{l:"אישרו",v:stats.byStatus.confirmed,c:"#D97706"},{l:"השלימו",v:stats.byStatus.completed,c:T.textMuted},{l:"ביטלו",v:stats.byStatus.declined,c:"#DC2626"}].map(s=>(
+            <div key={s.l} style={{textAlign:"center"}}>
+              <div style={{fontSize:19,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div>
+              <div style={{fontSize:9,color:T.textFaint,marginTop:1}}>{s.l}</div>
+            </div>
+          ))}
+          <div style={{width:1,height:28,background:T.border}}/>
+          {/* Global actions */}
+          <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center",marginRight:"auto"}}>
+            <span style={{fontSize:11,color:T.textMuted,background:T.tablehead,padding:"4px 10px",borderRadius:6,display:"flex",alignItems:"center",gap:5}}>
+              👤 {settings.currentUser}
+            </span>
+            <div style={{position:"relative"}}>
+              <button onClick={e=>{e.stopPropagation();setExportMenu(v=>!v);}} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:600}}>
+                ⬇️ ייצוא
+              </button>
+              {exportMenu&&(
+                <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",zIndex:200,minWidth:180}}>
+                  <div style={{padding:"6px 12px",fontSize:10,color:T.textFaint,borderBottom:`1px solid ${T.border}`}}>
+                    {selected.size>0?`${selected.size} נבחרו`:"כל הנבדקים"}
+                  </div>
+                  {[{l:"📋 כל הנתונים",f:"all"},{l:"📧 מיילים בלבד",f:"email"},{l:"📱 טלפונים בלבד",f:"phone"}].map(i=>(
+                    <button key={i.f} onClick={()=>doExport(i.f)} style={{display:"block",width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>{i.l}</button>
+                  ))}
+                  <button onClick={()=>{doExportJSON();setExportMenu(false);}} style={{display:"block",width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>🗂 JSON גיבוי</button>
+                </div>
+              )}
+            </div>
+            <button onClick={()=>fileRef.current?.click()} style={{background:T.accent,color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>📂 יבוא CSV</button>
+            <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{handleFile(e.target.files[0]);e.target.value="";}}/>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"0 22px"}}>
+        <div style={{maxWidth:1500,margin:"0 auto",display:"flex"}}>
+          {[{id:"assignments",l:"📋 שיבוצים"},{id:"calendar",l:"📅 לוח"},{id:"charts",l:"📊 גרפים"},{id:"emails",l:"✉️ מיילים"},{id:"locations",l:"📍 מיקומים"},{id:"settings",l:"⚙️ הגדרות"}].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:400,color:tab===t.id?T.accent:T.textMuted,borderBottom:tab===t.id?`2px solid ${T.accent}`:"2px solid transparent",fontFamily:"inherit",transition:"color .2s"}}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{maxWidth:1500,margin:"0 auto",padding:"16px 22px"}}>
+
+        {/* ══ ASSIGNMENTS ══════════════════════════════════════════════════════ */}
+        {tab==="assignments"&&(
+          <div>
+            {/* ── Table toolbar: primary actions + bulk ops ── */}
+            <div style={{marginBottom:8}}>
+              {/* Row 1: always-visible actions */}
+              <div style={{display:"flex",gap:7,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
+                <button onClick={()=>{setEditP(emptyP());setModal("addEdit");}} style={{background:"#059669",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                  ＋ הוסף נבדק
+                </button>
+                <button onClick={()=>autoAssign(null)} style={{background:"linear-gradient(135deg,#4338CA,#7C3AED)",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>
+                  ⚡ שיבוץ אוטומטי לכולם
+                </button>
+                {/* Counter pill */}
+                <span style={{fontSize:12,color:T.textMuted,background:T.surface,border:`1px solid ${T.border}`,padding:"5px 11px",borderRadius:20,marginRight:"auto"}}>
+                  {selected.size>0
+                    ? <><strong style={{color:T.accent}}>{selected.size}</strong> מסומנים מתוך {sortedFiltered.length} / {participants.length}</>
+                    : <>{sortedFiltered.length} / {participants.length} נבדקים</>
+                  }
+                </span>
+              </div>
+
+              {/* Row 2: bulk operations — shown only when rows are selected */}
+              {selected.size>0&&(
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",background:T.rowSel,border:`1px solid ${T.accent}44`,borderRadius:9,padding:"8px 12px"}}>
+                  <span style={{fontSize:11,fontWeight:700,color:T.accent,minWidth:80}}>📌 {selected.size} נבחרו:</span>
+
+                  {/* Auto-assign selected */}
+                  {selCanAutoAssign&&(
+                    <button onClick={()=>{autoAssign(selected);}} style={{background:"linear-gradient(135deg,#4338CA,#7C3AED)",color:"white",border:"none",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:11,fontFamily:"inherit"}}>
+                      ⚡ שבץ נבחרים
+                    </button>
+                  )}
+
+                  {/* Clear assignments of selected */}
+                  {selHasAssigned&&(
+                    <button onClick={()=>{
+                      const ids=selected;
+                      const count=[...ids].filter(id=>participants.find(p=>p.id===id)?.assigned).length;
+                      if(!window.confirm(`לנקות שיבוץ של ${count} נבדקים?`)) return;
+                      setParticipants(prev=>prev.map(p=>ids.has(p.id)&&p.assigned?{...p,assigned:null,status:"pending"}:p));
+                      addLog("ניקוי שיבוצים",`נוקו ${count} שיבוצים ע"י ${settings.currentUser}`);
+                      showToast(`🗑 נוקו ${count} שיבוצים`);
+                      setSelected(new Set());
+                    }} style={{background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
+                      🗑 נקה שיבוצים
+                    </button>
+                  )}
+
+                  {/* Bulk set status */}
+                  <select defaultValue="" onChange={e=>{
+                    if(!e.target.value) return;
+                    const status=e.target.value;
+                    setParticipants(prev=>prev.map(p=>selected.has(p.id)?{...p,status}:p));
+                    addLog("עדכון סטטוס",`סטטוס "${STATUS_META[status].label}" ל-${selected.size} נבדקים`);
+                    showToast(`✅ סטטוס עודכן ל-${selected.size} נבדקים`);
+                    e.target.value="";
+                  }} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer"}}>
+                    <option value="">סטטוס לנבחרים…</option>
+                    {Object.entries(STATUS_META).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
+                  </select>
+
+                  {/* Bulk set location */}
+                  <select defaultValue="" onChange={e=>{
+                    if(!e.target.value) return;
+                    const locId=parseInt(e.target.value);
+                    const room=locById[locId]?.rooms[0]||"";
+                    setParticipants(prev=>prev.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,locationId:locId,room}}:p));
+                    addLog("עדכון מיקום",`מיקום "${locById[locId]?.name}" ל-${selected.size} נבדקים`);
+                    showToast(`📍 מיקום עודכן`);
+                    e.target.value="";
+                  }} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer"}}>
+                    <option value="">מיקום לנבחרים…</option>
+                    {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+
+                  {/* Bulk set room */}
+                  {locations.some(l=>l.rooms.length>0)&&(
+                    <select defaultValue="" onChange={e=>{
+                      if(!e.target.value) return;
+                      const room=e.target.value;
+                      setParticipants(prev=>prev.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,room}}:p));
+                      showToast(`🏫 כיתה עודכנה`);
+                      e.target.value="";
+                    }} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer"}}>
+                      <option value="">כיתה/חדר לנבחרים…</option>
+                      {[...new Set(locations.flatMap(l=>l.rooms))].map(r=><option key={r} value={r}>{r}</option>)}
+                    </select>
+                  )}
+
+                  {/* Bulk email */}
+                  {selList.some(p=>p.email&&p.assigned)&&(
+                    <button onClick={()=>setModal("bulkEmail")} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
+                      ✉️ שלח מייל לנבחרים ({selList.filter(p=>p.email&&p.assigned).length})
+                    </button>
+                  )}
+
+                  <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:18,padding:"0 4px",marginRight:"auto"}}>×</button>
+                </div>
+              )}
+            </div>
+
+            {/* ── Filters row ── */}
+            <div style={{display:"flex",gap:7,marginBottom:8,flexWrap:"wrap",alignItems:"center",background:T.surface,padding:"8px 12px",borderRadius:10,border:`1px solid ${T.border}`}}>
+              <input placeholder="🔍 חיפוש שם / מייל" value={filters.name} onChange={e=>setFilters(f=>({...f,name:e.target.value}))}
+                style={{padding:"5px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:140}}/>
+              <select value={filters.status} onChange={e=>setFilters(f=>({...f,status:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
+                <option value="">כל הסטטוסים</option>
+                {Object.entries(STATUS_META).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
+              </select>
+              <select value={filters.gender} onChange={e=>setFilters(f=>({...f,gender:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
+                <option value="">כל המגדרים</option>
+                <option value="גבר">גבר</option><option value="אישה">אישה</option>
+              </select>
+              <select value={filters.assigned} onChange={e=>setFilters(f=>({...f,assigned:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
+                <option value="">שובצו/לא</option><option value="yes">שובצו</option><option value="no">לא שובצו</option>
+              </select>
+              <select value={filters.day} onChange={e=>setFilters(f=>({...f,day:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
+                <option value="">כל הימים</option>
+                {DAYS.map(d=><option key={d} value={d}>יום {DAY_NAMES[d]}</option>)}
+              </select>
+              <select value={filters.location} onChange={e=>setFilters(f=>({...f,location:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
+                <option value="">כל המיקומים</option>
+                {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+              {Object.values(filters).some(Boolean)&&(
+                <button onClick={()=>setFilters({name:"",status:"",location:"",day:"",gender:"",assigned:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ נקה סינון</button>
+              )}
+            </div>
+
+            <div style={{overflowX:"auto",borderRadius:10,border:`1px solid ${T.border}`,background:T.surface}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:1100}}>
+                <thead>
+                  <tr style={{background:T.tablehead,borderBottom:`2px solid ${T.border}`}}>
+                    <th style={{padding:"8px 10px",width:32}}>
+                      <input type="checkbox" checked={sortedFiltered.length>0&&sortedFiltered.every(p=>selected.has(p.id))} onChange={()=>{
+                        const ids=sortedFiltered.map(p=>p.id);
+                        const allOn=ids.every(id=>selected.has(id));
+                        setSelected(prev=>{const n=new Set(prev);ids.forEach(id=>allOn?n.delete(id):n.add(id));return n;});
+                      }} style={{cursor:"pointer"}}/>
+                    </th>
+                    {[{k:"name",l:"שם"},{k:"email",l:"אימייל"},{k:"age",l:"גיל"},{k:"gender",l:"מגדר"}].map(h=>(
+                      <th key={h.k} onClick={()=>toggleSort(h.k)} style={{padding:"8px 10px",textAlign:"right",fontSize:11,color:T.textMuted,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>
+                        <SortIcon col={h.k}/>{h.l}
+                      </th>
+                    ))}
+                    {["זמינות","יום","משמרת","מיקום","חדר","סטטוס","הערות","פעולות"].map(h=>(
+                      <th key={h} style={{padding:"8px 10px",textAlign:"right",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedFiltered.map((p,i)=>{
+                    const sm=STATUS_META[p.status];
+                    const lc=p.assigned?locColor(p.assigned.locationId):null;
+                    const isSel=selected.has(p.id);
+                    return (
+                      <tr key={p.id} style={{borderBottom:`1px solid ${T.border}`,background:isSel?T.rowSel:i%2===0?T.rowEven:T.rowOdd,transition:"background .1s"}}>
+                        <td style={{padding:"6px 10px",textAlign:"center"}}>
+                          <input type="checkbox" checked={isSel} onChange={()=>toggleSel(p.id)} style={{cursor:"pointer"}}/>
+                        </td>
+                        {/* Name */}
+                        <td style={{padding:"6px 10px",fontWeight:700,fontSize:13,whiteSpace:"nowrap",color:T.text}}>{p.name}</td>
+                        {/* Email */}
+                        <td style={{padding:"6px 10px",fontSize:11,color:T.textMuted,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {p.email||<span style={{color:"#FCA5A5"}}>חסר</span>}
+                        </td>
+                        {/* Age */}
+                        <td style={{padding:"6px 10px",fontSize:12,color:T.textMuted,textAlign:"center"}}>{p.age||"—"}</td>
+                        {/* Gender */}
+                        <td style={{padding:"6px 10px",fontSize:11}}>
+                          {p.gender&&<span style={{background:p.gender==="גבר"?"#EEF2FF":"#FDF4FF",color:p.gender==="גבר"?"#4338CA":"#7E22CE",borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700}}>{p.gender}</span>}
+                        </td>
+                        {/* Availability */}
+                        <td style={{padding:"6px 10px"}}>
+                          <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
+                            {DAYS.map(d=>p.availability[d]?.length>0?<span key={d} style={{background:T.tablehead,color:T.accent,borderRadius:3,padding:"1px 4px",fontSize:9,fontWeight:700,border:`1px solid ${T.border}`}}>{d}</span>:null)}
+                            {Object.values(p.availability).every(s=>s.length===0)&&<span style={{color:"#FCA5A5",fontSize:9}}>ללא</span>}
+                          </div>
+                        </td>
+                        {/* Day */}
+                        <td style={{padding:"4px 5px"}}>
+                          <select value={p.assigned?.day||""} onChange={e=>{
+                            const day=e.target.value;
+                            if(!day){clearA(p.id);return;}
+                            const slot=p.availability[day]?.[0]||SLOTS[0];
+                            assignP(p.id,day,slot,locations[0]?.id||null,locations[0]?.rooms[0]||"");
+                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.inputBg,color:p.assigned?T.accent:T.text,cursor:"pointer",minWidth:75}}>
+                            <option value="">— יום —</option>
+                            {DAYS.map(d=><option key={d} value={d}>{p.availability[d]?.length>0?"✓ ":"  "}יום {DAY_NAMES[d]}</option>)}
+                          </select>
+                        </td>
+                        {/* Slot */}
+                        <td style={{padding:"4px 5px"}}>
+                          <select value={p.assigned?.slot||""} disabled={!p.assigned} onChange={e=>updP(p.id,{assigned:{...p.assigned,slot:e.target.value}})}
+                            style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.tablehead,color:p.assigned?T.accent:T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:85,opacity:p.assigned?1:0.5}}>
+                            {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?"🌅 בוקר":"☀️ צהריים"}</option>)}
+                          </select>
+                        </td>
+                        {/* Location */}
+                        <td style={{padding:"4px 5px"}}>
+                          <select value={p.assigned?.locationId||""} disabled={!p.assigned} onChange={e=>{
+                            const locId=parseInt(e.target.value)||null;
+                            updP(p.id,{assigned:{...p.assigned,locationId:locId,room:locById[locId]?.rooms[0]||""}});
+                          }} style={{padding:"3px 4px",border:`1px solid ${lc?.border||T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:lc?.bg||T.tablehead,color:lc?.text||T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:60,opacity:p.assigned?1:0.5}}>
+                            <option value="">— מיקום —</option>
+                            {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+                          </select>
+                        </td>
+                        {/* Room */}
+                        <td style={{padding:"4px 5px"}}>
+                          {p.assigned&&p.assigned.locationId?(()=>{
+                            const rms=locById[p.assigned.locationId]?.rooms||[];
+                            return rms.length>0
+                              ?<select value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:70}}>
+                                <option value="">— חדר —</option>
+                                {rms.map(r=><option key={r} value={r}>{r}</option>)}
+                              </select>
+                              :<input value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} placeholder="ידני" style={{padding:"3px 5px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:65,background:T.inputBg,color:T.text}}/>;
+                          })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
+                        </td>
+                        {/* Status */}
+                        <td style={{padding:"4px 5px"}}>
+                          <select value={p.status} onChange={e=>updP(p.id,{status:e.target.value},`סטטוס ${p.name}: ${STATUS_META[e.target.value].label}`)}
+                            style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                            {Object.entries(STATUS_META).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
+                          </select>
+                        </td>
+                        {/* Notes */}
+                        <td style={{padding:"4px 5px"}}>
+                          <input value={p.notes||""} onChange={e=>updP(p.id,{notes:e.target.value})} placeholder="הערות…"
+                            style={{padding:"3px 7px",border:`1px solid ${p.notes?"#FDE68A":T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:100,background:p.notes?"#FFFBEB":T.inputBg,color:T.text}}/>
+                        </td>
+                        {/* Actions */}
+                        <td style={{padding:"4px 5px"}}>
+                          <div style={{display:"flex",gap:3}}>
+                            <button title="ערוך" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✏️</button>
+                            {p.email&&p.assigned&&<button title="שלח מייל" onClick={()=>sendViaGmail(buildEmail(p,"invitation").subject,buildEmail(p,"invitation").body,p.email)} style={{background:"#EEF2FF",color:"#4338CA",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✉️</button>}
+                            {p.assigned&&<button title="נקה שיבוץ" onClick={()=>clearA(p.id)} style={{background:"#FEF2F2",color:"#9CA3AF",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✕</button>}
+                            <button title="מחק" onClick={()=>{if(window.confirm(`למחוק ${p.name}?`)){setParticipants(prev=>prev.filter(x=>x.id!==p.id));addLog("מחיקה",`נמחק: ${p.name}`);}}} style={{background:T.tablehead,color:T.textFaint,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {sortedFiltered.length===0&&<div style={{padding:"30px",textAlign:"center",color:T.textFaint,fontSize:13}}>אין תוצאות לסינון הנוכחי</div>}
+            </div>
+          </div>
+        )}
+
+        {/* ══ CALENDAR ══════════════════════════════════════════════════════════ */}
+        {tab==="calendar"&&(
+          <div>
+            <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{display:"flex",background:T.tablehead,borderRadius:8,overflow:"hidden",border:`1px solid ${T.border}`}}>
+                {["week","month"].map(m=>(
+                  <button key={m} onClick={()=>setCalMode(m)} style={{padding:"7px 14px",border:"none",background:calMode===m?T.accent:"transparent",color:calMode===m?"white":T.textMuted,cursor:"pointer",fontSize:12,fontWeight:calMode===m?700:400,fontFamily:"inherit",transition:"all .2s"}}>
+                    {m==="week"?"📅 שבועי":"📆 חודשי"}
+                  </button>
+                ))}
+              </div>
+              {calMode==="week"&&(
+                <div style={{display:"flex",alignItems:"center",gap:7}}>
+                  <button onClick={()=>setWeekOffset(w=>w-1)} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:14,color:T.text}}>‹</button>
+                  <span style={{fontSize:12,fontWeight:600,color:T.text,minWidth:190,textAlign:"center"}}>
+                    {weekDates[0]&&`${fmtDate(weekDates[0])} – ${fmtDate(weekDates[5])}`}
+                    {weekOffset===0&&<span style={{color:T.accent,fontSize:10,marginRight:5}}>(שבוע נוכחי)</span>}
+                  </span>
+                  <button onClick={()=>setWeekOffset(w=>w+1)} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:14,color:T.text}}>›</button>
+                  <button onClick={()=>setWeekOffset(0)} style={{background:T.tablehead,border:"none",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,color:T.textMuted,fontFamily:"inherit"}}>היום</button>
+                </div>
+              )}
+              {calMode==="month"&&(
+                <div style={{display:"flex",alignItems:"center",gap:7}}>
+                  <button onClick={()=>setCalMonth(({y,m})=>m===0?{y:y-1,m:11}:{y,m:m-1})} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:14,color:T.text}}>‹</button>
+                  <span style={{fontSize:13,fontWeight:600,color:T.text,minWidth:120,textAlign:"center"}}>{HEBREW_MONTHS[calMonth.m]} {calMonth.y}</span>
+                  <button onClick={()=>setCalMonth(({y,m})=>m===11?{y:y+1,m:0}:{y,m:m+1})} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:14,color:T.text}}>›</button>
+                </div>
+              )}
+            </div>
+
+            {calMode==="week"&&(
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"separate",borderSpacing:4,minWidth:700}}>
+                  <thead>
+                    <tr>
+                      <th style={{width:90,fontSize:10,color:T.textFaint,textAlign:"right",paddingBottom:4}}>משמרת/מיקום</th>
+                      {DAYS.map((day,di)=>{
+                        const date=weekDates[di];
+                        const isToday=date&&date.toDateString()===new Date().toDateString();
+                        return(
+                          <th key={day} style={{padding:"7px",background:isToday?T.rowSel:T.surface,borderRadius:8,border:`1px solid ${isToday?T.accent:T.border}`,textAlign:"center",fontSize:12,fontWeight:700,color:isToday?T.accent:T.text}}>
+                            <div>יום {DAY_NAMES[day]}</div>
+                            {date&&<div style={{fontSize:9,color:T.textFaint,fontWeight:400}}>{fmtDate(date)}</div>}
+                            <div style={{fontSize:9,color:"#059669",fontWeight:600,marginTop:1}}>{participants.filter(p=>p.assigned?.day===day).length} נבדקים</div>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {SLOTS.map(slot=>locations.map((loc,li)=>(
+                      <tr key={`${slot}_${loc.id}`}>
+                        {li===0&&<td rowSpan={locations.length} style={{verticalAlign:"top",paddingTop:10,fontSize:10,color:T.textFaint}}>{slot.includes("בוקר")?"🌅 בוקר":"☀️ צהריים"}</td>}
+                        {DAYS.map(day=>{
+                          const people=participants.filter(p=>p.assigned?.day===day&&p.assigned?.slot===slot&&p.assigned?.locationId===loc.id);
+                          const isFull=people.length>=settings.perSlot;
+                          const eligible=participants.filter(p=>!p.assigned&&p.availability[day]?.includes(slot));
+                          const c=LOC_COLORS[li%LOC_COLORS.length];
+                          return(
+                            <td key={day} style={{background:isFull?c.bg:T.surface,border:`1px solid ${isFull?c.border:T.border}`,borderRadius:6,padding:6,verticalAlign:"top",minWidth:95}}>
+                              <div style={{fontSize:8,color:c.text,fontWeight:700,marginBottom:2,opacity:0.7}}>{loc.name}</div>
+                              {people.map(p=>(
+                                <div key={p.id} style={{background:STATUS_META[p.status].bg,border:`1px solid ${STATUS_META[p.status].border}`,borderRadius:4,padding:"2px 6px",marginBottom:2,fontSize:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                  <span style={{color:STATUS_META[p.status].text,fontWeight:700}}>{p.name}</span>
+                                  <button onClick={()=>clearA(p.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:11,padding:0}}>×</button>
+                                </div>
+                              ))}
+                              {!isFull&&eligible.length>0&&(
+                                <select onChange={e=>{if(e.target.value){assignP(parseInt(e.target.value),day,slot,loc.id,loc.rooms[0]||"");e.target.value="";}}} style={{width:"100%",padding:"2px 3px",border:`1px dashed ${T.border}`,borderRadius:3,fontSize:9,color:T.textFaint,background:T.surface,cursor:"pointer",fontFamily:"inherit"}}>
+                                  <option value="">+{eligible.length}</option>
+                                  {eligible.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {calMode==="month"&&(()=>{
+              const first=new Date(calMonth.y,calMonth.m,1);
+              const startOff=first.getDay();
+              const daysInMonth=new Date(calMonth.y,calMonth.m+1,0).getDate();
+              const cells=[];
+              for(let i=0;i<startOff;i++) cells.push(null);
+              for(let d=1;d<=daysInMonth;d++) cells.push(d);
+              return(
+                <div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+                    {["א׳","ב׳","ג׳","ד׳","ה׳","ו׳","ש׳"].map(d=>(
+                      <div key={d} style={{textAlign:"center",fontSize:11,color:T.textFaint,fontWeight:700,padding:"4px 0"}}>{d}</div>
+                    ))}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+                    {cells.map((dayNum,ci)=>{
+                      if(!dayNum) return <div key={`e${ci}`}/>;
+                      const date=new Date(calMonth.y,calMonth.m,dayNum);
+                      const isToday=date.toDateString()===new Date().toDateString();
+                      const isSat=date.getDay()===6;
+                      const heDay=["א","ב","ג","ד","ה","ו"][date.getDay()];
+                      const people=isSat?[]:participants.filter(p=>p.assigned?.day===heDay);
+                      return(
+                        <div key={dayNum} style={{background:isToday?T.rowSel:isSat?T.tablehead:T.surface,border:`1px solid ${isToday?T.accent:T.border}`,borderRadius:7,padding:"5px 7px",minHeight:70,opacity:isSat?0.35:1}}>
+                          <div style={{fontSize:11,fontWeight:isToday?800:600,color:isToday?T.accent:T.text,marginBottom:3}}>{dayNum}</div>
+                          {people.slice(0,3).map(p=>{
+                            const sm=STATUS_META[p.status];
+                            return <div key={p.id} style={{background:sm.bg,borderRadius:3,padding:"1px 4px",fontSize:8,color:sm.text,fontWeight:600,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>;
+                          })}
+                          {people.length>3&&<div style={{fontSize:8,color:T.textFaint}}>+{people.length-3}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ══ CHARTS ════════════════════════════════════════════════════════════ */}
+        {tab==="charts"&&(
+          <div>
+            {/* Chart filters */}
+            <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center",background:T.surface,padding:"10px 12px",borderRadius:10,border:`1px solid ${T.border}`}}>
+              <span style={{fontSize:12,color:T.textMuted,fontWeight:700}}>סנן גרפים:</span>
+              <select value={chartFilter.status} onChange={e=>setChartFilter(f=>({...f,status:e.target.value}))} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
+                <option value="">כל הסטטוסים</option>
+                {Object.entries(STATUS_META).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
+              </select>
+              <select value={chartFilter.location} onChange={e=>setChartFilter(f=>({...f,location:e.target.value}))} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
+                <option value="">כל המיקומים</option>
+                {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+              {(chartFilter.status||chartFilter.location)&&<button onClick={()=>setChartFilter({status:"",location:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"4px 9px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ נקה</button>}
+            </div>
+
+            {/* KPIs */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:16}}>
+              {[
+                {l:"יעד",v:`${stats.byStatus.completed}/${settings.totalTarget}`,sub:`${Math.round(stats.byStatus.completed/settings.totalTarget*100)}%`,c:"#4338CA",bg:"#EEF2FF"},
+                {l:"שובצו",v:stats.byStatus.assigned+stats.byStatus.confirmed+stats.byStatus.completed,sub:"מתוך "+stats.total,c:"#059669",bg:"#ECFDF5"},
+                {l:"ממתינים",v:stats.byStatus.pending,sub:`${stats.noAvail} ללא זמינות`,c:"#D97706",bg:"#FFF7ED"},
+                {l:"ביטלו",v:stats.byStatus.declined,sub:"יש לגייס",c:"#DC2626",bg:"#FEF2F2"},
+              ].map(k=>(
+                <div key={k.l} style={{background:k.bg,borderRadius:10,padding:"12px 14px"}}>
+                  <div style={{fontSize:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:k.c,marginTop:3}}>{k.l}</div>
+                  <div style={{fontSize:10,color:"#9CA3AF",marginTop:2}}>{k.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
+                <h3 style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:T.text}}>סטטוסים</h3>
+                <ResponsiveContainer width="100%" height={190}>
+                  <PieChart>
+                    <Pie data={Object.entries(stats.byStatus).filter(([,v])=>v>0).map(([k,v])=>({name:STATUS_META[k].label,value:v,key:k}))} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({name,value})=>`${name}:${value}`} fontSize={10}>
+                      {Object.entries(stats.byStatus).filter(([,v])=>v>0).map(([k])=><Cell key={k} fill={STATUS_META[k].dot}/>)}
+                    </Pie>
+                    <Tooltip/>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
+                <h3 style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:T.text}}>שיבוצים לפי יום</h3>
+                <ResponsiveContainer width="100%" height={190}>
+                  <BarChart data={stats.byDay} margin={{top:0,right:8,left:-20,bottom:0}}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
+                    <XAxis dataKey="day" fontSize={10} tick={{fill:T.textMuted}}/>
+                    <YAxis fontSize={10} tick={{fill:T.textMuted}} allowDecimals={false}/>
+                    <Tooltip contentStyle={{background:T.surface,border:`1px solid ${T.border}`,color:T.text}}/>
+                    <Bar dataKey="count" fill={T.accent} radius={[4,4,0,0]} name="נבדקים"/>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
+                <h3 style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:T.text}}>לפי מיקום</h3>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={stats.byLoc} layout="vertical" margin={{top:0,right:8,left:10,bottom:0}}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
+                    <XAxis type="number" fontSize={10} tick={{fill:T.textMuted}} allowDecimals={false}/>
+                    <YAxis type="category" dataKey="name" fontSize={10} tick={{fill:T.textMuted}} width={45}/>
+                    <Tooltip contentStyle={{background:T.surface,border:`1px solid ${T.border}`,color:T.text}}/>
+                    <Bar dataKey="count" radius={[0,4,4,0]} name="נבדקים">
+                      {stats.byLoc.map((_,i)=><Cell key={i} fill={LOC_COLORS[i%LOC_COLORS.length].chart}/>)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
+                <h3 style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:T.text}}>התקדמות לעבר יעד</h3>
+                {[
+                  {l:"השלימו",v:stats.byStatus.completed,c:"#059669"},
+                  {l:"אישרו",v:stats.byStatus.confirmed,c:"#D97706"},
+                  {l:"שובצו",v:stats.byStatus.assigned,c:T.accent},
+                  {l:"ממתינים",v:stats.byStatus.pending,c:"#9CA3AF"},
+                ].map(r=>(
+                  <div key={r.l} style={{marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                      <span style={{fontSize:11,color:T.text}}>{r.l}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:r.c}}>{r.v}/{settings.totalTarget}</span>
+                    </div>
+                    <div style={{background:T.tablehead,borderRadius:4,height:7}}>
+                      <div style={{background:r.c,height:7,borderRadius:4,width:`${Math.min(100,r.v/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══ EMAILS ════════════════════════════════════════════════════════════ */}
+        {tab==="emails"&&(
+          <div>
+            <div style={{background:"#FFF7ED",border:"1px solid #FDE68A",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#92400E"}}>
+              📬 <strong>Gmail:</strong> לחיצה על "שלח" פותחת Gmail Compose עם הנוסח מוכן. לשליחה ישירה דרך API — הגדר ב-<button onClick={()=>setModal("gmail")} style={{background:"none",border:"none",cursor:"pointer",color:"#D97706",fontWeight:700,fontFamily:"inherit",textDecoration:"underline"}}>הגדרות Gmail</button>.
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+              {[{title:"📨 הזמנות",filter:p=>p.assigned,type:"invitation",color:"#4338CA"},
+                {title:"⚠️ עדכון זמינות",filter:p=>Object.values(p.availability).every(s=>s.length===0),type:"noAvailability",color:"#DC2626"}].map(card=>{
+                const ps=participants.filter(card.filter);
+                return(
+                  <div key={card.title} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:14}}>
+                    <h3 style={{margin:"0 0 4px",fontSize:13,color:T.text}}>{card.title}</h3>
+                    <p style={{margin:"0 0 10px",fontSize:11,color:T.textMuted}}>{ps.length} משתתפים</p>
+                    <button onClick={()=>{
+                      const body=ps.map(p=>{const e=buildEmail(p,card.type);return `─── ${p.name} | ${p.email||"אין"} ───\nנושא: ${e.subject}\n\n${e.body}\n`;}).join("\n═══════════════════════\n\n");
+                      setEmailModal({participant:null,subject:card.title,body,type:"bulk"});
+                    }} style={{background:card.color,color:"white",border:"none",padding:"6px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>הצג</button>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:9}}>
+              {participants.filter(p=>p.assigned).map(p=>{
+                const loc=locById[p.assigned.locationId];
+                const lc=locColor(p.assigned.locationId);
+                return(
+                  <div key={p.id} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,padding:12}}>
+                    <div style={{fontWeight:700,fontSize:12,color:T.text}}>{p.name}</div>
+                    <div style={{fontSize:10,color:T.textMuted,margin:"2px 0 8px",display:"flex",gap:4,flexWrap:"wrap"}}>
+                      <span>{DAY_NAMES[p.assigned.day]}</span>·
+                      <span>{p.assigned.slot.includes("בוקר")?"בוקר":"צהריים"}</span>
+                      {loc&&<><span>·</span><span style={{background:lc.bg,color:lc.text,borderRadius:3,padding:"0 4px",fontSize:9,fontWeight:700}}>{loc.name}</span></>}
+                    </div>
+                    <div style={{display:"flex",gap:5}}>
+                      <button onClick={()=>sendViaGmail(buildEmail(p,"invitation").subject,buildEmail(p,"invitation").body,p.email)} style={{background:"#EEF2FF",color:"#4338CA",border:"none",padding:"3px 8px",borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>📨 הזמנה</button>
+                      <button onClick={()=>sendViaGmail(buildEmail(p,"reminder").subject,buildEmail(p,"reminder").body,p.email)} style={{background:"#FFF7ED",color:"#D97706",border:"none",padding:"3px 8px",borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>🔔 תזכורת</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══ LOCATIONS ════════════════════════════════════════════════════════ */}
+        {tab==="locations"&&(
+          <div>
+            <button onClick={()=>setModal("addLoc")} style={{background:T.accent,color:"white",border:"none",padding:"8px 15px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",marginBottom:14}}>+ הוסף מיקום</button>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:12}}>
+              {locations.map((loc,i)=>{
+                const c=LOC_COLORS[i%LOC_COLORS.length];
+                const n=participants.filter(p=>p.assigned?.locationId===loc.id).length;
+                return(
+                  <div key={loc.id} style={{background:T.surface,border:`1px solid ${c.border}`,borderRadius:12,padding:15}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:7}}>
+                        <span style={{width:10,height:10,borderRadius:"50%",background:c.dot,display:"inline-block"}}/>
+                        <span style={{fontSize:15,fontWeight:800,color:c.text}}>{loc.name}</span>
+                      </div>
+                      <div style={{display:"flex",gap:5}}>
+                        <button onClick={()=>setModal({type:"editLoc",loc:{...loc,rooms:[...loc.rooms]}})} style={{background:c.bg,color:c.text,border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>✏️</button>
+                        <button onClick={()=>{if(window.confirm("למחוק?")) setLocations(p=>p.filter(l=>l.id!==loc.id));}} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑</button>
+                      </div>
+                    </div>
+                    <div style={{fontSize:11,color:T.textMuted,marginBottom:8}}>{n} משובצים</div>
+                    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                      {loc.rooms.map(r=><span key={r} style={{background:c.bg,color:c.text,borderRadius:5,padding:"2px 7px",fontSize:11,fontWeight:600}}>{r}</span>)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══ SETTINGS ══════════════════════════════════════════════════════════ */}
+        {tab==="settings"&&(
+          <div style={{maxWidth:480}}>
+            <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:20}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,color:T.text}}>הגדרות ניסוי</h3>
+              {[{k:"experimentName",l:"שם הניסוי"},{k:"researcherName",l:"שם החוקר"},{k:"duration",l:"משך סשן"},{k:"currentUser",l:"משתמש נוכחי (לוג)"},{k:"baseDate",l:"תאריך התחלה",type:"date"}].map(f=>(
+                <div key={f.k} style={{marginBottom:11}}>
+                  <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{f.l}</label>
+                  <input type={f.type||"text"} value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))} style={{width:"100%",padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit",boxSizing:"border-box",background:T.inputBg,color:T.text}}/>
+                </div>
+              ))}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:4}}>
+                {[{k:"totalTarget",l:"יעד"},{k:"perSlot",l:"במקביל"},{k:"maxPerDay",l:"מקס׳/יום"}].map(f=>(
+                  <div key={f.k}>
+                    <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{f.l}</label>
+                    <input type="number" min={1} value={settings[f.k]} onChange={e=>setSettings(s=>({...s,[f.k]:parseInt(e.target.value)||1}))} style={{width:"100%",padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit",boxSizing:"border-box",background:T.inputBg,color:T.text}}/>
+                  </div>
+                ))}
+              </div>
+              <div style={{marginTop:14,borderTop:`1px solid ${T.border}`,paddingTop:12,display:"flex",gap:8}}>
+                <button onClick={()=>{const blob=new Blob([JSON.stringify({participants,locations,settings,changelog},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="experiment_backup.json";a.click();}} style={{background:T.accent,color:"white",border:"none",padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>⬇️ ייצא JSON</button>
+                <button onClick={()=>{const i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.participants)setParticipants(d.participants);if(d.locations)setLocations(d.locations);if(d.settings)setSettings(d.settings);if(d.changelog)setChangelog(d.changelog);showToast("✅ שוחזר");}catch{showToast("שגיאה","error");}};r.readAsText(f);};i.click();}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>⬆️ יבוא JSON</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══════════════════════ MODALS ══════════════════════════════════════════ */}
+
+      {/* Add/Edit participant */}
+      {modal==="addEdit"&&editP&&<ParticipantModal p={editP} locations={locations} T={T} onSave={saveParticipant} onClose={()=>{setModal(null);setEditP(null);}}/>}
+
+      {/* Location add/edit */}
+      {(modal==="addLoc"||modal?.type==="editLoc")&&(
+        <LocModal loc={modal?.type==="editLoc"?modal.loc:{id:null,name:"",rooms:[]}} T={T}
+          onSave={l=>{if(l.id){setLocations(p=>p.map(x=>x.id===l.id?l:x));}else{setLocations(p=>[...p,{...l,id:newId(locations)}]);}setModal(null);}}
+          onClose={()=>setModal(null)}/>
+      )}
+
+      {/* Help */}
+      {modal==="help"&&(
+        <ModalShell title="📖 הדרכה ועזרה" T={T} onClose={()=>setModal(null)} wide>
+          <div style={{fontSize:13,lineHeight:1.8,color:T.text}}>
+            {[
+              ["📋 טאב שיבוצים","הטבלה הראשית. בחר נבדקים עם הצ'קבוקס ואז הפעל פעולות. ניתן למיין כל עמודה בלחיצה על הכותרת. הסינון בשורה העליונה פועל בזמן אמת."],
+              ["⚡ שיבוץ אוטומטי","כשאין בחירה — משבץ את כולם. כשיש בחירה — משבץ רק את הנבחרים. האלגוריתם מקשה לשיבוץ קודם (הכי מוגבלים בזמינות)."],
+              ["🗑 ניקוי שיבוצים","פועל רק כשיש נבדקים נבחרים — מנקה את שיבוצם. ללא בחירה — הפקד לא מוצג."],
+              ["📂 יבוא CSV","ייצא מגוגל פורמס כ-CSV. המערכת מזהה כפולים לפי אימייל/טלפון/שם ושואלת מה לעשות."],
+              ["✉️ מיילים","לחיצה על 'שלח' פותחת Gmail Compose עם הנוסח. ניתן לערוך לפני השליחה."],
+              ["📅 לוח","שבועי עם ניווט ‹ › בין שבועות. חודשי מציג כל הנבדקים המשובצים על הלוח."],
+              ["📊 גרפים","ניתן לסנן את הגרפים לפי סטטוס ומיקום. הגרפים מתעדכנים בזמן אמת."],
+              ["💾 גיבוי","ייצא JSON מהגדרות → שלח לשותף → הוא מייבא. כל הנתונים שמורים בדפדפן."],
+            ].map(([title,desc])=>(
+              <div key={title} style={{marginBottom:12,padding:"8px 12px",background:T.tablehead,borderRadius:8}}>
+                <div style={{fontWeight:700,marginBottom:3}}>{title}</div>
+                <div style={{color:T.textMuted,fontSize:12}}>{desc}</div>
+              </div>
+            ))}
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Changelog */}
+      {modal==="changelog"&&(
+        <ModalShell title="📋 לוג שינויים" T={T} onClose={()=>setModal(null)} wide>
+          {changelog.length===0?<p style={{color:T.textMuted,textAlign:"center"}}>אין שינויים עדיין</p>:(
+            <div style={{maxHeight:450,overflowY:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{background:T.tablehead}}>
+                    {["זמן","משתמש","פעולה","פרטים"].map(h=><th key={h} style={{padding:"7px 10px",textAlign:"right",color:T.textMuted,fontWeight:700,borderBottom:`1px solid ${T.border}`}}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {changelog.map((e,i)=>(
+                    <tr key={e.id} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.surface:T.tablehead}}>
+                      <td style={{padding:"6px 10px",whiteSpace:"nowrap",color:T.textFaint}}>{tsToStr(e.ts)}</td>
+                      <td style={{padding:"6px 10px",fontWeight:600,color:T.accent}}>{e.user}</td>
+                      <td style={{padding:"6px 10px",fontWeight:600,color:T.text}}>{e.action}</td>
+                      <td style={{padding:"6px 10px",color:T.textMuted}}>{e.details}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div style={{marginTop:10,textAlign:"left"}}>
+            <button onClick={()=>{if(window.confirm("לנקות את הלוג?")) setChangelog([]);}} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑 נקה לוג</button>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Gmail settings */}
+      {modal==="gmail"&&(
+        <ModalShell title="✉️ הגדרות Gmail" T={T} onClose={()=>setModal(null)}>
+          <div style={{fontSize:13,color:T.text,lineHeight:1.8}}>
+            <div style={{background:"#FFF7ED",border:"1px solid #FDE68A",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#92400E"}}>
+              <strong>⚠️ מגבלת Artifact:</strong> שליחה ישירה דרך Gmail API אינה אפשרית בתוך Claude artifact בגלל מגבלות OAuth.
+              <br/>הפתרון הנוכחי: לחיצת "שלח" פותחת Gmail Compose עם הנוסח — בלחיצה נוספת הוא נשלח.
+            </div>
+            <p style={{margin:"0 0 10px",fontWeight:700}}>לשליחה ישירה — 2 אפשרויות:</p>
+            <div style={{background:T.tablehead,borderRadius:8,padding:"10px 14px",marginBottom:10}}>
+              <p style={{margin:"0 0 5px",fontWeight:600}}>אפשרות 1: Replit + Gmail API</p>
+              <p style={{margin:0,fontSize:12,color:T.textMuted}}>העלה את הקוד ל-Replit, הוסף Gmail API credentials, ותוכל לשלוח ישירות מהאפליקציה.</p>
+            </div>
+            <div style={{background:T.tablehead,borderRadius:8,padding:"10px 14px"}}>
+              <p style={{margin:"0 0 5px",fontWeight:600}}>אפשרות 2: Google Apps Script</p>
+              <p style={{margin:0,fontSize:12,color:T.textMuted}}>דרך ה-Google Sheets backend — Apps Script יכול לשלוח מיילים ב-Gmail API ישירות.</p>
+            </div>
+            <div style={{marginTop:14,padding:"10px 14px",background:T.rowSel,borderRadius:8}}>
+              <p style={{margin:"0 0 6px",fontWeight:700,color:T.accent}}>כרגע — הגדר כתובת שולח:</p>
+              <input value={settings.gmailSender||""} onChange={e=>setSettings(s=>({...s,gmailSender:e.target.value}))} placeholder="your@gmail.com" style={{width:"100%",padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",boxSizing:"border-box",background:T.inputBg,color:T.text}}/>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* About */}
+      {modal==="about"&&(
+        <ModalShell title="ℹ️ אודות" T={T} onClose={()=>setModal(null)}>
+          <div style={{textAlign:"center",padding:"10px 0",color:T.text}}>
+            <div style={{fontSize:40,marginBottom:8}}>🧪</div>
+            <h2 style={{margin:"0 0 4px",fontSize:18}}>{APP_NAME}</h2>
+            <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>גרסה {APP_VERSION}</div>
+            <div style={{fontSize:12,color:T.textMuted,lineHeight:1.7}}>
+              <p>מערכת לניהול וסיאום משתתפים במחקר</p>
+              <p>כל הנתונים שמורים מקומית בדפדפן</p>
+              <p>לשיתוף בזמן אמת — ראה מדריך Google Sheets</p>
+            </div>
+            <div style={{marginTop:16,padding:"8px 14px",background:T.tablehead,borderRadius:8,fontSize:11,color:T.textFaint}}>
+              נבנה עם React + Recharts • {new Date().getFullYear()}
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Bulk email modal */}
+      {modal==="bulkEmail"&&(
+        <BulkEmailModal
+          targets={selList.filter(p=>p.email&&p.assigned)}
+          buildEmail={buildEmail}
+          T={T}
+          onClose={()=>{setModal(null);setSelected(new Set());}}
+          onDone={(count,type)=>{addLog("שליחת מיילים",`נשלחו ${count} מיילים (${type})`);}}
+        />
+      )}
+
+      {/* Duplicate resolution */}
+      {dupModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:T.surface,borderRadius:13,padding:22,maxWidth:480,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.3)"}}>
+            <h3 style={{margin:"0 0 5px",fontSize:14,color:T.text}}>⚠️ כפול — {dupModal.index+1}/{dupModal.conflicts.length}</h3>
+            {(()=>{const{incoming,existing,reason}=dupModal.conflicts[dupModal.index];return(<>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,margin:"12px 0"}}>
+                {[{l:"📥 נכנס",p:incoming,bg:"#EEF2FF"},{l:"✅ קיים",p:existing[0],bg:"#F0FDF4"}].map(({l,p,bg})=>(
+                  <div key={l} style={{background:bg,borderRadius:7,padding:10}}>
+                    <div style={{fontSize:9,fontWeight:700,marginBottom:4,color:"#6B7280"}}>{l}</div>
+                    <div style={{fontSize:12,fontWeight:700}}>{p.name}</div>
+                    <div style={{fontSize:10,color:"#6B7280"}}>{p.email}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{background:"#FFF7ED",border:"1px solid #FDE68A",borderRadius:5,padding:"5px 9px",fontSize:11,color:"#92400E",marginBottom:10}}>זוהה לפי: <strong>{reason}</strong></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+                {[{a:"skip",l:"⏭ דלג"},{a:"merge",l:"🔀 מזג"},{a:"replace",l:"🔁 החלף"},{a:"add",l:"➕ הוסף"}].map(b=>(
+                  <button key={b.a} onClick={()=>resolveDup(b.a)} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>{b.l}</button>
+                ))}
+              </div>
+            </>);})()}
+          </div>
+        </div>
+      )}
+
+      {/* Email modal */}
+      {emailModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)setEmailModal(null);}}>
+          <div style={{background:T.surface,borderRadius:12,padding:20,maxWidth:540,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <h3 style={{margin:0,fontSize:13,color:T.text}}>{emailModal.subject}</h3>
+              <button onClick={()=>setEmailModal(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:T.textMuted}}>×</button>
+            </div>
+            <textarea value={emailModal.body} onChange={e=>setEmailModal(p=>({...p,body:e.target.value}))} style={{flex:1,minHeight:200,padding:"8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:12,fontFamily:"inherit",resize:"vertical",lineHeight:1.65,background:T.inputBg,color:T.text}}/>
+            <div style={{display:"flex",gap:7,marginTop:10,justifyContent:"flex-end"}}>
+              <button onClick={()=>navigator.clipboard.writeText(emailModal.body).then(()=>showToast("הועתק ✓"))} style={{background:T.accent,color:"white",border:"none",padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>📋 העתק</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast&&<div style={{position:"fixed",bottom:20,right:22,background:toast.type==="error"?"#DC2626":"#1E1B4B",color:"white",padding:"10px 16px",borderRadius:8,fontSize:13,fontWeight:600,zIndex:3000,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",animation:"slideUp .25s ease"}}>{toast.msg}</div>}
+      <style>{`@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+    </div>
+  );
+}
+
+// ── Modal shell ───────────────────────────────────────────────────────────────
+function ModalShell({title,T,onClose,children,wide}) {
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:wide?680:460,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{margin:0,fontSize:15,color:T.text}}>{title}</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
+        </div>
+        <div style={{overflowY:"auto",flex:1}}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Participant add/edit modal ─────────────────────────────────────────────────
+function ParticipantModal({p:initP,locations,T,onSave,onClose}) {
+  const [p,setP]=useState(initP);
+  const SLOTS=["בוקר (08:00-12:00)","צהריים (12:00-18:00)"];
+  const DAYS=["א","ב","ג","ד","ה","ו"];
+  const DAY_NAMES={"א":"ראשון","ב":"שני","ג":"שלישי","ד":"רביעי","ה":"חמישי","ו":"שישי"};
+  const toggleAvail=(day,slot)=>{
+    setP(prev=>{
+      const cur=prev.availability[day]||[];
+      const next=cur.includes(slot)?cur.filter(s=>s!==slot):[...cur,slot];
+      return{...prev,availability:{...prev.availability,[day]:next}};
+    });
+  };
+  const inputStyle={width:"100%",padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",boxSizing:"border-box",background:T.inputBg,color:T.text};
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{margin:0,fontSize:15,color:T.text}}>{p.id?"עריכת נבדק":"הוספת נבדק ידנית"}</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          {[{k:"name",l:"שם מלא *"},{k:"email",l:"אימייל"},{k:"phone",l:"טלפון"},{k:"age",l:"גיל"}].map(f=>(
+            <div key={f.k}>
+              <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{f.l}</label>
+              <input value={p[f.k]||""} onChange={e=>setP(prev=>({...prev,[f.k]:e.target.value}))} style={inputStyle}/>
+            </div>
+          ))}
+          <div>
+            <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>מגדר</label>
+            <select value={p.gender||""} onChange={e=>setP(prev=>({...prev,gender:e.target.value}))} style={{...inputStyle}}>
+              <option value="">בחר</option><option value="גבר">גבר</option><option value="אישה">אישה</option><option value="אחר">אחר</option>
+            </select>
+          </div>
+          <div>
+            <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>סטטוס</label>
+            <select value={p.status} onChange={e=>setP(prev=>({...prev,status:e.target.value}))} style={{...inputStyle}}>
+              {Object.entries({pending:"ממתין",assigned:"שובץ",confirmed:"אישר",completed:"השלים",declined:"ביטל"}).map(([v,l])=><option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:6,fontWeight:600}}>זמינות</label>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+            <thead>
+              <tr>
+                <th style={{padding:"5px 8px",textAlign:"right",color:T.textFaint}}>יום</th>
+                {SLOTS.map(s=><th key={s} style={{padding:"5px 8px",textAlign:"center",color:T.textFaint}}>{s.includes("בוקר")?"בוקר":"צהריים"}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {DAYS.map(day=>(
+                <tr key={day} style={{borderBottom:`1px solid ${T.border}`}}>
+                  <td style={{padding:"5px 8px",fontWeight:600,color:T.text}}>יום {DAY_NAMES[day]}</td>
+                  {SLOTS.map(slot=>{
+                    const on=(p.availability[day]||[]).includes(slot);
+                    return(
+                      <td key={slot} style={{textAlign:"center",padding:"4px"}}>
+                        <button onClick={()=>toggleAvail(day,slot)} style={{background:on?"#4338CA":T.tablehead,color:on?"white":T.textMuted,border:`1px solid ${on?"#4338CA":T.border}`,borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:on?700:400,transition:"all .15s"}}>
+                          {on?"✓ זמין":"—"}
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>הערות</label>
+          <textarea value={p.notes||""} onChange={e=>setP(prev=>({...prev,notes:e.target.value}))} rows={2} style={{...inputStyle,resize:"vertical"}}/>
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"8px 15px",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"inherit"}}>ביטול</button>
+          <button onClick={()=>onSave(p)} disabled={!p.name.trim()} style={{background:"#059669",color:"white",border:"none",padding:"8px 18px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",opacity:p.name.trim()?1:0.5}}>
+            {p.id?"💾 שמור שינויים":"✅ הוסף נבדק"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Location modal ────────────────────────────────────────────────────────────
+function LocModal({loc,T,onSave,onClose}) {
+  const [name,setName]=useState(loc.name||"");
+  const [rooms,setRooms]=useState(loc.rooms||[]);
+  const [nr,setNr]=useState("");
+  const inputStyle={padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text};
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:T.surface,borderRadius:12,padding:22,maxWidth:400,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <h3 style={{margin:"0 0 14px",fontSize:14,color:T.text}}>{loc.id?"עריכת מיקום":"מיקום חדש"}</h3>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"block",fontSize:11,fontWeight:600,color:T.textMuted,marginBottom:4}}>שם</label>
+          <input value={name} onChange={e=>setName(e.target.value)} style={{...inputStyle,width:"100%",boxSizing:"border-box"}} placeholder="נמל, הר, אוניברסיטה…"/>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,fontWeight:600,color:T.textMuted,marginBottom:6}}>חדרים</label>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>
+            {rooms.map(r=><span key={r} style={{background:"#EEF2FF",color:"#4338CA",borderRadius:5,padding:"2px 7px",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>{r}<button onClick={()=>setRooms(p=>p.filter(x=>x!==r))} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:12,padding:0}}>×</button></span>)}
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <input value={nr} onChange={e=>setNr(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&nr.trim()){setRooms(p=>[...p,nr.trim()]);setNr("");}}} placeholder="שם חדר (Enter)" style={{...inputStyle,flex:1}}/>
+            <button onClick={()=>{if(nr.trim()){setRooms(p=>[...p,nr.trim()]);setNr("");}}} style={{background:"#4338CA",color:"white",border:"none",padding:"7px 12px",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700}}>+</button>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>ביטול</button>
+          <button onClick={()=>onSave({...loc,name,rooms})} disabled={!name.trim()} style={{background:"#4338CA",color:"white",border:"none",padding:"7px 15px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>שמור</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
