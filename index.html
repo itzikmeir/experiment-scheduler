@@ -1612,11 +1612,11 @@ function App() {
         {/* ══ SETTINGS ══════════════════════════════════════════════════════════ */}
         {modal==="settings"&&(
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)setModal(null);}}>
-          <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:480,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <h3 style={{margin:0,fontSize:15,color:T.text}}>⚙️ הגדרות ניסוי</h3>
-              <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
-            </div>
+            <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:480,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <h3 style={{margin:0,fontSize:15,color:T.text}}>{L("settingsTitle")}</h3>
+                <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
+              </div>
               {[{k:"experimentName",l:"שם הניסוי"},{k:"researcherName",l:"שם החוקר"},{k:"duration",l:"משך סשן"},{k:"currentUser",l:"משתמש נוכחי (לוג)"},{k:"baseDate",l:"תאריך התחלה",type:"date"}].map(f=>(
                 <div key={f.k} style={{marginBottom:11}}>
                   <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{f.l}</label>
@@ -1636,7 +1636,6 @@ function App() {
                 <button onClick={()=>{const i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.participants)setParticipants(d.participants);if(d.locations)setLocations(d.locations);if(d.settings)setSettings(d.settings);if(d.changelog)setChangelog(d.changelog);showToast("✅ שוחזר");}catch{showToast("שגיאה","error");}};r.readAsText(f);};i.click();}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>⬆️ יבוא JSON</button>
               </div>
             </div>
-          </div>
           </div>
         )}
       </div>
