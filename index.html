@@ -150,40 +150,63 @@ function parseCSVRows(text) {
 }
 
 function parseRow(row, id) {
-  // Flexible column finder - strips whitespace and brackets
+  // Normalize a string: remove spaces, brackets, apostrophes → for fuzzy matching
+  const norm = s => s.replace(/\s+/g,"").replace(/[\[\]'״׳]/g,"");
+
+  // Find column value by partial normalized match
   const g = s => {
-    const key = Object.keys(row).find(k => {
-      const kn = k.replace(/\s+/g,"").replace(/[\[\]']/g,"");
-      const sn = s.replace(/\s+/g,"").replace(/[\[\]']/g,"");
-      return kn.includes(sn);
-    });
+    const sn = norm(s);
+    const key = Object.keys(row).find(k => norm(k).includes(sn));
     return key ? (row[key] || "").toString().trim() : "";
   };
-  
+
+  // Availability: match columns containing [יום X'] or יום X
+  // Google Form columns look like: "זמינות להגעה לקמפוס הנמל   [יום א']"
+  // Internal columns look like: "יום א"
+  const DAY_MARKERS = {
+    "א": ["יוםא"],
+    "ב": ["יוםב"],
+    "ג": ["יוםג"],
+    "ד": ["יוםד"],
+    "ה": ["יוםה"],
+    "ו": ["יוםו"],
+  };
   const avail = {};
-  // Match columns like "זמינות להגעה לקמפוס הנמל [יום א']" or "יום א" etc
-  const DAY_KEYS = {"א":["יוםא","יוםא'"], "ב":["יוםב","יוםב'"], "ג":["יוםג","יוםג'"], 
-                    "ד":["יוםד","יוםד'"], "ה":["יוםה","יוםה'"], "ו":["יוםו","יוםו'"]};
-  
   DAYS.forEach(d => {
-    const matchKeys = DAY_KEYS[d];
+    const markers = DAY_MARKERS[d];
     const key = Object.keys(row).find(k => {
-      const kn = k.replace(/\s+/g,"").replace(/[\[\]']/g,"");
-      return matchKeys.some(mk => kn.includes(mk));
+      const kn = norm(k);
+      return markers.some(m => kn.includes(m));
     });
     const raw = key ? (row[key] || "").toString().trim() : "";
-    avail[d] = raw ? raw.split(",").map(x => x.trim()).filter(Boolean) : [];
+    // Values can be comma-separated: "בוקר (08:00-12:00), צהריים (12:00-18:00)"
+    avail[d] = raw ? raw.split(",").map(x => x.trim()).filter(x =>
+      x === "בוקר (08:00-12:00)" || x === "צהריים (12:00-18:00)"
+    ) : [];
   });
-  
+
+  // Extra fields from Google Form — store as notes
+  const eligible = g("מעלגיל18") || g("הינךמעל");
+  const license  = g("רישיוןנהיגה");
+  const vision   = g("הצהרתראייה");
+  const extraNote = [
+    eligible === "כן" ? "" : eligible ? `גיל 18: ${eligible}` : "",
+    license  === "כן" ? "" : license  ? `רישיון: ${license}`  : "",
+    vision && !vision.includes("תקין") ? `ראייה: ${vision.substring(0,30)}` : "",
+  ].filter(Boolean).join(" | ");
+
   return {
-    id, 
-    name:   g("שם מלא") || g("שם"),
-    email:  g("אימייל") || g("כתובת אימייל") || g("Email") || g("email"),
-    phone:  g("טלפון") || g("מספר טלפון"),
+    id,
+    name:   g("שםמלא") || g("שם"),
+    email:  g("כתובתאימייל") || g("אימייל") || g("email"),
+    phone:  g("מספרטלפון") || g("טלפון"),
     age:    g("גיל"),
     gender: g("מגדר"),
     availability: avail,
-    assigned: null, status: "pending", notes: "", importedAt: Date.now()
+    assigned: null,
+    status: "pending",
+    notes: extraNote,
+    importedAt: Date.now(),
   };
 }
 function exportCSV(rows,filename) {
@@ -618,7 +641,24 @@ function App() {
             </div>
             <button onClick={()=>fileRef.current?.click()} style={{background:T.accent,color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>📂 יבוא CSV</button>
             <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{handleFile(e.target.files[0]);e.target.value="";}}/>
-          </div>
+            <button onClick={()=>{
+              setSyncStatus("syncing");
+              fetch(`${GS_URL}?action=importFromForm`)
+                .then(r=>r.json())
+                .then(d=>{
+                  if(d.error) throw new Error(d.error);
+                  showToast(`✅ נוספו ${d.added}, עודכנו ${d.updated} מהטופס`);
+                  // Reload all data from sheets
+                  return fetch(`${GS_URL}?action=getAll`).then(r=>r.json());
+                })
+                .then(data=>{
+                  if(data.participants?.length) setParticipants(data.participants);
+                  setSyncStatus("ok"); setLastSync(new Date());
+                })
+                .catch(e=>{setSyncStatus("error");showToast("שגיאה: "+e.message,"error");});
+            }} style={{background:"#059669",color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>
+              📋 יבוא מ-Sheets
+            </button>          </div>
         </div>
       </div>
 
