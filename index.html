@@ -2262,7 +2262,7 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
             <tbody>
               {DAYS.map(day=>(
                 <tr key={day} style={{borderBottom:`1px solid ${T.border}`}}>
-                  <td style={{padding:"5px 8px",fontWeight:600,color:T.text}}>{L("dayPrefix")}{dayNames[day]}</td>
+                  <td style={{padding:"5px 8px",fontWeight:600,color:T.text}}>{L("dayPrefix")}{DAY_NAMES[day]}</td>
                   {SLOTS.map(slot=>{
                     const on=(p.availability[day]||[]).includes(slot);
                     return(
