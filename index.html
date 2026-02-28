@@ -7,29 +7,29 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif; }
-    #loading { display:flex; align-items:center; justify-content:center; height:100vh; font-size:18px; color:#4338CA; font-family:inherit; }
+    #loading { display:flex; align-items:center; justify-content:center; height:100vh; 
+               font-size:18px; color:#4338CA; flex-direction:column; gap:12px; }
   </style>
 </head>
 <body>
-  <div id="root"><div id="loading">⏳ טוען...</div></div>
+  <div id="root"><div id="loading"><span>⏳</span><span>טוען מנהל ניסוי...</span></div></div>
 
-  <!-- Step 1: React -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.2.0",
+      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+      "recharts": "https://esm.sh/recharts@2.8.0"
+    }
+  }
+  </script>
 
-  <!-- Step 2: Recharts (needs React on window first) -->
-  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js" crossorigin></script>
-
-  <!-- Step 3: Babel (compiles JSX in next script tag) -->
   <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 
-  <!-- Step 4: App -->
-  <script type="text/babel" data-type="module" data-presets="react,env">
-    const { useState, useMemo, useEffect, useRef, useCallback } = React;
-    const {
-      BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-      PieChart, Pie, Cell, CartesianGrid
-    } = Recharts;
+  <script type="text/babel" data-presets="react" data-plugins="transform-modules-umd">
+    import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+    import ReactDOM from "react-dom/client";
+    import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } from "recharts";
 
 
 // ─── Version ──────────────────────────────────────────────────────────────────
@@ -1459,8 +1459,7 @@ function LocModal({loc,T,onSave,onClose}) {
 
 
     const container = document.getElementById('root');
-    const root = ReactDOM.createRoot(container);
-    root.render(React.createElement(React.StrictMode, null, React.createElement(App)));
+    ReactDOM.createRoot(container).render(React.createElement(App));
   </script>
 </body>
 </html>
