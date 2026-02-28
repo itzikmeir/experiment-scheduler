@@ -58,10 +58,10 @@ const LANG = {
     btnCancel:"ביטול", btnSaveChanges:"💾 שמור שינויים", btnAddConfirm:"✅ הוסף נבדק",
     available:"✓ זמין", notAvailable:"—",
     noLocations:"אין מיקומים מוגדרים",
-    menuHelp:"📖 הדרכה ועזרה", menuChangelog:"📋 לוג שינויים",
+    menuHelp:"הדרכה ועזרה", menuChangelog:"לוג שינויים",
     menuDark:"מצב כהה", menuLight:"מצב בהיר",
-    menuGmail:"✉️ הגדרות Gmail", menuSettings:"⚙️ הגדרות",
-    menuAbout:"ℹ️ אודות", menuLang:"🌐 English",
+    menuGmail:"הגדרות Gmail", menuSettings:"הגדרות",
+    menuAbout:"אודות", menuLang:"🌐 English",
     emailManualTitle:"✍️ הודעה חופשית לנבדקים",
     emailThanksTitle:"🙏 תודה למשתתפים שהשלימו",
     btnSendThanks:"✉️ שלח תודה", btnSendThanksAll:"📨 שלח תודה לכולם",
@@ -109,10 +109,10 @@ const LANG = {
     btnCancel:"Cancel", btnSaveChanges:"💾 Save Changes", btnAddConfirm:"✅ Add Participant",
     available:"✓ Available", notAvailable:"—",
     noLocations:"No locations defined",
-    menuHelp:"📖 Help & Guide", menuChangelog:"📋 Change Log",
+    menuHelp:"Help & Guide", menuChangelog:"Change Log",
     menuDark:"Dark Mode", menuLight:"Light Mode",
-    menuGmail:"✉️ Gmail Settings", menuSettings:"⚙️ Settings",
-    menuAbout:"ℹ️ About", menuLang:"🌐 עברית",
+    menuGmail:"Gmail Settings", menuSettings:"Settings",
+    menuAbout:"About", menuLang:"🌐 עברית",
     emailManualTitle:"✍️ Custom Message to Participants",
     emailThanksTitle:"🙏 Thank Completed Participants",
     btnSendThanks:"✉️ Send Thanks", btnSendThanksAll:"📨 Send Thanks to All",
@@ -389,6 +389,7 @@ function App() {
   const [sortDir,setSortDir]     = useState("asc");
   const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[]});
   const [colMenu,setColMenu]       = useState(null); // {col, x, y}
+  const [rowEmailMenu,setRowEmailMenu] = useState(null); // {pid, x, y}
   const [emailModal,setEmailModal] = useState(null);
   const [toast,setToast]           = useState(null);
   const [dupModal,setDupModal]     = useState(null);
@@ -709,7 +710,8 @@ function App() {
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div dir="rtl" style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);}}>
+    <div dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setRowEmailMenu(null);}}>
+
 
       {/* ── Header ── */}
       <div style={{background:T.headerBg,padding:"8px 22px",color:"white",position:"sticky",top:0,zIndex:50,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
@@ -722,8 +724,8 @@ function App() {
               {menuOpen&&(
                 <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 12px 40px rgba(0,0,0,0.2)",zIndex:200,minWidth:200,overflow:"hidden"}}>
                   {[
-                    {icon:"📖",label:"הדרכה ועזרה",action:()=>{setModal("help");setMenuOpen(false);}},
-                    {icon:"📋",label:"לוג שינויים",action:()=>{setModal("changelog");setMenuOpen(false);}},
+                    {icon:"📖",label:L("menuHelp"),action:()=>{setModal("help");setMenuOpen(false);}},
+                    {icon:"📋",label:L("menuChangelog"),action:()=>{setModal("changelog");setMenuOpen(false);}},
                     {icon:darkMode?"☀️":"🌙",label:darkMode?L("menuLight"):L("menuDark"),action:()=>{setDarkMode(v=>!v);setMenuOpen(false);}},
                     {icon:"✉️",label:L("menuGmail"),action:()=>{setModal("gmail");setMenuOpen(false);}},
                     {icon:"⚙️",label:L("menuSettings"),action:()=>{setModal("settings");setMenuOpen(false);}},
@@ -734,7 +736,7 @@ function App() {
                     }},
                     {icon:"ℹ️",label:L("menuAbout"),action:()=>{setModal("about");setMenuOpen(false);}},
                   ].map(item=>(
-                    <button key={item.label} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"right",padding:"11px 16px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
+                    <button key={item.label} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"start",padding:"11px 16px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
                       <span>{item.icon}</span>{item.label}
                     </button>
                   ))}
@@ -752,7 +754,7 @@ function App() {
             <div style={{fontSize:22,fontWeight:900,lineHeight:1,letterSpacing:"-0.5px"}}>
               {stats.byStatus.completed}<span style={{fontSize:13,opacity:0.6,fontWeight:400}}>/{settings.totalTarget}</span>
             </div>
-            <div style={{fontSize:9,opacity:0.6,letterSpacing:"0.5px",textTransform:"uppercase"}}>השלימו</div>
+            <div style={{fontSize:9,opacity:0.6,letterSpacing:"0.5px",textTransform:"uppercase"}}>{L("completed")}</div>
             <div style={{background:"rgba(255,255,255,0.2)",borderRadius:3,height:3,width:70}}>
               <div style={{background:"#34D399",height:3,borderRadius:3,width:`${Math.min(100,stats.byStatus.completed/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
             </div>
@@ -763,7 +765,7 @@ function App() {
             <span style={{fontSize:10,color:"rgba(255,255,255,0.7)"}}>
               {syncStatus==="syncing"&&<span style={{display:"inline-block",width:8,height:8,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",marginLeft:3}}/>}
               {syncStatus==="ok"&&`☁️ ${lastSync?lastSync.getHours()+":"+String(lastSync.getMinutes()).padStart(2,"0"):"Sheets"}`}
-              {(syncStatus==="error"||syncStatus==="idle")&&"💾 מקומי"}
+              {(syncStatus==="error"||syncStatus==="idle")&&`💾 ${L("syncLocal")}`}
             </span>
             <button title="טען מחדש מ-Sheets" onClick={()=>{
               setSyncStatus("syncing");
@@ -820,7 +822,7 @@ function App() {
             </span>
             <div style={{position:"relative"}}>
               <button onClick={e=>{e.stopPropagation();setExportMenu(v=>!v);}} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:600}}>
-                ⬇️ ייצוא
+                {L("btnExport")}
               </button>
               {exportMenu&&(
                 <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",zIndex:200,minWidth:180}}>
@@ -839,7 +841,7 @@ function App() {
               <button onClick={()=>fileRef.current?.click()}
                 disabled={importStatus?.state==="loading"}
                 style={{background:T.accent,color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",opacity:importStatus?.state==="loading"?0.6:1}}>
-                📂 יבוא CSV
+                {L("btnImportCSV")}
               </button>
               <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{handleFile(e.target.files[0]);e.target.value="";}}/>
               <button onClick={()=>{
@@ -865,7 +867,7 @@ function App() {
               }}
                 disabled={importStatus?.state==="loading"}
                 style={{background:"#059669",color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",opacity:importStatus?.state==="loading"?0.6:1}}>
-                📋 יבוא מ-Sheets
+                {L("btnImportSheets")}
               </button>
 
               {/* Import status indicator */}
@@ -916,10 +918,10 @@ function App() {
               {/* Row 1: always-visible actions */}
               <div style={{display:"flex",gap:7,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
                 <button onClick={()=>{setEditP(emptyP());setModal("addEdit");}} style={{background:"#059669",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
-                  ＋ הוסף נבדק
+                  {L("btnAddParticipant")}
                 </button>
                 <button onClick={()=>autoAssign(null)} style={{background:"linear-gradient(135deg,#4338CA,#7C3AED)",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>
-                  ⚡ שיבוץ אוטומטי לכולם
+                  {L("btnAutoAssign")}
                 </button>
                 {/* Counter pill */}
                 <span style={{fontSize:12,color:T.textMuted,background:T.surface,border:`1px solid ${T.border}`,padding:"5px 11px",borderRadius:20,marginRight:"auto"}}>
@@ -953,7 +955,7 @@ function App() {
                       showToast(`🗑 נוקו ${count} שיבוצים`);
                       setSelected(new Set());
                     }} style={{background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
-                      🗑 נקה שיבוצים
+                      {L("btnClearAssign")}
                     </button>
                   )}
 
@@ -1030,12 +1032,47 @@ function App() {
                     })}
                   </div>
 
-                  {/* Bulk email */}
-                  {selList.some(p=>p.email&&p.assigned)&&(
-                    <button onClick={()=>setModal("bulkEmail")} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
-                      ✉️ שלח מייל לנבחרים ({selList.filter(p=>p.email&&p.assigned).length})
-                    </button>
-                  )}
+                    {selList.some(p=>p.email)&&(
+                      <div style={{position:"relative"}}>
+                        <button onClick={e=>{e.stopPropagation();setExportMenu(v=>v==="bulkEmailMenu"?false:"bulkEmailMenu");}} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
+                          ✉️ {lang==="en"?"Email selected":"מייל לנבחרים"} ({selList.filter(p=>p.email).length}) ▾
+                        </button>
+                        {exportMenu==="bulkEmailMenu"&&(
+                          <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",zIndex:300,minWidth:200,overflow:"hidden"}}>
+                            {[
+                              {type:"invitation",icon:"📨",he:"הזמנה לניסוי",en:"Invitation",cond:p=>p.email&&p.assigned},
+                              {type:"reminder",icon:"🔔",he:"תזכורת",en:"Reminder",cond:p=>p.email&&p.assigned},
+                              {type:"noAvailability",icon:"⚠️",he:"בקשת זמינות",en:"Availability request",cond:p=>p.email},
+                              {type:"thanks",icon:"🙏",he:"תודה (השלים)",en:"Thank you",cond:p=>p.email&&p.status==="completed"},
+                            ].map(opt=>{
+                              const targets=selList.filter(opt.cond);
+                              if(targets.length===0) return null;
+                              return(
+                                <button key={opt.type} onClick={()=>{
+                                  targets.forEach(p=>{
+                                    let subj,body;
+                                    if(opt.type==="thanks"){
+                                      subj=`תודה על השתתפותך – ${settings.experimentName}`;
+                                      body=`שלום ${p.name},\n\nתודה רבה על השתתפותך בניסוי!\n\nבברכה,\n${settings.currentUser}`;
+                                    } else {
+                                      const e=buildEmail(p,opt.type);
+                                      subj=e.subject; body=e.body;
+                                    }
+                                    sendViaGmail(subj,body,p.email);
+                                  });
+                                  setExportMenu(false);
+                                  showToast(`✉️ ${targets.length} ${lang==="en"?"emails opened":"חלונות נפתחו"}`);
+                                }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
+                                  <span>{opt.icon}</span>
+                                  <span style={{flex:1}}>{lang==="en"?opt.en:opt.he}</span>
+                                  <span style={{fontSize:10,color:T.textMuted,background:T.tablehead,borderRadius:10,padding:"1px 7px"}}>{targets.length}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                   <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:18,padding:"0 4px",marginRight:"auto"}}>×</button>
                 </div>
@@ -1047,7 +1084,7 @@ function App() {
               <input placeholder={L("searchPlaceholder")} value={filters.name} onChange={e=>setFilters(f=>({...f,name:e.target.value}))}
                 style={{padding:"5px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:140}}/>
               <select value={filters.assigned} onChange={e=>setFilters(f=>({...f,assigned:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
-                <option value="">שובצו/לא</option><option value="yes">שובצו</option><option value="no">לא שובצו</option>
+                <option value="">{L("filterAssigned")}</option><option value="yes">{L("filterYes")}</option><option value="no">{L("filterNo")}</option>
               </select>
               {(filters.name||filters.assigned||filters.status.length>0||filters.gender.length>0||filters.location.length>0||filters.day.length>0||filters.slot.length>0||filters.locPref.length>0||filters.age.length>0)&&(
                 <button onClick={()=>setFilters({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[]})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{L("clearAll")}</button>
@@ -1065,8 +1102,8 @@ function App() {
                         setSelected(prev=>{const n=new Set(prev);ids.forEach(id=>allOn?n.delete(id):n.add(id));return n;});
                       }} style={{cursor:"pointer"}}/>
                     </th>
-                    {[{k:"name",l:"שם"},{k:"email",l:"אימייל"}].map(h=>(
-                      <th key={h.k} onClick={()=>toggleSort(h.k)} style={{padding:"8px 10px",textAlign:"right",fontSize:11,color:T.textMuted,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>
+                    {[{k:"name",l:L("colName")},{k:"email",l:L("colEmail")}].map(h=>(
+                      <th key={h.k} onClick={()=>toggleSort(h.k)} style={{padding:"8px 10px",textAlign:"start",fontSize:11,color:T.textMuted,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>
                         <SortIcon col={h.k}/>{h.l}
                       </th>
                     ))}
@@ -1077,7 +1114,7 @@ function App() {
                         const isOpen = colMenu?.col===col;
                         const selected_vals = filters[fkey]||[];
                         return (
-                          <th style={{padding:"4px 6px",textAlign:"right",fontSize:11,color:active?T.accent:T.textMuted,fontWeight:700,whiteSpace:"nowrap",position:"relative",userSelect:"none"}}>
+                          <th style={{padding:"4px 6px",textAlign:"start",fontSize:11,color:active?T.accent:T.textMuted,fontWeight:700,whiteSpace:"nowrap",position:"relative",userSelect:"none"}}>
                             <div style={{display:"flex",alignItems:"center",gap:2}}>
                               <span onClick={()=>toggleSort(col)} style={{cursor:"pointer",flex:1}}>
                                 <SortIcon col={col}/>{label}
@@ -1143,10 +1180,15 @@ function App() {
                           {p.gender&&<span style={{background:p.gender==="גבר"?"#EEF2FF":"#FDF4FF",color:p.gender==="גבר"?"#4338CA":"#7E22CE",borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700}}>{p.gender}</span>}
                         </td>
                         {/* Availability */}
-                        <td style={{padding:"6px 10px"}}>
-                          <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
-                            {DAYS.map(d=>p.availability[d]?.length>0?<span key={d} style={{background:T.tablehead,color:T.accent,borderRadius:3,padding:"1px 4px",fontSize:9,fontWeight:700,border:`1px solid ${T.border}`}}>{d}</span>:null)}
-                            {Object.values(p.availability).every(s=>s.length===0)&&<span style={{color:"#FCA5A5",fontSize:9}}>ללא</span>}
+                        <td style={{padding:"4px 6px",minWidth:140}}>
+                          <div style={{display:"flex",gap:3,flexWrap:"wrap",minWidth:130}}>
+                            {DAYS.filter(d=>p.availability[d]?.length>0).map(d=>(
+                              <span key={d} style={{background:T.tablehead,color:T.accent,borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,border:`1px solid ${T.border}`,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:2}}>
+                                {dayNames[d]?.slice(0,3)||d}
+                                <span style={{opacity:0.6,fontSize:8}}>{(p.availability[d]||[]).some(s=>s.includes("בוקר"))?"🌅":""}{(p.availability[d]||[]).some(s=>s.includes("צהריים"))?"☀️":""}</span>
+                              </span>
+                            ))}
+                            {Object.values(p.availability).every(s=>s.length===0)&&<span style={{color:"#FCA5A5",fontSize:10}}>—</span>}
                           </div>
                         </td>
                         {/* Day */}
@@ -1232,7 +1274,14 @@ function App() {
                         <td style={{padding:"4px 5px"}}>
                           <div style={{display:"flex",gap:3}}>
                             <button title="ערוך" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✏️</button>
-                            {p.email&&p.assigned&&<button title="שלח מייל" onClick={()=>sendViaGmail(buildEmail(p,"invitation").subject,buildEmail(p,"invitation").body,p.email)} style={{background:"#EEF2FF",color:"#4338CA",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✉️</button>}
+                            {p.email&&(
+                              <button title={lang==="en"?"Send email":"שלח מייל"} onClick={e=>{
+                                const r=e.currentTarget.getBoundingClientRect();
+                                setRowEmailMenu(rowEmailMenu?.pid===p.id?null:{pid:p.id,x:r.left,y:r.bottom+4,p});
+                              }} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer",fontWeight:700}}>
+                                ✉️▾
+                              </button>
+                            )}
                             {p.assigned&&<button title="נקה שיבוץ" onClick={()=>clearA(p.id)} style={{background:"#FEF2F2",color:"#9CA3AF",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✕</button>}
                             <button title="מחק" onClick={()=>{if(window.confirm(`למחוק ${p.name}?`)){setParticipants(prev=>prev.filter(x=>x.id!==p.id));addLog("מחיקה",`נמחק: ${p.name}`);}}} style={{background:T.tablehead,color:T.textFaint,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>🗑</button>
                           </div>
@@ -1655,7 +1704,7 @@ function App() {
 
       {/* Help */}
       {modal==="help"&&(
-        <ModalShell title="📖 הדרכה ועזרה" T={T} onClose={()=>setModal(null)} wide>
+        <ModalShell title={L("menuHelp")} T={T} onClose={()=>setModal(null)} wide>
           <div style={{fontSize:13,lineHeight:1.8,color:T.text}}>
             {[
               ["📋 טאב שיבוצים","הטבלה הראשית. בחר נבדקים עם הצ'קבוקס ואז הפעל פעולות. ניתן למיין כל עמודה בלחיצה על הכותרת. הסינון בשורה העליונה פועל בזמן אמת."],
@@ -1678,7 +1727,7 @@ function App() {
 
       {/* Changelog */}
       {modal==="changelog"&&(
-        <ModalShell title="📋 לוג שינויים" T={T} onClose={()=>setModal(null)} wide>
+        <ModalShell title={L("menuChangelog")} T={T} onClose={()=>setModal(null)} wide>
           {changelog.length===0?<p style={{color:T.textMuted,textAlign:"center"}}>אין שינויים עדיין</p>:(
             <div style={{maxHeight:450,overflowY:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -1701,7 +1750,7 @@ function App() {
             </div>
           )}
           <div style={{marginTop:10,textAlign:"left"}}>
-            <button onClick={()=>{if(window.confirm("לנקות את הלוג?")) setChangelog([]);}} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑 נקה לוג</button>
+            <button onClick={()=>{if(window.confirm("לנקות את הלוג?")) setChangelog([]);}} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{lang==="en"?"🗑 Clear log":"🗑 נקה לוג"}</button>
           </div>
         </ModalShell>
       )}
@@ -1787,11 +1836,11 @@ function App() {
               
               // Field-by-field comparison
               const fields = [
-                {label:"שם",        a:incoming.name,  b:ex.name},
-                {label:"אימייל",    a:incoming.email, b:ex.email},
+                {label:L("colName"),a:incoming.name,  b:ex.name},
+                {label:L("colEmail"),a:incoming.email, b:ex.email},
                 {label:"טלפון",     a:incoming.phone, b:ex.phone},
-                {label:"גיל",       a:incoming.age,   b:ex.age},
-                {label:"מגדר",      a:incoming.gender,b:ex.gender},
+                {label:L("colAge"), a:incoming.age,   b:ex.age},
+                {label:L("colGender"),a:incoming.gender,b:ex.gender},
                 {label:"נוסף",      a:incoming.importedAt?tsToStr(incoming.importedAt):"",b:ex.importedAt?tsToStr(ex.importedAt):""},
                 {label:"סטטוס",     a:"",             b:statusMeta[ex.status]?.label||ex.status},
                 {label:"שיבוץ",     a:"",             b:ex.assigned?`${L("dayPrefix")}${dayNames[ex.assigned.day]} ${ex.assigned.slot?.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}`:"אין"},
@@ -1893,6 +1942,40 @@ function App() {
       )}
 
       {/* Toast */}
+      {/* Per-row email dropdown */}
+      {rowEmailMenu&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setRowEmailMenu(null)}/>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",left:rowEmailMenu.x,top:rowEmailMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
+            {(()=>{
+              const p=rowEmailMenu.p;
+              const opts=[
+                {type:"invitation",icon:"📨",he:"הזמנה לניסוי",en:"Invitation",show:!!p.assigned},
+                {type:"reminder",  icon:"🔔",he:"תזכורת",en:"Reminder",show:!!p.assigned},
+                {type:"noAvailability",icon:"⚠️",he:"בקשת עדכון זמינות",en:"Availability request",show:true},
+                {type:"thanks",    icon:"🙏",he:"תודה (השלמת ניסוי)",en:"Thank you",show:p.status==="completed"},
+              ].filter(o=>o.show);
+              return opts.map(opt=>(
+                <button key={opt.type} onClick={()=>{
+                  let subj,body;
+                  if(opt.type==="thanks"){
+                    subj=`תודה על השתתפותך – ${settings.experimentName}`;
+                    body=`שלום ${p.name},\n\nתודה רבה על השתתפותך בניסוי "${settings.experimentName}"!\n\nבברכה,\n${settings.currentUser}`;
+                  } else {
+                    const e=buildEmail(p,opt.type);subj=e.subject;body=e.body;
+                  }
+                  sendViaGmail(subj,body,p.email);
+                  setRowEmailMenu(null);
+                }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
+                  <span style={{fontSize:16}}>{opt.icon}</span>
+                  <span>{lang==="en"?opt.en:opt.he}</span>
+                </button>
+              ));
+            })()}
+          </div>
+        </>
+      )}
+
       {/* Excel-style column filter dropdown */}
       {colMenu&&(
         <>
@@ -2045,14 +2128,14 @@ function ManualEmailComposer({participants, T, sendViaGmail, GS_URL}) {
           border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700,
           opacity:aiLoading&&aiMode!=="proofread"?0.5:1
         }}>
-          {aiLoading&&aiMode==="proofread"?"⏳ ...":"✍️ תיקון כתיב (AI)"}
+          {aiLoading&&aiMode==="proofread"?"⏳ ...":L("btnProofread")}
         </button>
         <button onClick={()=>callAI("rewrite")} disabled={aiLoading||!body.trim()} style={{
           background:aiMode==="rewrite"?"#7C3AED":"#EDE9FE",color:aiMode==="rewrite"?"white":"#5B21B6",
           border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700,
           opacity:aiLoading&&aiMode!=="rewrite"?0.5:1
         }}>
-          {aiLoading&&aiMode==="rewrite"?"⏳ ...":"🔄 שכתוב (AI)"}
+          {aiLoading&&aiMode==="rewrite"?"⏳ ...":L("btnRewrite")}
         </button>
         <div style={{marginRight:"auto",fontSize:11,color:T.textMuted}}>{recipients.length} נמענים</div>
         <button onClick={()=>{
@@ -2106,7 +2189,7 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-          {[{k:"name",l:"שם מלא *"},{k:"email",l:"אימייל"},{k:"phone",l:"טלפון"},{k:"age",l:"גיל"}].map(f=>(
+          {[{k:"name",l:L("fieldName")},{k:"email",l:L("fieldEmail")},{k:"phone",l:L("fieldPhone")},{k:"age",l:L("fieldAge")}].map(f=>(
             <div key={f.k}>
               <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{f.l}</label>
               <input value={p[f.k]||""} onChange={e=>setP(prev=>({...prev,[f.k]:e.target.value}))} style={inputStyle}/>
@@ -2194,7 +2277,7 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"8px 15px",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"inherit"}}>{L("btnCancel")}</button>
           <button onClick={()=>onSave(p)} disabled={!p.name.trim()} style={{background:"#059669",color:"white",border:"none",padding:"8px 18px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",opacity:p.name.trim()?1:0.5}}>
-            {p.id?"💾 שמור שינויים":"✅ הוסף נבדק"}
+            {p.id?L("btnSaveChanges"):L("btnAddConfirm")}
           </button>
         </div>
       </div>
