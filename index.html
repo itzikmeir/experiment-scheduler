@@ -1208,10 +1208,10 @@ function App() {
                       return (<>
                         <ExcelTh col="age"     label={L("colAge")}         fkey="age"     options={ageOpts}/>
                         <ExcelTh col="gender"  label={L("colGender")}        fkey="gender"  options={genderOpts}/>
-                        (()=>{
+                        {(()=>{
                           const availDayOpts = DAYS.map(d=>({v:d, l:lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:d}));
                           return <ExcelTh col="avail" label={L("colAvail")} fkey="avail" options={availDayOpts}/>;
-                        })()
+                        })()}
                         <ExcelTh col="assigned_day"  label={L("colDay")}   fkey="day"     options={dayOpts}/>
                         <ExcelTh col="assigned_slot" label={L("colSlot")} fkey="slot"    options={slotOpts}/>
                         <ExcelTh col="assigned_loc"  label={L("colLocation")} fkey="location" options={locOpts}/>
