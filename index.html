@@ -209,6 +209,7 @@ function parseRow(row, id) {
     assigned: null,
     status: "pending",
     notes: extraNote,
+    locPref: [],
     importedAt: Date.now(),
   };
 }
@@ -346,10 +347,16 @@ function App() {
       .sort((a,b)=>Object.values(a.availability).flat().length-Object.values(b.availability).flat().length);
     let n=0;
     queue.forEach(p=>{
+      // Try preferred locations first, then all others
+      const prefs=p.locPref&&p.locPref.length>0?p.locPref:[];
+      const orderedLocs=[
+        ...locations.filter(l=>prefs.includes(l.id)),
+        ...locations.filter(l=>!prefs.includes(l.id)),
+      ];
       outer:for(const day of DAYS){
         if(updated.filter(u=>u.assigned?.day===day).length>=settings.maxPerDay) continue;
         for(const slot of p.availability[day]||[]){
-          for(const loc of locations){
+          for(const loc of orderedLocs){
             const k=`${day}_${slot}_${loc.id}`;
             if((cnt[k]||0)<settings.perSlot){
               const idx=updated.findIndex(u=>u.id===p.id);
@@ -881,7 +888,7 @@ function App() {
                         <SortIcon col={h.k}/>{h.l}
                       </th>
                     ))}
-                    {["זמינות","יום","משמרת","מיקום","חדר","סטטוס","הערות","פעולות"].map(h=>(
+                    {["זמינות","יום","משמרת","מיקום","חדר","העדפת מיקום","סטטוס","הערות","פעולות"].map(h=>(
                       <th key={h} style={{padding:"8px 10px",textAlign:"right",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
                     ))}
                   </tr>
@@ -962,6 +969,32 @@ function App() {
                             style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
                             {Object.entries(STATUS_META).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
                           </select>
+                        </td>
+                        {/* Location preference */}
+                        <td style={{padding:"4px 5px",minWidth:110}}>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
+                            {locations.map(loc=>{
+                              const pref=p.locPref||[];
+                              const on=pref.includes(loc.id);
+                              const c=LOC_COLORS[(locations.findIndex(l=>l.id===loc.id))%LOC_COLORS.length];
+                              return(
+                                <button key={loc.id} onClick={()=>{
+                                  const cur=p.locPref||[];
+                                  const next=on?cur.filter(x=>x!==loc.id):[...cur,loc.id];
+                                  updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
+                                }} style={{
+                                  background:on?c.bg:T.tablehead,
+                                  color:on?c.text:T.textFaint,
+                                  border:`1px solid ${on?c.border:T.border}`,
+                                  borderRadius:4,padding:"2px 6px",fontSize:10,
+                                  cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:400,
+                                  transition:"all .15s"
+                                }}>
+                                  {on?"✓ ":""}{loc.name}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </td>
                         {/* Notes */}
                         <td style={{padding:"4px 5px"}}>
@@ -1683,6 +1716,40 @@ function ParticipantModal({p:initP,locations,T,onSave,onClose}) {
               ))}
             </tbody>
           </table>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:6,fontWeight:600}}>📍 העדפת מיקום (ניתן לבחור מספר)</label>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            {locations.length===0 && <span style={{fontSize:11,color:T.textFaint}}>אין מיקומים מוגדרים — הוסף במלן מיקומים</span>}
+            {locations.map((loc,i)=>{
+              const pref=p.locPref||[];
+              const on=pref.includes(loc.id);
+              const colors=[
+                {bg:"#EEF2FF",text:"#4338CA",border:"#C7D4FF"},
+                {bg:"#FFF7ED",text:"#C2410C",border:"#FED7AA"},
+                {bg:"#F0FDF4",text:"#166534",border:"#A7F3D0"},
+                {bg:"#FDF4FF",text:"#7E22CE",border:"#E9D5FF"},
+              ];
+              const c=colors[i%colors.length];
+              return(
+                <button key={loc.id} type="button" onClick={()=>{
+                  const cur=p.locPref||[];
+                  const next=on?cur.filter(x=>x!==loc.id):[...cur,loc.id];
+                  setP(prev=>({...prev,locPref:next}));
+                }} style={{
+                  background:on?c.bg:T.tablehead,
+                  color:on?c.text:T.textMuted,
+                  border:`1.5px solid ${on?c.border:T.border}`,
+                  borderRadius:7,padding:"6px 14px",
+                  cursor:"pointer",fontFamily:"inherit",
+                  fontSize:12,fontWeight:on?700:400,
+                  transition:"all .15s",
+                }}>
+                  {on?"✓ ":""}{loc.name}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>הערות</label>
