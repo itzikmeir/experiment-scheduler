@@ -417,7 +417,7 @@ function exportCSV(rows,filename) {
 const emptyP = () => ({
   id:null,name:"",email:"",phone:"",age:"",gender:"",
   availability:{א:[],ב:[],ג:[],ד:[],ה:[],ו:[]},
-  assigned:null,status:"pending",notes:"",importedAt:Date.now()
+  assigned:null,startTime:"",status:"pending",notes:"",importedAt:Date.now()
 });
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
@@ -818,7 +818,7 @@ function App() {
     const room=p.assigned?.room||"";
     const day=p.assigned?`יום ${dayNames[p.assigned.day]}`:"—";
     const slot=p.assigned?p.assigned.slot.replace("בוקר (08:00-12:00)","08:00–12:00").replace("צהריים (12:00-18:00)","12:00–18:00"):"—";
-    if(type==="invitation") return{subject:`הזמנה לניסוי – ${settings.experimentName}`,body:`שלום ${p.name},\n\nשמחנו להזמין אותך לניסוי "${settings.experimentName}"!\n\n📅 יום: ${day}\n⏰ שעות: ${slot}\n📍 מיקום: ${loc}${room?` – ${room}`:""}\n⏱ משך: ${settings.duration}\n\nאנא אשר/י הגעה במענה למייל זה.\n\nבברכה,\n${settings.researcherName}`};
+    if(type==="invitation"){const timeStr=p.startTime?`\n🕐 שעת התחלה: ${p.startTime}`:"";return{subject:`הזמנה לניסוי – ${settings.experimentName}`,body:`שלום ${p.name},\n\nשמחנו להזמין אותך לניסוי "${settings.experimentName}"!\n\n📅 יום: ${day}\n⏰ שעות: ${slot}${timeStr}\n📍 מיקום: ${loc}${room?` – ${room}`:""}\n⏱ משך: ${settings.duration}\n\nאנא אשר/י הגעה במענה למייל זה.\n\nבברכה,\n${settings.researcherName}`};}
     if(type==="reminder") return{subject:`תזכורת – ${settings.experimentName}`,body:`שלום ${p.name},\n\nתזכורת: ${day} | ${slot} | ${loc}${room?` – ${room}`:""}\n\nמחכים לראותך!\n\nבברכה,\n${settings.researcherName}`};
     return{subject:`עדכון זמינות – ${settings.experimentName}`,body:`שלום ${p.name},\n\nלא מצאנו זמן מתאים. האם תוכל/י לעדכן ימים נוספים?\n\nבברכה,\n${settings.researcherName}`};
   }
@@ -1108,6 +1108,36 @@ function App() {
                     {Object.entries(statusMeta).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
                   </select>
 
+                  {/* Bulk set day */}
+                  <select defaultValue="" onChange={e=>{
+                    if(!e.target.value) return;
+                    const day=e.target.value;
+                    setParticipants(prev=>prev.map(p=>{
+                      if(!selected.has(p.id)||!p.assigned) return p;
+                      const slot=p.availability[day]?.[0]||p.assigned.slot||SLOTS[0];
+                      return {...p,assigned:{...p.assigned,day,slot}};
+                    }));
+                    addLog("עדכון יום",`יום ${dayNames[day]} ל-${selected.size} נבדקים`);
+                    showToast(`📅 יום עודכן`);
+                    e.target.value="";
+                  }} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer"}}>
+                    <option value="">{lang==="en"?"Day for selected…":"יום לנבחרים…"}</option>
+                    {DAYS.map(d=><option key={d} value={d}>{lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:dayNames[d]}</option>)}
+                  </select>
+
+                  {/* Bulk set shift */}
+                  <select defaultValue="" onChange={e=>{
+                    if(!e.target.value) return;
+                    const slot=e.target.value;
+                    setParticipants(prev=>prev.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,slot}}:p));
+                    addLog("עדכון משמרת",`משמרת ל-${selected.size} נבדקים`);
+                    showToast(`⏰ משמרת עודכנה`);
+                    e.target.value="";
+                  }} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer"}}>
+                    <option value="">{lang==="en"?"Shift for selected…":"משמרת לנבחרים…"}</option>
+                    {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</option>)}
+                  </select>
+
                   {/* Bulk set location */}
                   <select defaultValue="" onChange={e=>{
                     if(!e.target.value) return;
@@ -1134,6 +1164,31 @@ function App() {
                       <option value="">כיתה/חדר לנבחרים…</option>
                       {[...new Set(locations.flatMap(l=>l.rooms))].map(r=><option key={r} value={r}>{r}</option>)}
                     </select>
+                  )}
+
+                  {/* Bulk auto-fill time */}
+                  {selList.some(p=>p.assigned)&&(
+                    <button onClick={()=>{
+                      const conflicts=[];
+                      const timeCounts={};
+                      selList.forEach(p=>{
+                        if(!p.assigned) return;
+                        const t=p.assigned.slot?.includes("בוקר")?"08:00":"12:00";
+                        const key=`${p.assigned.day}_${t}_${p.assigned.locationId}`;
+                        timeCounts[key]=(timeCounts[key]||0)+1;
+                        if(timeCounts[key]>settings.perSlot) conflicts.push(p.name);
+                      });
+                      if(conflicts.length>0){
+                        if(!window.confirm(`⚠️ ${lang==="en"?"Conflict:":"קונפליקט:"} ${conflicts.join(", ")} ${lang==="en"?"exceed slot limit. Continue?":"חורגים ממגבלת משמרת. להמשיך?"}`)) return;
+                      }
+                      setParticipants(prev=>prev.map(p=>{
+                        if(!selected.has(p.id)||!p.assigned) return p;
+                        return {...p,startTime:p.assigned.slot?.includes("בוקר")?"08:00":"12:00"};
+                      }));
+                      showToast(`⏰ ${lang==="en"?"Times set":"שעות מולאו"}`);
+                    }} style={{background:"#FFF7ED",color:"#D97706",border:"1px solid #FDE68A",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
+                      ⏰ {lang==="en"?"Auto-fill time":"מלא שעות אוטומטית"}
+                    </button>
                   )}
 
                   {/* Bulk set location preference */}
@@ -1297,6 +1352,7 @@ function App() {
                         <ExcelTh col="assigned_slot" label={L("colSlot")} fkey="slot"    options={slotOpts}/>
                         <ExcelTh col="assigned_loc"  label={L("colLocation")} fkey="location" options={locOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colRoom")}</th>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap",minWidth:90}}>{lang==="en"?"Time":"שעה"}</th>
                         <ExcelTh col="status"  label={L("colStatus")}       fkey="status"  options={statusOpts}/>
                         <ExcelTh col="locPref" label={L("colLocPref")} fkey="locPref" options={locPrefOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colNotes")}</th>
@@ -1379,6 +1435,22 @@ function App() {
                               :<input value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} placeholder="ידני" style={{padding:"3px 5px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:65,background:T.inputBg,color:T.text}}/>;
                           })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
                         </td>
+                        {/* Time */}
+                        <td style={{padding:"4px 5px"}}>
+                          {p.assigned?(()=>{
+                            const autoTime=p.assigned.slot?.includes("בוקר")?"08:00":"12:00";
+                            return(
+                              <div style={{display:"flex",gap:2,alignItems:"center"}}>
+                                <input type="time" value={p.startTime||""} onChange={e=>updP(p.id,{startTime:e.target.value})}
+                                  style={{padding:"2px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,width:80}}/>
+                                <button title={lang==="en"?"Auto-fill from shift":"מלא לפי משמרת"} onClick={()=>{
+                                  updP(p.id,{startTime:autoTime});
+                                }} style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10,color:T.textMuted,fontFamily:"inherit"}}>⟳</button>
+                              </div>
+                            );
+                          })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
+                        </td>
+
                         {/* Status */}
                         <td style={{padding:"4px 5px"}}>
                           <select value={p.status} onChange={e=>updP(p.id,{status:e.target.value},`סטטוס ${p.name}: ${statusMeta[e.target.value].label}`)}
@@ -2095,7 +2167,7 @@ function App() {
           <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setRowEmailMenu(null)}/>
           <div onClick={e=>e.stopPropagation()} style={{position:"fixed",[lang==="en"?"left":"right"]:lang==="en"?rowEmailMenu.x:rowEmailMenu.right,top:rowEmailMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
             {(()=>{
-              const p=rowEmailMenu.p;
+              const p=participants.find(x=>x.id===rowEmailMenu.p.id)||rowEmailMenu.p;
               const opts=[
                 {type:"invitation",icon:"📨",he:"הזמנה לניסוי",en:"Invitation",show:!!p.assigned},
                 {type:"reminder",  icon:"🔔",he:"תזכורת",en:"Reminder",show:!!p.assigned},
@@ -2119,6 +2191,10 @@ function App() {
                 </button>
               ));
             })()}
+            <button onClick={()=>{setRowEmailMenu(null);setFreeMailModal({recipients:[participants.find(x=>x.id===rowEmailMenu.p.id)||rowEmailMenu.p]});}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"#F0FDF4",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#166534",fontWeight:700}}>
+              <span style={{fontSize:16}}>✍️</span>
+              <span>{lang==="en"?"Free write...":"הודעה חופשית..."}</span>
+            </button>
           </div>
         </>
       )}
@@ -2216,7 +2292,7 @@ function App() {
       {/* Free-write email to selected */}
       {freeMailModal&&(
         <FreeMailModal
-          recipients={selList.filter(p=>p.email)}
+          recipients={Array.isArray(freeMailModal)?freeMailModal:freeMailModal.recipients||selList.filter(p=>p.email)}
           T={T} L={L} lang={lang}
           sendViaGmail={sendViaGmail}
           onClose={()=>setFreeMailModal(false)}
@@ -2251,7 +2327,7 @@ function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
             ? `Fix spelling and grammar in the following message, return only the corrected text:\n\n${body}`
             : `בדוק ותקן שגיאות כתיב ודקדוק בהודעה הבאה, החזר רק את הטקסט המתוקן:\n\n${body}`);
       const res = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json"},
+        method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
       });
       const data = await res.json();
@@ -2340,7 +2416,12 @@ function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
           <button
             disabled={!subject.trim()||!body.trim()||sent}
             onClick={()=>{
-              recipients.forEach(p=>sendViaGmail(subject,body,p.email));
+              if(recipients.length===1){
+                sendViaGmail(subject,body,recipients[0].email);
+              } else {
+                const bcc=recipients.map(p=>p.email).join(",");
+                window.open(`https://mail.google.com/mail/?view=cm&bcc=${encodeURIComponent(bcc)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,"_blank");
+              }
               setSent(true);
               setTimeout(onClose,1200);
             }}
@@ -2383,7 +2464,7 @@ function ManualEmailComposer({participants, T, sendViaGmail, GS_URL, L, lang}) {
         : `בדוק ותקן שגיאות כתיב ודקדוק בהודעה הבאה בעברית, החזר רק את הטקסט המתוקן:\n\n${body}`;
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
         body: JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
       });
       const data = await res.json();
@@ -2454,7 +2535,12 @@ function ManualEmailComposer({participants, T, sendViaGmail, GS_URL, L, lang}) {
         <div style={{marginRight:"auto",fontSize:11,color:T.textMuted}}>{recipients.length} נמענים</div>
         <button onClick={()=>{
           if(!subject.trim()||!body.trim()||recipients.length===0) return;
-          recipients.forEach(p=>sendViaGmail(subject, `שלום ${p.name},\n\n${body}`, p.email));
+          if(recipients.length===1){
+            sendViaGmail(subject,`שלום ${recipients[0].name},\n\n${body}`,recipients[0].email);
+          } else {
+            const bcc=recipients.map(p=>p.email).join(",");
+            window.open(`https://mail.google.com/mail/?view=cm&bcc=${encodeURIComponent(bcc)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,"_blank");
+          }
         }} disabled={!subject.trim()||!body.trim()||recipients.length===0} style={{
           background:subject&&body&&recipients.length>0?"#059669":"#9CA3AF",
           color:"white",border:"none",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700
