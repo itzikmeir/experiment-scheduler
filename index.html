@@ -1710,7 +1710,7 @@ function App() {
             {participants.filter(p=>p.status==="completed").length>0&&(
               <div style={{background:"#F0FDF4",border:"1px solid #A7F3D0",borderRadius:12,padding:16,marginBottom:16}}>
                 <h3 style={{margin:"0 0 6px",fontSize:13,color:"#166534"}}>🙏 תודה למשתתפים שהשלימו</h3>
-                <p style={{margin:"0 0 10px",fontSize:11,color:"#16a34a"}}>{participants.filter(p=>p.status==="completed").length} {L("emailCompleteCount")</p>
+                <p style={{margin:"0 0 10px",fontSize:11,color:"#16a34a"}}>{participants.filter(p=>p.status==="completed").length} {L("emailCompleteCount")}</p>
                 <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
                   {participants.filter(p=>p.status==="completed").map(p=>(
                     <div key={p.id} style={{background:"white",border:"1px solid #A7F3D0",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
