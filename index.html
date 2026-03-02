@@ -485,6 +485,14 @@ function App() {
 
   // ── Sync state ────────────────────────────────────────────────────────────
   const [syncStatus,setSyncStatus] = useState("idle"); // idle | syncing | ok | error
+  const [notifications,setNotifications] = useState([]); // [{id,type,msg,p,action}]
+  const [notifOpen,setNotifOpen] = useState(false);
+  const addNotif = (notif) => setNotifications(prev=>{
+    const exists = prev.some(n=>n.id===notif.id);
+    if(exists) return prev;
+    return [notif,...prev].slice(0,50);
+  });
+  const removeNotif = (id) => setNotifications(prev=>prev.filter(n=>n.id!==id));
   const [importStatus,setImportStatus] = useState(null); // null | {state:"loading"|"ok"|"error", msg:string}
   const [syncMsg,setSyncMsg]       = useState("");
   const [lastSync,setLastSync]     = useState(null);
@@ -523,6 +531,18 @@ function App() {
   const lastSyncRef = React.useRef(null);
   const participantsRef = React.useRef(participants);
   useEffect(()=>{participantsRef.current=participants;},[participants]);
+  // Integrity check: flag participants with missing email
+  useEffect(()=>{
+    participants.forEach(p=>{
+      if(!p.email) addNotif({
+        id:'no-email-'+p.id,
+        type:'warning',
+        msg:(lang==="en"?`${p.name}: missing email`:`${p.name}: חסר אימייל`),
+        p, actions:['keep','delete','merge']
+      });
+    });
+  // eslint-disable-next-line
+  },[]);  // run once on mount only
   useEffect(()=>{
     const interval = setInterval(()=>{
       // Only auto-save if last sync was > 55s ago or never
@@ -552,7 +572,52 @@ function App() {
     gsGetAll()
       .then(data=>{
         if(data.error) throw new Error(data.error);
-        if(data.participants?.length) setParticipants(data.participants);
+        if(data.participants?.length) {
+          // Dedup & merge: prefer the entry with the richer data (assigned, email, etc.)
+          const merged = [];
+          const seen = new Map(); // key -> index in merged
+          for(const p of data.participants) {
+            const keys = [];
+            if(p.email) keys.push('e:'+p.email.toLowerCase().replace(/\s/g,''));
+            if(p.phone && p.phone.length>5) keys.push('ph:'+p.phone.replace(/[^0-9]/g,''));
+            keys.push('n:'+p.name.toLowerCase().replace(/\s/g,''));
+            const existKey = keys.find(k=>seen.has(k));
+            if(existKey) {
+              const idx = seen.get(existKey);
+              const ex = merged[idx];
+              // Merge: keep assigned/status from whichever has them, merge availability
+              merged[idx] = {
+                ...ex, ...p,
+                id: ex.id,
+                assigned: ex.assigned || p.assigned,
+                status: ex.assigned ? ex.status : (p.assigned ? p.status : ex.status),
+                availability: {...(ex.availability||{}), ...(p.availability||{})},
+                email: ex.email || p.email,
+                phone: ex.phone || p.phone,
+                locPref: [...new Set([...(ex.locPref||[]),...(p.locPref||[])])],
+              };
+            } else {
+              const idx = merged.length;
+              merged.push(p);
+              keys.forEach(k=>seen.set(k,idx));
+            }
+          }
+          setParticipants(merged);
+          // Alert for missing email
+          merged.forEach(p=>{
+            if(!p.email) addNotif({
+              id:'no-email-'+p.id,
+              type:'warning',
+              msg: (lang==="en"?`${p.name}: missing email`:\`${p.name}: חסר אימייל\`),
+              p,
+              actions:['keep','delete','merge']
+            });
+          });
+          if(merged.length < data.participants.length) {
+            const dupsRemoved = data.participants.length - merged.length;
+            addNotif({id:'dedup-'+Date.now(),type:'info',msg:(lang==="en"?`${dupsRemoved} duplicates merged on load`:\`${dupsRemoved} כפילויות מוזגו בטעינה\`),actions:[]});
+          }
+        }
         if(data.locations?.length)    setLocations(data.locations);
         if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
         if(data.researchers?.length)  ; // could store if needed
@@ -849,7 +914,7 @@ function App() {
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div data-dark={darkMode?"true":"false"} dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setColMenu(null);}}>
+    <div data-dark={darkMode?"true":"false"} dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setColMenu(null);setNotifOpen(false);}}>
 
 
       {/* ── Header ── */}
@@ -910,7 +975,21 @@ function App() {
               setSyncStatus("syncing");
               gsGetAll().then(data=>{
                 if(data.error) throw new Error(data.error);
-                if(data.participants?.length) setParticipants(data.participants);
+                if(data.participants?.length) {
+                  const merged=[];const seen=new Map();
+                  for(const p of data.participants){
+                    const keys=[];
+                    if(p.email) keys.push('e:'+p.email.toLowerCase().replace(/\s/g,''));
+                    if(p.phone&&p.phone.length>5) keys.push('ph:'+p.phone.replace(/[^0-9]/g,''));
+                    keys.push('n:'+p.name.toLowerCase().replace(/\s/g,''));
+                    const ek=keys.find(k=>seen.has(k));
+                    if(ek){const idx=seen.get(ek);const ex=merged[idx];merged[idx]={...ex,...p,id:ex.id,assigned:ex.assigned||p.assigned,status:ex.assigned?ex.status:(p.assigned?p.status:ex.status),availability:{...(ex.availability||{}),...(p.availability||{})},email:ex.email||p.email,phone:ex.phone||p.phone,locPref:[...new Set([...(ex.locPref||[]),...(p.locPref||[])])]};
+                    }else{const idx=merged.length;merged.push(p);keys.forEach(k=>seen.set(k,idx));}
+                  }
+                  setParticipants(merged);
+                  merged.forEach(p=>{if(!p.email)addNotif({id:'no-email-'+p.id,type:'warning',msg:p.name+': חסר אימייל',p,actions:['keep','delete','merge']});});
+                  if(merged.length<data.participants.length) addNotif({id:'dedup-'+Date.now(),type:'info',msg:`${data.participants.length-merged.length} כפילויות מוזגו`,actions:[]});
+                }
                 if(data.locations?.length)    setLocations(data.locations);
                 if(data.settings&&Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
                 setSyncStatus("ok");setLastSync(new Date());
@@ -919,6 +998,67 @@ function App() {
             }} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",color:"white",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
               {L("btnLoad")}
             </button>
+            {/* Bell notification button */}
+            <div style={{position:"relative"}}>
+              <button onClick={e=>{e.stopPropagation();setNotifOpen(v=>!v);setMenuOpen(false);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:7,padding:"5px 9px",cursor:"pointer",fontSize:15,lineHeight:1,position:"relative"}}>
+                🔔
+                {notifications.length>0&&<span style={{position:"absolute",top:-3,right:-3,background:"#EF4444",color:"white",borderRadius:"50%",width:15,height:15,fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifications.length>9?"9+":notifications.length}</span>}
+              </button>
+              {notifOpen&&(
+                <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"115%",right:0,background:"#1a2338",border:"1px solid #374162",borderRadius:12,boxShadow:"0 12px 40px rgba(0,0,0,0.5)",zIndex:500,width:340,maxHeight:480,overflowY:"auto"}}>
+                  <div style={{padding:"12px 16px",borderBottom:"1px solid #374162",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{color:"#F0F2FF",fontWeight:800,fontSize:13}}>🔔 {lang==="en"?"Alerts":"התראות"} ({notifications.length})</span>
+                    {notifications.length>0&&<button onClick={()=>setNotifications([])} style={{background:"none",border:"none",color:"#A8B0D8",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ {lang==="en"?"Clear all":"נקה הכל"}</button>}
+                  </div>
+                  {notifications.length===0&&<div style={{padding:"24px",textAlign:"center",color:"#6B7299",fontSize:13}}>{lang==="en"?"No alerts":"אין התראות"} ✓</div>}
+                  {notifications.map(notif=>(
+                    <div key={notif.id} style={{padding:"12px 16px",borderBottom:"1px solid #374162",background:notif.type==="warning"?"#2d1a1a":"#1a1f2e"}}>
+                      <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                        <span style={{fontSize:16}}>{notif.type==="warning"?"⚠️":"ℹ️"}</span>
+                        <div style={{flex:1}}>
+                          <p style={{margin:"0 0 8px",fontSize:12,color:"#F0F2FF",lineHeight:1.4}}>{notif.msg}</p>
+                          {notif.actions?.includes("keep")&&(
+                            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                              <button onClick={()=>removeNotif(notif.id)} style={{background:"#1e3a2a",color:"#6ee7b7",border:"1px solid #2d5a3d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                ✓ {lang==="en"?"Keep as-is":"שמור כך"}
+                              </button>
+                              {notif.actions?.includes("merge")&&notif.p&&(
+                                <button onClick={()=>{
+                                  const similar=participants.filter(x=>x.id!==notif.p.id&&x.name.toLowerCase().includes(notif.p.name.split(" ")[0].toLowerCase()));
+                                  if(similar.length===0){showToast(lang==="en"?"No similar participants found":"לא נמצאו נבדקים דומים","error");return;}
+                                  const target=similar[0];
+                                  setParticipants(prev=>prev.map(x=>x.id===target.id?{...target,...notif.p,id:target.id,assigned:target.assigned||notif.p.assigned,email:target.email||notif.p.email}:x).filter(x=>x.id!==notif.p.id));
+                                  removeNotif(notif.id);
+                                  showToast(`🔀 ${lang==="en"?"Merged with":"מוזג עם"} ${target.name}`);
+                                }} style={{background:"#1e2d4a",color:"#93c5fd",border:"1px solid #2d4a6a",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                  🔀 {lang==="en"?"Merge":"מזג"}
+                                </button>
+                              )}
+                              {notif.actions?.includes("delete")&&notif.p&&(
+                                <button onClick={()=>{
+                                  if(window.confirm(`${lang==="en"?"Delete":"מחק"} ${notif.p.name}?`)){
+                                    setParticipants(prev=>prev.filter(x=>x.id!==notif.p.id));
+                                    removeNotif(notif.id);
+                                    showToast(`🗑 ${lang==="en"?"Deleted":"נמחק"}`);
+                                  }
+                                }} style={{background:"#2d1a1a",color:"#fca5a5",border:"1px solid #5a2d2d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                  🗑 {lang==="en"?"Delete":"מחק"}
+                                </button>
+                              )}
+                              {notif.p&&<button onClick={()=>{setEditP({...notif.p});setModal("addEdit");setNotifOpen(false);}} style={{background:"#2d2a1a",color:"#fde68a",border:"1px solid #5a4a1a",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                ✏️ {lang==="en"?"Edit":"ערוך"}
+                              </button>}
+                            </div>
+                          )}
+                          {notif.actions?.length===0&&<button onClick={()=>removeNotif(notif.id)} style={{background:"none",border:"none",color:"#6B7299",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✓ {lang==="en"?"Dismiss":"סגור"}</button>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button title="שמור ל-Sheets" onClick={()=>{
               if(!window.confirm("ישכתב את כל נתוני ה-Sheets. להמשיך?")) return;
               setSyncStatus("syncing");
