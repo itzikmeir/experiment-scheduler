@@ -608,14 +608,14 @@ function App() {
             if(!p.email) addNotif({
               id:'no-email-'+p.id,
               type:'warning',
-              msg: (lang==="en"?`${p.name}: missing email`:\`${p.name}: חסר אימייל\`),
+              msg: (lang==="en"?`${p.name}: missing email`:`${p.name}: חסר אימייל`),
               p,
               actions:['keep','delete','merge']
             });
           });
           if(merged.length < data.participants.length) {
             const dupsRemoved = data.participants.length - merged.length;
-            addNotif({id:'dedup-'+Date.now(),type:'info',msg:(lang==="en"?`${dupsRemoved} duplicates merged on load`:\`${dupsRemoved} כפילויות מוזגו בטעינה\`),actions:[]});
+            addNotif({id:'dedup-'+Date.now(),type:'info',msg:(lang==="en"?`${dupsRemoved} duplicates merged on load`:`${dupsRemoved} כפילויות מוזגו בטעינה`),actions:[]});
           }
         }
         if(data.locations?.length)    setLocations(data.locations);
