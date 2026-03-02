@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>מנהל ניסוי</title>
   <style>
+select { color-scheme: light; }
 select option { background: inherit; }
 select:disabled, input:disabled { opacity: 0.6; }
-[data-dark="true"] select { background: #1E2238; color: #F0F2FF; }
-[data-dark="true"] select option { background: #1E2238; color: #F0F2FF; }
+[data-dark="true"] select { background: #1E2238 !important; color: #F0F2FF !important; color-scheme: dark; }
+[data-dark="true"] select option { background: #1E2238 !important; color: #F0F2FF !important; }
+[data-dark="true"] select:disabled { background: #161929 !important; color: #6B7299 !important; }
+[data-dark="true"] input[type="time"] { background: #1E2238; color: #F0F2FF; color-scheme: dark; }
+[data-dark="true"] input { background: #1E2238; color: #F0F2FF; }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; }
@@ -845,7 +849,7 @@ function App() {
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setColMenu(null);}}>
+    <div data-dark={darkMode?"true":"false"} dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setColMenu(null);}}>
 
 
       {/* ── Header ── */}
@@ -1381,7 +1385,7 @@ function App() {
                         <td style={{padding:"6px 10px",fontSize:12,color:T.textMuted,textAlign:"center"}}>{p.age||"—"}</td>
                         {/* Gender */}
                         <td style={{padding:"6px 10px",fontSize:11}}>
-                          {p.gender&&<span style={{background:p.gender==="גבר"?"#EEF2FF":"#FDF4FF",color:p.gender==="גבר"?"#4338CA":"#7E22CE",borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700}}>{p.gender}</span>}
+                          {p.gender&&<span style={{fontSize:11,color:T.textMuted}}>{p.gender==="גבר"?L("genderM"):p.gender==="אישה"?L("genderF"):p.gender}</span>}
                         </td>
                         {/* Availability */}
                         <td style={{padding:"4px 6px",minWidth:140}}>
@@ -1471,12 +1475,12 @@ function App() {
                                   const next=on?cur.filter(x=>x!==loc.id):[...cur,loc.id];
                                   updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
                                 }} style={{
-                                  background:on?c.bg:T.tablehead,
-                                  color:on?c.text:T.textFaint,
-                                  border:`1px solid ${on?c.border:T.border}`,
+                                  background:on?(darkMode?c.bg+"33":c.bg+"99"):T.tablehead,
+                                  color:on?(darkMode?c.text+"cc":c.text):T.textFaint,
+                                  border:`1px solid ${on?(darkMode?c.border+"66":c.border+"99"):T.border}`,
                                   borderRadius:4,padding:"2px 6px",fontSize:10,
-                                  cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:400,
-                                  transition:"all .15s"
+                                  cursor:"pointer",fontFamily:"inherit",fontWeight:on?600:400,
+                                  transition:"all .15s",opacity:on?1:0.6
                                 }}>
                                   {on?"✓ ":""}{loc.name}
                                 </button>
@@ -1497,7 +1501,7 @@ function App() {
                               <button title={lang==="en"?"Send email":"שלח מייל"} onClick={e=>{
                                 const r=e.currentTarget.getBoundingClientRect();
                                 setRowEmailMenu(rowEmailMenu?.pid===p.id?null:{pid:p.id,x:r.left,right:window.innerWidth-r.right,y:r.bottom+4,p});
-                              }} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer",fontWeight:700}}>
+                              }} style={{background:darkMode?"#1e2238":T.accent,color:darkMode?"#A5B4FC":"white",border:`1px solid ${darkMode?"#374162":T.accent}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer",fontWeight:700}}>
                                 ✉️▾
                               </button>
                             )}
@@ -2165,7 +2169,7 @@ function App() {
       {rowEmailMenu&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setRowEmailMenu(null)}/>
-          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",[lang==="en"?"left":"right"]:lang==="en"?rowEmailMenu.x:rowEmailMenu.right,top:rowEmailMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",left:Math.min(rowEmailMenu.x,window.innerWidth-220),top:rowEmailMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
             {(()=>{
               const p=participants.find(x=>x.id===rowEmailMenu.p.id)||rowEmailMenu.p;
               const opts=[
@@ -2191,7 +2195,7 @@ function App() {
                 </button>
               ));
             })()}
-            <button onClick={()=>{setRowEmailMenu(null);setFreeMailModal({recipients:[participants.find(x=>x.id===rowEmailMenu.p.id)||rowEmailMenu.p]});}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"#F0FDF4",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#166534",fontWeight:700}}>
+            <button onClick={()=>{setRowEmailMenu(null);setFreeMailModal({recipients:[participants.find(x=>x.id===rowEmailMenu.p.id)||rowEmailMenu.p]});}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:darkMode?"#1a2e1a":"#F0FDF4",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:darkMode?"#6ee7b7":"#166534",fontWeight:700}}>
               <span style={{fontSize:16}}>✍️</span>
               <span>{lang==="en"?"Free write...":"הודעה חופשית..."}</span>
             </button>
