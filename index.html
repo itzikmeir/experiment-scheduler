@@ -1297,11 +1297,17 @@ function App() {
                 <thead>
                   <tr style={{background:T.tablehead,borderBottom:`2px solid ${T.border}`}}>
                     <th style={{padding:"8px 10px",width:32}}>
-                      <input type="checkbox" checked={sortedFiltered.length>0&&sortedFiltered.every(p=>selected.has(p.id))} onChange={()=>{
+                      {(()=>{
                         const ids=sortedFiltered.map(p=>p.id);
-                        const allOn=ids.every(id=>selected.has(id));
-                        setSelected(prev=>{const n=new Set(prev);ids.forEach(id=>allOn?n.delete(id):n.add(id));return n;});
-                      }} style={{cursor:"pointer"}}/>
+                        const allOn=ids.length>0&&ids.every(id=>selected.has(id));
+                        const someOn=!allOn&&ids.some(id=>selected.has(id));
+                        return <input type="checkbox"
+                          ref={el=>{if(el){el.indeterminate=someOn;}}}
+                          checked={allOn}
+                          onChange={()=>{
+                            setSelected(prev=>{const n=new Set(prev);ids.forEach(id=>allOn?n.delete(id):n.add(id));return n;});
+                          }} style={{cursor:"pointer",accentColor:T.accent}}/>;
+                      })()}
                     </th>
                     {[{k:"name",l:L("colName")},{k:"email",l:L("colEmail")}].map(h=>(
                       <th key={h.k} onClick={()=>toggleSort(h.k)} style={{padding:"8px 10px",textAlign:"start",fontSize:11,color:T.textMuted,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>
@@ -1475,12 +1481,12 @@ function App() {
                                   const next=on?cur.filter(x=>x!==loc.id):[...cur,loc.id];
                                   updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
                                 }} style={{
-                                  background:on?(darkMode?c.bg+"33":c.bg+"99"):T.tablehead,
-                                  color:on?(darkMode?c.text+"cc":c.text):T.textFaint,
-                                  border:`1px solid ${on?(darkMode?c.border+"66":c.border+"99"):T.border}`,
+                                  background:on?(darkMode?c.dot+"22":c.bg):T.tablehead,
+                                  color:on?(darkMode?c.dot:c.text):T.textFaint,
+                                  border:`1px solid ${on?(darkMode?c.dot+"88":c.border):T.border}`,
                                   borderRadius:4,padding:"2px 6px",fontSize:10,
-                                  cursor:"pointer",fontFamily:"inherit",fontWeight:on?600:400,
-                                  transition:"all .15s",opacity:on?1:0.6
+                                  cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:400,
+                                  transition:"all .15s",opacity:on?1:0.55
                                 }}>
                                   {on?"✓ ":""}{loc.name}
                                 </button>
@@ -1491,7 +1497,7 @@ function App() {
                         {/* Notes */}
                         <td style={{padding:"4px 5px"}}>
                           <input value={p.notes||""} onChange={e=>updP(p.id,{notes:e.target.value})} placeholder="הערות…"
-                            style={{padding:"3px 7px",border:`1px solid ${p.notes?"#FDE68A":T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:100,background:p.notes?"#FFFBEB":T.inputBg,color:T.text}}/>
+                            style={{padding:"3px 7px",border:`1px solid ${p.notes?(darkMode?"#854d0e":"#FDE68A"):T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:100,background:p.notes?(darkMode?"#292310":"#FFFBEB"):T.inputBg,color:T.text}}/>
                         </td>
                         {/* Actions */}
                         <td style={{padding:"4px 5px"}}>
@@ -1499,10 +1505,11 @@ function App() {
                             <button title="ערוך" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✏️</button>
                             {p.email&&(
                               <button title={lang==="en"?"Send email":"שלח מייל"} onClick={e=>{
+                                e.stopPropagation();
                                 const r=e.currentTarget.getBoundingClientRect();
                                 setRowEmailMenu(rowEmailMenu?.pid===p.id?null:{pid:p.id,x:r.left,right:window.innerWidth-r.right,y:r.bottom+4,p});
-                              }} style={{background:darkMode?"#1e2238":T.accent,color:darkMode?"#A5B4FC":"white",border:`1px solid ${darkMode?"#374162":T.accent}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer",fontWeight:700}}>
-                                ✉️▾
+                              }} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>
+                                ✉️
                               </button>
                             )}
                             {p.assigned&&<button title="נקה שיבוץ" onClick={()=>clearA(p.id)} style={{background:"#FEF2F2",color:"#9CA3AF",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✕</button>}
