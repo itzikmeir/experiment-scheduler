@@ -1621,9 +1621,9 @@ function App() {
                                   const next=on?cur.filter(x=>x!==loc.id):[...cur,loc.id];
                                   updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
                                 }} style={{
-                                  background:on?(darkMode?c.dot+"22":c.bg):T.tablehead,
-                                  color:on?(darkMode?c.dot:c.text):T.textFaint,
-                                  border:`1px solid ${on?(darkMode?c.dot+"88":c.border):T.border}`,
+                                  background:on?(darkMode?c.dot+"30":c.bg):T.tablehead,
+                                  color:on?(darkMode?"#ffffff":c.text):T.textFaint,
+                                  border:`1px solid ${on?(darkMode?c.dot+"BB":c.border):T.border}`,
                                   borderRadius:4,padding:"2px 6px",fontSize:10,
                                   cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:400,
                                   transition:"all .15s",opacity:on?1:0.55
