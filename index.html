@@ -33,6 +33,19 @@ select:disabled, input:disabled { opacity: 0.6; }
 
 // ─── Version ──────────────────────────────────────────────────────────────────
 const APP_VERSION = "5.0.0";
+
+// ─── Auth / Roles ─────────────────────────────────────────────────────────────
+// Passwords stored as SHA-256 hex hashes (never plaintext)
+// Default: admin=Admin123, editor=Editor123 — change in Settings → Auth
+const DEFAULT_AUTH = {
+  admin:  {nameHe:"מנהל מערכת", nameEn:"Admin",  color:"#7C3AED", bg:"#EDE9FE", icon:"👑"},
+  editor: {nameHe:"עורך",       nameEn:"Editor",  color:"#0891B2", bg:"#E0F2FE", icon:"✏️"},
+  viewer: {nameHe:"צופה",       nameEn:"Viewer",  color:"#6B7280", bg:"#F3F4F6", icon:"👁"},
+};
+async function hashPwd(s){
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
 const APP_NAME = "מנהל ניסוי";
 
 // ─── i18n ────────────────────────────────────────────────────────────────────
@@ -485,6 +498,31 @@ function App() {
 
   // ── Sync state ────────────────────────────────────────────────────────────
   const [syncStatus,setSyncStatus] = useState("idle"); // idle | syncing | ok | error
+  // ── Auth state ────────────────────────────────────────────────────────────
+  const [userRole,setUserRole] = useState(()=>{
+    try{return JSON.parse(localStorage.getItem("exp_role"))||"viewer";}catch{return "viewer";}
+  });
+  const [userName,setUserName] = useState(()=>{
+    try{return localStorage.getItem("exp_username")||"";}catch{return "";}
+  });
+  const [authModal,setAuthModal] = useState(false); // false | "login" | "settings"
+  const [authPwds,setAuthPwds] = useState(()=>{
+    try{return JSON.parse(localStorage.getItem("exp_auth_pwds"))||{admin:"",editor:""};}catch{return {admin:"",editor:""};}
+  });
+  // Persist role + username
+  React.useEffect(()=>{
+    localStorage.setItem("exp_role",JSON.stringify(userRole));
+    localStorage.setItem("exp_username",userName||"");
+  },[userRole,userName]);
+  React.useEffect(()=>{
+    localStorage.setItem("exp_auth_pwds",JSON.stringify(authPwds));
+  },[authPwds]);
+  // Permission helpers
+  const isAdmin  = userRole==="admin";
+  const isEditor = userRole==="editor"||userRole==="admin";
+  const isViewer = userRole==="viewer";
+  // Pending delete requests (editor → admin approval)
+  const [pendingDeletes,setPendingDeletes] = useState([]);
   const [notifications,setNotifications] = useState([]); // [{id,type,msg,p,action}]
   const [notifOpen,setNotifOpen] = useState(false);
   const addNotif = (notif) => setNotifications(prev=>{
@@ -646,6 +684,7 @@ function App() {
 
   // ── Participant mutations ──────────────────────────────────────────────────
   const updP = useCallback((id,patch,logMsg)=>{
+    if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
     setParticipantsUndo(prev=>prev.map(p=>p.id===id?{...p,...patch}:p), logMsg);
     if(logMsg) addLog("עדכון",logMsg);
     // Push only this single row to Sheets (safe — never touches other rows)
@@ -933,6 +972,7 @@ function App() {
                     {icon:darkMode?"☀️":"🌙",label:darkMode?L("menuLight"):L("menuDark"),action:()=>{setDarkMode(v=>!v);setMenuOpen(false);}},
                     {icon:"✉️",label:L("menuGmail"),action:()=>{setModal("gmail");setMenuOpen(false);}},
                     {icon:"⚙️",label:L("menuSettings"),action:()=>{setModal("settings");setMenuOpen(false);}},
+                    {icon:"🔐",label:lang==="en"?"Access Level":"רמת גישה",action:()=>{setAuthModal("login");setMenuOpen(false);}},
                     {icon:"🌐",label:lang==="he"?"English":"עברית",action:()=>{
                       const next=lang==="he"?"en":"he";
                       setMenuOpen(false);
@@ -1019,9 +1059,29 @@ function App() {
                           <p style={{margin:"0 0 8px",fontSize:12,color:"#F0F2FF",lineHeight:1.4}}>{notif.msg}</p>
                           {notif.actions?.includes("keep")&&(
                             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                              {notif.actions?.includes("approve-delete")&&isAdmin?(
+                                <>
+                                  <button onClick={()=>{
+                                    setParticipantsUndo(prev=>prev.filter(x=>x.id!==notif.p.id),`מחיקה אושרה: ${notif.p.name}`);
+                                    setPendingDeletes(prev=>prev.filter(x=>x.id!==notif.p.id));
+                                    removeNotif(notif.id);
+                                    showToast(`✅ ${lang==="en"?"Deleted":"נמחק"}: ${notif.p.name}`);
+                                  }} style={{background:"#2d1a1a",color:"#fca5a5",border:"1px solid #5a2d2d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>
+                                    ✓ {lang==="en"?"Approve delete":"אשר מחיקה"}
+                                  </button>
+                                  <button onClick={()=>{
+                                    setPendingDeletes(prev=>prev.filter(x=>x.id!==notif.p.id));
+                                    removeNotif(notif.id);
+                                    showToast(lang==="en"?"Delete rejected":"מחיקה נדחתה");
+                                  }} style={{background:"#1e3a2a",color:"#6ee7b7",border:"1px solid #2d5a3d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                    ✕ {lang==="en"?"Reject":"דחה"}
+                                  </button>
+                                </>
+                              ):(
                               <button onClick={()=>removeNotif(notif.id)} style={{background:"#1e3a2a",color:"#6ee7b7",border:"1px solid #2d5a3d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
                                 ✓ {lang==="en"?"Keep as-is":"שמור כך"}
                               </button>
+                              )}
                               {notif.actions?.includes("merge")&&notif.p&&(
                                 <button onClick={()=>{
                                   const similar=participants.filter(x=>x.id!==notif.p.id&&x.name.toLowerCase().includes(notif.p.name.split(" ")[0].toLowerCase()));
@@ -1089,9 +1149,17 @@ function App() {
           <div style={{width:1,height:24,background:T.border}}/>
           {/* Global actions */}
           <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center",marginRight:"auto"}}>
-            <span style={{fontSize:11,color:T.textMuted,background:T.tablehead,padding:"4px 10px",borderRadius:6,display:"flex",alignItems:"center",gap:5}}>
-              {L("userIcon")} {settings.currentUser}
-            </span>
+            <button onClick={()=>setAuthModal("login")} style={{
+              background:DEFAULT_AUTH[userRole]?.bg||T.tablehead,
+              color:DEFAULT_AUTH[userRole]?.color||T.textMuted,
+              border:`1.5px solid ${DEFAULT_AUTH[userRole]?.color||T.border}88`,
+              padding:"4px 11px",borderRadius:6,cursor:"pointer",fontSize:11,
+              fontFamily:"inherit",fontWeight:700,display:"flex",alignItems:"center",gap:5
+            }}>
+              <span>{DEFAULT_AUTH[userRole]?.icon}</span>
+              <span>{userName||settings.currentUser}</span>
+              <span style={{fontSize:9,opacity:0.75}}>· {lang==="en"?DEFAULT_AUTH[userRole]?.nameEn:DEFAULT_AUTH[userRole]?.nameHe}</span>
+            </button>
             <div style={{position:"relative"}}>
               <button onClick={e=>{e.stopPropagation();setExportMenu(v=>!v);}} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:600}}>
                 {L("btnExport")}
@@ -1642,7 +1710,7 @@ function App() {
                         {/* Actions */}
                         <td style={{padding:"4px 5px"}}>
                           <div style={{display:"flex",gap:3}}>
-                            <button title="ערוך" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✏️</button>
+                            {isEditor&&<button title="ערוך" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✏️</button>}
                             {p.email&&(
                               <button title={lang==="en"?"Send email":"שלח מייל"} onClick={e=>{
                                 e.stopPropagation();
@@ -1652,8 +1720,21 @@ function App() {
                                 ✉️
                               </button>
                             )}
-                            {p.assigned&&<button title="נקה שיבוץ" onClick={()=>clearA(p.id)} style={{background:"#FEF2F2",color:"#9CA3AF",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✕</button>}
-                            <button title="מחק" onClick={()=>{if(window.confirm(`למחוק ${p.name}?`)){setParticipantsUndo(prev=>prev.filter(x=>x.id!==p.id), `${lang==="en"?"Delete":"מחק"}: ${p.name}`);addLog("מחיקה",`נמחק: ${p.name}`);}}} style={{background:T.tablehead,color:T.textFaint,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>🗑</button>
+                            {p.assigned&&isEditor&&<button title="נקה שיבוץ" onClick={()=>clearA(p.id)} style={{background:"#FEF2F2",color:"#9CA3AF",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✕</button>}
+                            <button title="מחק" onClick={()=>{
+  if(isViewer) return;
+  if(isAdmin){
+    if(window.confirm(`${lang==="en"?"Delete":"למחוק"} ${p.name}?`)){
+      setParticipantsUndo(prev=>prev.filter(x=>x.id!==p.id),`${lang==="en"?"Delete":"מחק"}: ${p.name}`);
+      addLog("מחיקה",`נמחק: ${p.name}`);
+    }
+  } else {
+    // Editor: request approval
+    setPendingDeletes(prev=>[...prev.filter(x=>x.id!==p.id),{id:p.id,name:p.name,requestedBy:userName||"editor",requestedAt:Date.now()}]);
+    addNotif({id:"del-req-"+p.id,type:"warning",msg:`🗑 ${lang==="en"?"Delete request:":"בקשת מחיקה:"} ${p.name} (${lang==="en"?"by":"מאת"}: ${userName||"editor"})`,p,actions:["approve-delete","reject-delete"]});
+    showToast(lang==="en"?"Delete request sent to admin":"בקשת מחיקה נשלחה למנהל");
+  }
+}} style={{background:T.tablehead,color:T.textFaint,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>🗑</button>
                           </div>
                         </td>
                       </tr>
@@ -2061,6 +2142,24 @@ function App() {
       </div>
 
       {/* ══════════════════════ MODALS ══════════════════════════════════════════ */}
+
+      {/* ── Auth modal ──────────────────────────────────────────────────── */}
+      {authModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)setAuthModal(false);}}>
+          <div style={{background:T.surface,borderRadius:14,padding:28,maxWidth:420,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.4)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <h3 style={{margin:0,fontSize:16,color:T.text,fontWeight:800}}>🔐 {lang==="en"?"Access Level":"רמת גישה"}</h3>
+              <button onClick={()=>setAuthModal(false)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
+            </div>
+            <AuthPanel T={T} lang={lang} userRole={userRole} userName={userName}
+              authPwds={authPwds} setAuthPwds={setAuthPwds}
+              onLogin={(role,name)=>{setUserRole(role);setUserName(name);setAuthModal(false);showToast((lang==="en"?"Logged in as ":"מחובר כ-")+name);}}
+              onLogout={()=>{setUserRole("viewer");setUserName("");setAuthModal(false);showToast(lang==="en"?"Logged out":"התנתקת");}}
+              isAdmin={isAdmin}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit participant */}
       {modal==="addEdit"&&editP&&<ParticipantModal p={editP} locations={locations} T={T} L={L} onSave={saveParticipant} onClose={()=>{setModal(null);setEditP(null);}}/>}
@@ -2837,6 +2936,137 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
 }
 
 // ── Location modal ────────────────────────────────────────────────────────────
+// ── Auth Panel Component ──────────────────────────────────────────────────────
+function AuthPanel({T,lang,userRole,userName,authPwds,setAuthPwds,onLogin,onLogout,isAdmin}){
+  const [mode,setMode] = React.useState("switch"); // "switch" | "pwdSettings"
+  const [inputName,setInputName] = React.useState(userName||"");
+  const [inputPwd,setInputPwd] = React.useState("");
+  const [targetRole,setTargetRole] = React.useState("admin");
+  const [pwdError,setPwdError] = React.useState("");
+  const [newPwds,setNewPwds] = React.useState({admin:"",editor:""});
+  const [pwdSaved,setPwdSaved] = React.useState(false);
+
+  const ROLES = [
+    {key:"admin",  icon:"👑", nameHe:"מנהל מערכת", nameEn:"Admin",  color:"#7C3AED"},
+    {key:"editor", icon:"✏️", nameHe:"עורך",        nameEn:"Editor", color:"#0891B2"},
+    {key:"viewer", icon:"👁", nameHe:"צופה",        nameEn:"Viewer", color:"#6B7280"},
+  ];
+
+  const tryLogin = async (role)=>{
+    if(role==="viewer"){onLogin("viewer",inputName||lang==="en"?"Guest":"אורח");return;}
+    const stored = authPwds[role];
+    if(!stored){
+      // No password set yet → allow free entry (bootstrap mode)
+      onLogin(role,inputName||role);
+      return;
+    }
+    const h = await hashPwd(inputPwd);
+    if(h===stored){setPwdError("");onLogin(role,inputName||role);}
+    else{setPwdError(lang==="en"?"Wrong password":"סיסמה שגויה");}
+  };
+
+  const savePwds = async()=>{
+    const updated={...authPwds};
+    for(const role of ["admin","editor"]){
+      if(newPwds[role]){updated[role]=await hashPwd(newPwds[role]);}
+    }
+    setAuthPwds(updated);
+    setNewPwds({admin:"",editor:""});
+    setPwdSaved(true);
+    setTimeout(()=>setPwdSaved(false),2000);
+  };
+
+  const inputStyle={width:"100%",padding:"9px 11px",border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",marginBottom:10};
+
+  if(mode==="pwdSettings"&&isAdmin) return(
+    <div>
+      <p style={{margin:"0 0 16px",fontSize:12,color:T.textMuted}}>{lang==="en"?"Set passwords for each role:":"הגדר סיסמאות לכל רמה:"}</p>
+      {["admin","editor"].map(role=>(
+        <div key={role} style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,color:T.textMuted,fontWeight:700,marginBottom:5}}>
+            {ROLES.find(r=>r.key===role)?.icon} {lang==="en"?ROLES.find(r=>r.key===role)?.nameEn:ROLES.find(r=>r.key===role)?.nameHe}
+            {authPwds[role]?<span style={{color:"#10b981",marginRight:6}}>✓ {lang==="en"?"set":"מוגדרת"}</span>:<span style={{color:"#f59e0b",marginRight:6}}>⚠ {lang==="en"?"not set":"לא מוגדרת"}</span>}
+          </label>
+          <input type="password" placeholder={lang==="en"?"New password...":"סיסמה חדשה..."} value={newPwds[role]}
+            onChange={e=>setNewPwds(p=>({...p,[role]:e.target.value}))} style={inputStyle}/>
+        </div>
+      ))}
+      <div style={{display:"flex",gap:8,marginTop:4}}>
+        <button onClick={()=>setMode("switch")} style={{flex:1,padding:"8px",borderRadius:7,border:`1px solid ${T.border}`,background:T.tablehead,color:T.text,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>
+          ← {lang==="en"?"Back":"חזור"}
+        </button>
+        <button onClick={savePwds} style={{flex:2,padding:"8px",borderRadius:7,border:"none",background:pwdSaved?"#059669":"#7C3AED",color:"white",cursor:"pointer",fontSize:13,fontFamily:"inherit",fontWeight:700,transition:"background .3s"}}>
+          {pwdSaved?(lang==="en"?"✓ Saved!":"✓ נשמר!"):(lang==="en"?"💾 Save passwords":"💾 שמור סיסמאות")}
+        </button>
+      </div>
+    </div>
+  );
+
+  return(
+    <div>
+      {/* Current status */}
+      <div style={{background:T.tablehead,borderRadius:9,padding:"10px 14px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:12,color:T.textMuted}}>{lang==="en"?"Currently:":"כרגע:"}</span>
+        <span style={{fontWeight:700,color:ROLES.find(r=>r.key===userRole)?.color,fontSize:13}}>
+          {ROLES.find(r=>r.key===userRole)?.icon} {lang==="en"?ROLES.find(r=>r.key===userRole)?.nameEn:ROLES.find(r=>r.key===userRole)?.nameHe}
+          {userName&&<span style={{fontWeight:400,color:T.textMuted}}> · {userName}</span>}
+        </span>
+        <button onClick={onLogout} style={{background:"#FEF2F2",color:"#DC2626",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>
+          {lang==="en"?"Log out":"התנתק"}
+        </button>
+      </div>
+
+      {/* Name input */}
+      <input value={inputName} onChange={e=>setInputName(e.target.value)}
+        placeholder={lang==="en"?"Your name (optional)":"שמך (אופציונלי)"}
+        style={inputStyle}/>
+
+      {/* Role selector */}
+      <div style={{display:"flex",gap:6,marginBottom:14}}>
+        {ROLES.map(r=>(
+          <button key={r.key} onClick={()=>setTargetRole(r.key)} style={{
+            flex:1,padding:"10px 4px",borderRadius:8,border:`2px solid ${targetRole===r.key?r.color:T.border}`,
+            background:targetRole===r.key?r.color+"18":T.tablehead,color:targetRole===r.key?r.color:T.textMuted,
+            cursor:"pointer",fontFamily:"inherit",fontWeight:targetRole===r.key?800:400,fontSize:11,transition:"all .15s"
+          }}>
+            <div style={{fontSize:18,marginBottom:2}}>{r.icon}</div>
+            <div>{lang==="en"?r.nameEn:r.nameHe}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Password field (not for viewer) */}
+      {targetRole!=="viewer"&&(
+        <>
+          <input type="password" value={inputPwd} onChange={e=>{setInputPwd(e.target.value);setPwdError("");}}
+            onKeyDown={e=>e.key==="Enter"&&tryLogin(targetRole)}
+            placeholder={lang==="en"?"Password":"סיסמה"}
+            style={{...inputStyle,borderColor:pwdError?"#EF4444":T.border}}/>
+          {!authPwds[targetRole]&&(
+            <p style={{margin:"-6px 0 10px",fontSize:11,color:"#F59E0B"}}>
+              ⚠️ {lang==="en"?"No password set — free entry (bootstrap mode)":"אין סיסמה — כניסה חופשית (הגדר סיסמה מיד)"}
+            </p>
+          )}
+        </>
+      )}
+      {pwdError&&<p style={{margin:"0 0 10px",fontSize:12,color:"#EF4444"}}>{pwdError}</p>}
+
+      <button onClick={()=>tryLogin(targetRole)} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",
+        background:ROLES.find(r=>r.key===targetRole)?.color||T.accent,color:"white",
+        cursor:"pointer",fontSize:14,fontFamily:"inherit",fontWeight:800,marginBottom:12}}>
+        {lang==="en"?"Switch to "+ROLES.find(r=>r.key===targetRole)?.nameEn:"עבור ל"+ROLES.find(r=>r.key===targetRole)?.nameHe}
+      </button>
+
+      {/* Admin: password settings link */}
+      {isAdmin&&(
+        <button onClick={()=>setMode("pwdSettings")} style={{width:"100%",padding:"7px",borderRadius:7,border:`1px solid ${T.border}`,background:T.tablehead,color:T.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>
+          ⚙️ {lang==="en"?"Manage passwords":"נהל סיסמאות"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function LocModal({L,lang,loc,T,onSave,onClose}) {
   if(!L) L=(k)=>k;
   if(!lang) lang="he";
