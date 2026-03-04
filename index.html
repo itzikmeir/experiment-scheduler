@@ -696,16 +696,19 @@ function App() {
   },[addLog, settings.currentUser, syncStatus]);
 
   const assignP = (id,day,slot,locationId,room)=>{
+    if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
     const p=participants.find(x=>x.id===id);
     updP(id,{assigned:{day,slot,locationId,room},status:"assigned"},`שיבוץ ${p?.name} ← יום ${dayNames[day]} ${slot.includes("בוקר")?"בוקר":"צהריים"} @ ${locById[locationId]?.name||""}`);
   };
   const clearA = id=>{
+    if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
     const p=participants.find(x=>x.id===id);
     updP(id,{assigned:null,status:"pending"},`ניקוי שיבוץ: ${p?.name}`);
   };
 
   // ── Auto-assign ────────────────────────────────────────────────────────────
   function autoAssign(ids) {
+    if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
     const updated=participants.map(p=>({...p}));
     const cnt={};
     updated.filter(p=>p.assigned).forEach(p=>{const k=`${p.assigned.day}_${p.assigned.slot}_${p.assigned.locationId}`;cnt[k]=(cnt[k]||0)+1;});
@@ -740,6 +743,7 @@ function App() {
 
   // ── Clear assignments ──────────────────────────────────────────────────────
   function clearAssignments(ids) {
+    if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
     const count = ids ? ids.size : participants.filter(p=>p.assigned).length;
     if(!window.confirm(`לנקות ${count} שיבוצים?`)) return;
     setParticipants(prev=>prev.map(p=>(ids?ids.has(p.id):true)&&p.assigned?{...p,assigned:null,status:"pending"}:p));
@@ -1004,14 +1008,18 @@ function App() {
             </div>
           </div>
 
-          {/* RIGHT: sync controls */}
-          <div style={{display:"flex",alignItems:"center",gap:5}}>
-            <span style={{fontSize:10,color:"rgba(255,255,255,0.7)"}}>
-              {syncStatus==="syncing"&&<span style={{display:"inline-block",width:8,height:8,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",marginLeft:3}}/>}
-              {syncStatus==="ok"&&`☁️ ${lastSync?lastSync.getHours()+":"+String(lastSync.getMinutes()).padStart(2,"0"):"Sheets"}`}
-              {(syncStatus==="error"||syncStatus==="idle")&&`💾 ${L("syncLocal")}`}
+          {/* RIGHT: sync status + load + save + bell */}
+          <div style={{display:"flex",alignItems:"center",gap:4}}>
+
+            {/* Sync status chip */}
+            <span style={{fontSize:10,color:"rgba(255,255,255,0.55)",display:"flex",alignItems:"center",gap:3}}>
+              {syncStatus==="syncing"&&<span style={{display:"inline-block",width:7,height:7,border:"2px solid rgba(255,255,255,0.25)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>}
+              {syncStatus==="ok"&&lastSync&&`${lastSync.getHours()}:${String(lastSync.getMinutes()).padStart(2,"0")}`}
+              {(syncStatus==="error"||syncStatus==="idle")&&"●"}
             </span>
-            <button title="טען מחדש מ-Sheets" onClick={()=>{
+
+            {/* Load + Save — uniform ghost style */}
+            <button title={lang==="en"?"Load from Sheets":"טען מ-Sheets"} onClick={()=>{
               setSyncStatus("syncing");
               gsGetAll().then(data=>{
                 if(data.error) throw new Error(data.error);
@@ -1035,28 +1043,47 @@ function App() {
                 setSyncStatus("ok");setLastSync(new Date());
                 showToast("✅ נטען מ-Sheets");
               }).catch(e=>{setSyncStatus("error");showToast("שגיאה: "+e.message,"error");});
-            }} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",color:"white",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
-              {L("btnLoad")}
+
+            }} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",color:"white",borderRadius:5,padding:"4px 9px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:600,letterSpacing:0.3}}>
+              ↻ {L("btnLoad")}
             </button>
-            {/* Bell notification button */}
+
+            {isAdmin&&<button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={()=>{
+              if(!window.confirm(lang==="en"?"Overwrite all Sheets data?":"ישכתב את כל נתוני ה-Sheets. להמשיך?")) return;
+              setSyncStatus("syncing");
+              gsSaveAll({participants,locations,settings,user:settings.currentUser})
+                .then(r=>{
+                  if(r.error) throw new Error(r.error);
+                  setSyncStatus("ok");setLastSync(new Date());
+                  showToast("✅ נשמר ל-Sheets");
+                })
+                .catch(e=>{setSyncStatus("error");showToast("שגיאת שמירה: "+e.message,"error");})
+            }} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",color:"white",borderRadius:5,padding:"4px 9px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:600,letterSpacing:0.3}}>
+              💾 {L("btnSave")}
+            </button>}
+
+            {/* Bell — leftmost, opens panel to the LEFT (start) */}
             <div style={{position:"relative"}}>
-              <button onClick={e=>{e.stopPropagation();setNotifOpen(v=>!v);setMenuOpen(false);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:7,padding:"5px 9px",cursor:"pointer",fontSize:15,lineHeight:1,position:"relative"}}>
+              <button onClick={e=>{e.stopPropagation();setNotifOpen(v=>!v);setMenuOpen(false);}}
+                style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",color:"white",borderRadius:5,padding:"4px 8px",cursor:"pointer",fontSize:13,lineHeight:1,position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 🔔
-                {notifications.length>0&&<span style={{position:"absolute",top:-3,right:-3,background:"#EF4444",color:"white",borderRadius:"50%",width:15,height:15,fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{notifications.length>9?"9+":notifications.length}</span>}
+                {notifications.length>0&&<span style={{position:"absolute",top:-4,left:-4,background:"#EF4444",color:"white",borderRadius:"50%",minWidth:15,height:15,fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px",lineHeight:1}}>
+                  {notifications.length>9?"9+":notifications.length}
+                </span>}
               </button>
               {notifOpen&&(
-                <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"115%",right:0,background:"#1a2338",border:"1px solid #374162",borderRadius:12,boxShadow:"0 12px 40px rgba(0,0,0,0.5)",zIndex:500,width:340,maxHeight:480,overflowY:"auto"}}>
-                  <div style={{padding:"12px 16px",borderBottom:"1px solid #374162",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{color:"#F0F2FF",fontWeight:800,fontSize:13}}>🔔 {lang==="en"?"Alerts":"התראות"} ({notifications.length})</span>
-                    {notifications.length>0&&<button onClick={()=>setNotifications([])} style={{background:"none",border:"none",color:"#A8B0D8",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ {lang==="en"?"Clear all":"נקה הכל"}</button>}
+                <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"115%",left:lang==="en"?"auto":0,right:lang==="en"?0:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 12px 40px rgba(0,0,0,0.5)",zIndex:500,width:340,maxHeight:480,overflowY:"auto"}}>
+                  <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{color:T.text,fontWeight:800,fontSize:13}}>🔔 {lang==="en"?"Alerts":"התראות"} ({notifications.length})</span>
+                    {notifications.length>0&&<button onClick={()=>setNotifications([])} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ {lang==="en"?"Clear all":"נקה הכל"}</button>}
                   </div>
-                  {notifications.length===0&&<div style={{padding:"24px",textAlign:"center",color:"#6B7299",fontSize:13}}>{lang==="en"?"No alerts":"אין התראות"} ✓</div>}
+                  {notifications.length===0&&<div style={{padding:"24px",textAlign:"center",color:T.textFaint,fontSize:13}}>{lang==="en"?"No alerts":"אין התראות"} ✓</div>}
                   {notifications.map(notif=>(
-                    <div key={notif.id} style={{padding:"12px 16px",borderBottom:"1px solid #374162",background:notif.type==="warning"?"#2d1a1a":"#1a1f2e"}}>
+                    <div key={notif.id} style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,background:notif.type==="warning"?(darkMode?"#2d1a1a":"#FFF8F8"):(darkMode?"#1a1f2e":T.tablehead)}}>
                       <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
                         <span style={{fontSize:16}}>{notif.type==="warning"?"⚠️":"ℹ️"}</span>
                         <div style={{flex:1}}>
-                          <p style={{margin:"0 0 8px",fontSize:12,color:"#F0F2FF",lineHeight:1.4}}>{notif.msg}</p>
+                          <p style={{margin:"0 0 8px",fontSize:12,color:T.text,lineHeight:1.4}}>{notif.msg}</p>
                           {notif.actions?.includes("keep")&&(
                             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                               {notif.actions?.includes("approve-delete")&&isAdmin?(
@@ -1110,7 +1137,7 @@ function App() {
                               </button>}
                             </div>
                           )}
-                          {notif.actions?.length===0&&<button onClick={()=>removeNotif(notif.id)} style={{background:"none",border:"none",color:"#6B7299",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✓ {lang==="en"?"Dismiss":"סגור"}</button>}
+                          {notif.actions?.length===0&&<button onClick={()=>removeNotif(notif.id)} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✓ {lang==="en"?"Dismiss":"סגור"}</button>}
                         </div>
                       </div>
                     </div>
@@ -1118,20 +1145,6 @@ function App() {
                 </div>
               )}
             </div>
-
-            <button title="שמור ל-Sheets" onClick={()=>{
-              if(!window.confirm("ישכתב את כל נתוני ה-Sheets. להמשיך?")) return;
-              setSyncStatus("syncing");
-              gsSaveAll({participants,locations,settings,user:settings.currentUser})
-                .then(r=>{
-                  if(r.error) throw new Error(r.error);
-                  setSyncStatus("ok");setLastSync(new Date());
-                  showToast("✅ נשמר ל-Sheets");
-                })
-                .catch(e=>{setSyncStatus("error");showToast("שגיאת שמירה: "+e.message,"error");});
-            }} style={{background:"rgba(255,255,255,0.9)",border:"none",color:"#4338CA",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:800}}>
-              {L("btnSave")}
-            </button>
           </div>
         </div>
       </div>
