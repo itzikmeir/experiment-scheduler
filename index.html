@@ -402,6 +402,10 @@ function parseRow(row, id) {
     vision && !vision.includes("תקין") ? `ראייה: ${vision.substring(0,30)}` : "",
   ].filter(Boolean).join(" | ");
 
+  // Try to parse Google Form timestamp
+  const tsRaw = g("חותמתזמן") || g("timestamp") || g("Timestamp") || "";
+  const surveyDate = tsRaw ? new Date(tsRaw).getTime() || null : null;
+
   return {
     id,
     name:   g("שםמלא") || g("שם"),
@@ -411,9 +415,11 @@ function parseRow(row, id) {
     gender: g("מגדר"),
     availability: avail,
     assigned: null,
+    startTime: "",
     status: "pending",
     notes: extraNote,
     locPref: [],
+    surveyDate,
     importedAt: Date.now(),
   };
 }
@@ -598,6 +604,36 @@ function App() {
         .catch(()=>setSyncStatus("error"));
     }, 60000);
     return ()=>clearInterval(interval);
+  },[]);
+
+  // ── Auto-poll Sheets for new submissions every 30s ───────────────────────
+  const lastRowCountRef = React.useRef(null);
+  useEffect(()=>{
+    const poll = setInterval(()=>{
+      gsGetAll().then(data=>{
+        if(!data?.participants?.length) return;
+        const newCount = data.participants.length;
+        if(lastRowCountRef.current===null){lastRowCountRef.current=newCount;return;}
+        if(newCount>lastRowCountRef.current){
+          const diff=newCount-lastRowCountRef.current;
+          lastRowCountRef.current=newCount;
+          // Merge new rows in
+          setParticipants(prev=>{
+            const merged=[...prev];
+            const seen=new Set(prev.map(p=>(p.email||"").toLowerCase()+"_"+(p.phone||"")+"_"+p.name.toLowerCase()));
+            let added=0;
+            data.participants.slice(-diff*2).forEach(p=>{
+              const key=(p.email||"").toLowerCase()+"_"+(p.phone||"")+"_"+p.name.toLowerCase();
+              if(!seen.has(key)){merged.push({...p,id:newId(merged)});seen.add(key);added++;}
+            });
+            if(added>0) showToast(`📥 ${added} ${lang==="en"?"new response(s) from Sheets":"תשובות חדשות מ-Sheets"}`);
+            return merged;
+          });
+        }
+      }).catch(()=>{});// silent fail
+    },30000);
+    return ()=>clearInterval(poll);
+  // eslint-disable-next-line
   },[]);
   useEffect(()=>{
     document.documentElement.setAttribute("dir", lang==="en"?"ltr":"rtl");
@@ -1573,7 +1609,8 @@ function App() {
                       const ageOpts=[...new Set(participants.map(p=>String(p.age||"")).filter(Boolean))].sort((a,b)=>parseInt(a)-parseInt(b)).map(v=>({v,l:v}));
                       const availOpts=[...new Set(participants.flatMap(p=>Object.entries(p.availability||{}).filter(([,s])=>s.length>0).map(([d,])=>`יום ${dayNames[d]||d}`)))].sort().map(v=>({v:v.replace("יום ",""),l:v}));
                       return (<>
-                        <ExcelTh col="age"     label={L("colAge")}         fkey="age"     options={ageOpts}/>
+                        <ExcelTh col="surveyDate" label={lang==="en"?"Survey Date":"תאריך שאלון"} fkey="surveyDate" options={[]}/>
+                      <ExcelTh col="age"     label={L("colAge")}         fkey="age"     options={ageOpts}/>
                         <ExcelTh col="gender"  label={L("colGender")}        fkey="gender"  options={genderOpts}/>
                         {(()=>{
                           const availDayOpts = DAYS.map(d=>({v:d, l:lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:d}));
@@ -1608,22 +1645,48 @@ function App() {
                         <td style={{padding:"6px 10px",fontSize:11,color:T.textMuted,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           {p.email||<span style={{color:"#FCA5A5"}}>חסר</span>}
                         </td>
+                        {/* Survey Date */}
+                        <td style={{padding:"4px 6px",fontSize:10,color:T.textFaint,whiteSpace:"nowrap",textAlign:"center"}}>
+                          {p.surveyDate?new Date(p.surveyDate).toLocaleDateString(lang==="en"?"en-GB":"he-IL",{day:"2-digit",month:"2-digit"})+(new Date(p.surveyDate).getFullYear()!==new Date().getFullYear()?" "+new Date(p.surveyDate).getFullYear():""):"—"}
+                        </td>
                         {/* Age */}
                         <td style={{padding:"6px 10px",fontSize:12,color:T.textMuted,textAlign:"center"}}>{p.age||"—"}</td>
                         {/* Gender */}
                         <td style={{padding:"6px 10px",fontSize:11}}>
                           {p.gender&&<span style={{fontSize:11,color:T.textMuted}}>{p.gender==="גבר"?L("genderM"):p.gender==="אישה"?L("genderF"):p.gender}</span>}
                         </td>
-                        {/* Availability */}
-                        <td style={{padding:"4px 6px",minWidth:140}}>
-                          <div style={{display:"flex",gap:3,flexWrap:"wrap",minWidth:130}}>
-                            {DAYS.filter(d=>p.availability[d]?.length>0).map(d=>(
-                              <span key={d} style={{background:T.tablehead,color:T.accent,borderRadius:4,padding:"2px 5px",fontSize:9,fontWeight:700,border:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>
-                                {lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:d}
-                              </span>
-                            ))}
-                            {Object.values(p.availability).every(s=>s.length===0)&&<span style={{color:"#FCA5A5",fontSize:10}}>—</span>}
-                          </div>
+                        {/* Availability — per day with M/A indicators */}
+                        <td style={{padding:"4px 6px",minWidth:110}}>
+                          {Object.values(p.availability).every(s=>s.length===0)
+                            ?<span style={{color:"#FCA5A5",fontSize:10}}>—</span>
+                            :<div style={{display:"flex",gap:2,flexWrap:"nowrap"}}>
+                              {DAYS.map(d=>{
+                                const slots=p.availability[d]||[];
+                                if(!slots.length) return null;
+                                const hasMorn=slots.some(s=>s.includes("בוקר"));
+                                const hasAft=slots.some(s=>s.includes("צהריים"));
+                                const both=hasMorn&&hasAft;
+                                const dayLabel=lang==="en"?["Su","Mo","Tu","We","Th","Fr"]["אבגדהו".indexOf(d)]||d:d;
+                                return(
+                                  <div key={d} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+                                    <span style={{fontSize:8,color:T.textFaint,fontWeight:600,lineHeight:1}}>{dayLabel}</span>
+                                    <div style={{display:"flex",gap:1}}>
+                                      <span title={lang==="en"?"Morning":"בוקר"} style={{
+                                        width:7,height:7,borderRadius:2,
+                                        background:hasMorn?(both?"#F59E0B":"#3B82F6"):T.border,
+                                        opacity:hasMorn?1:0.2
+                                      }}/>
+                                      <span title={lang==="en"?"Afternoon":"צהריים"} style={{
+                                        width:7,height:7,borderRadius:2,
+                                        background:hasAft?(both?"#F59E0B":"#F97316"):T.border,
+                                        opacity:hasAft?1:0.2
+                                      }}/>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          }
                         </td>
                         {/* Day */}
                         <td style={{padding:"4px 5px"}}>
@@ -3107,7 +3170,7 @@ function LocModal({L,lang,loc,T,onSave,onClose}) {
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>{L("btnCancel")}</button>
-          <button onClick={()=>onSave({...loc,name,rooms})} disabled={!name.trim()} style={{background:"#4338CA",color:"white",border:"none",padding:"7px 15px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>שמור</button>
+          <button type="button" onClick={()=>{const finalRooms=nr.trim()?[...rooms,nr.trim()]:rooms;onSave({...loc,name,rooms:finalRooms});}} disabled={!name.trim()} style={{background:"#4338CA",color:"white",border:"none",padding:"7px 15px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{lang==="en"?"Save":"שמור"}</button>
         </div>
       </div>
     </div>
