@@ -715,13 +715,12 @@ function App() {
             addNotif({id:'dedup-'+Date.now(),type:'info',msg:(lang==="en"?`${dupsRemoved} duplicates merged on load`:`${dupsRemoved} כפילויות מוזגו בטעינה`),actions:[]});
           }
         }
-        if(data.locations?.length)    setLocations(incoming) => setLocations(prev => {
-          // Merge: keep local locations not yet in Sheets, update existing ones
-          const merged = [...incoming];
-          const inIds = new Set(incoming.map(l=>l.id));
+        if(data.locations?.length) setLocations(prev => {
+          const merged = [...data.locations];
+          const inIds = new Set(data.locations.map(l=>l.id));
           prev.forEach(l => { if(!inIds.has(l.id)) merged.push(l); });
           return merged;
-        })(data.locations);
+        });
         if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
         if(data.researchers?.length)  ; // could store if needed
         setSyncStatus("ok");setSyncMsg("מסונכרן");setLastSync(new Date());
