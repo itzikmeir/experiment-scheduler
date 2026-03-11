@@ -1562,7 +1562,7 @@ function App() {
                           }} style={{cursor:"pointer",accentColor:T.accent}}/>;
                       })()}
                     </th>
-                    {[{k:"name",l:L("colName")},{k:"email",l:L("colEmail")}].map(h=>(
+                    {[{k:"name",l:L("colName")}].map(h=>(
                       <th key={h.k} onClick={()=>toggleSort(h.k)} style={{padding:"8px 10px",textAlign:"start",fontSize:11,color:T.textMuted,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>
                         <SortIcon col={h.k}/>{h.l}
                       </th>
@@ -1637,10 +1637,6 @@ function App() {
                         </td>
                         {/* Name */}
                         <td style={{padding:"6px 10px",fontWeight:700,fontSize:13,whiteSpace:"nowrap",color:T.text}}>{p.name}</td>
-                        {/* Email */}
-                        <td style={{padding:"6px 10px",fontSize:11,color:T.textMuted,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          {p.email||<span style={{color:"#FCA5A5"}}>חסר</span>}
-                        </td>
                         {/* Survey Date */}
                         <td style={{padding:"4px 6px",fontSize:10,color:T.textFaint,whiteSpace:"nowrap",textAlign:"center"}}>
                           {p.surveyDate?new Date(p.surveyDate).toLocaleDateString(lang==="en"?"en-GB":"he-IL",{day:"2-digit",month:"2-digit"})+(new Date(p.surveyDate).getFullYear()!==new Date().getFullYear()?" "+new Date(p.surveyDate).getFullYear():""):"—"}
