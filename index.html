@@ -392,14 +392,15 @@ function parseRow(row, id) {
     ) : [];
   });
 
-  // Extra fields from Google Form — store as notes
-  const eligible = g("מעלגיל18") || g("הינךמעל");
-  const license  = g("רישיוןנהיגה");
-  const vision   = g("הצהרתראייה");
+  // Extra fields from Google Form
+  const eligible   = g("מעלגיל18") || g("הינךמעל");
+  const license    = g("רישיוןנהיגה");
+  const vision     = g("הצהרתראייה");
+  const locPrefRaw = g("מיקום") || g("העדפתמיקום") || g("locpref") || "";
+  const visionNote = vision && !vision.includes("תקין") ? vision.substring(0,80) : "";
   const extraNote = [
     eligible === "כן" ? "" : eligible ? `גיל 18: ${eligible}` : "",
     license  === "כן" ? "" : license  ? `רישיון: ${license}`  : "",
-    vision && !vision.includes("תקין") ? `ראייה: ${vision.substring(0,30)}` : "",
   ].filter(Boolean).join(" | ");
 
   // Try to parse Google Form timestamp
@@ -419,6 +420,8 @@ function parseRow(row, id) {
     status: "pending",
     notes: extraNote,
     locPref: [],
+    locPrefText: locPrefRaw || "",
+    visionNote: visionNote || "",
     surveyDate,
     importedAt: Date.now(),
   };
@@ -574,66 +577,85 @@ function App() {
   // Auto-sync to Sheets every 60s if there are recent changes
   const lastSyncRef = React.useRef(null);
   const participantsRef = React.useRef(participants);
+  const locationsRef = React.useRef(locations);
   useEffect(()=>{participantsRef.current=participants;},[participants]);
+  useEffect(()=>{locationsRef.current=locations;},[locations]);
   // Integrity check: flag participants with missing email
   useEffect(()=>{
     participants.forEach(p=>{
       if(!p.email) addNotif({
-        id:'no-email-'+p.id,
-        type:'warning',
+        id:'no-email-'+p.id, type:'warning',
         msg:(lang==="en"?`${p.name}: missing email`:`${p.name}: חסר אימייל`),
         p, actions:['keep','delete','merge']
       });
     });
   // eslint-disable-next-line
-  },[]);  // run once on mount only
-  useEffect(()=>{
-    const interval = setInterval(()=>{
-      // Only auto-save if last sync was > 55s ago or never
-      const now = Date.now();
-      if(lastSyncRef.current && now - lastSyncRef.current < 55000) return;
-      if(syncStatus==="syncing") return;
-      setSyncStatus("syncing");
-      gsSaveAll({participants:participantsRef.current,locations,settings,user:settings.currentUser})
-        .then(r=>{
-          if(r?.error) { setSyncStatus("error"); return; }
-          setSyncStatus("ok");
-          setLastSync(new Date());
-          lastSyncRef.current = Date.now();
-        })
-        .catch(()=>setSyncStatus("error"));
-    }, 60000);
-    return ()=>clearInterval(interval);
   },[]);
 
-  // ── Auto-poll Sheets for new submissions every 30s ───────────────────────
-  const lastRowCountRef = React.useRef(null);
-  useEffect(()=>{
-    const poll = setInterval(()=>{
-      gsGetAll().then(data=>{
-        if(!data?.participants?.length) return;
-        const newCount = data.participants.length;
-        if(lastRowCountRef.current===null){lastRowCountRef.current=newCount;return;}
-        if(newCount>lastRowCountRef.current){
-          const diff=newCount-lastRowCountRef.current;
-          lastRowCountRef.current=newCount;
-          // Merge new rows in
-          setParticipants(prev=>{
-            const merged=[...prev];
-            const seen=new Set(prev.map(p=>(p.email||"").toLowerCase()+"_"+(p.phone||"")+"_"+p.name.toLowerCase()));
-            let added=0;
-            data.participants.slice(-diff*2).forEach(p=>{
-              const key=(p.email||"").toLowerCase()+"_"+(p.phone||"")+"_"+p.name.toLowerCase();
-              if(!seen.has(key)){merged.push({...p,id:newId(merged)});seen.add(key);added++;}
-            });
-            if(added>0) showToast(`📥 ${added} ${lang==="en"?"new response(s) from Sheets":"תשובות חדשות מ-Sheets"}`);
-            return merged;
-          });
+  // ── Bidirectional reconcile helper (also called by "Sync" button) ────────
+  const reconcileRef = React.useRef(null);
+  const doSync = React.useCallback(()=>{
+    if(syncStatus==="syncing") return Promise.resolve();
+    setSyncStatus("syncing");
+    return gsGetAll().then(remote=>{
+      if(remote.error) throw new Error(remote.error);
+      const localPs = participantsRef.current;
+      // Merge: for each remote participant, update local with newer data;
+      // keep local participants not yet pushed (they'll be written on next save).
+      let changed = false;
+      const merged = [...localPs];
+      const seenIds = new Set(localPs.map(p=>p.id));
+      (remote.participants||[]).forEach(rp=>{
+        const idx = merged.findIndex(lp=>
+          lp.id===rp.id ||
+          (rp.email && lp.email && rp.email.toLowerCase()===lp.email.toLowerCase()) ||
+          (lp.name.toLowerCase()===rp.name.toLowerCase())
+        );
+        if(idx>=0){
+          // Take remote fields that are richer, keep local assignment
+          const lp=merged[idx];
+          const remoteNewer = (rp.importedAt||0) > (lp.importedAt||0);
+          merged[idx]={
+            ...lp,
+            availability: remoteNewer ? {...rp.availability} : lp.availability,
+            surveyDate: rp.surveyDate || lp.surveyDate,
+            email: lp.email||rp.email,
+            phone: lp.phone||rp.phone,
+            locPref: lp.locPref?.length ? lp.locPref : (rp.locPref||[]),
+          };
+          if(JSON.stringify(merged[idx])!==JSON.stringify(lp)) changed=true;
+        } else if(!seenIds.has(rp.id)) {
+          merged.push(rp); seenIds.add(rp.id); changed=true;
         }
-      }).catch(()=>{});// silent fail
-    },30000);
-    return ()=>clearInterval(poll);
+      });
+      if(changed){
+        setParticipants(merged);
+        showToast(lang==="en"?"📥 Synced new data from Sheets":"📥 עודכן מ-Sheets");
+      }
+      // Merge locations
+      if(remote.locations?.length){
+        setLocations(prev=>{
+          const next=[...remote.locations];
+          const inIds=new Set(remote.locations.map(l=>l.id));
+          prev.forEach(l=>{if(!inIds.has(l.id)) next.push(l);});
+          return next;
+        });
+      }
+      // Push local state to Sheets
+      return gsSaveAll({participants:merged,locations:locationsRef.current,settings,user:settings.currentUser});
+    }).then(()=>{
+      setSyncStatus("ok"); setLastSync(new Date()); lastSyncRef.current=Date.now();
+    }).catch(e=>{
+      setSyncStatus("error"); console.warn("Sync error:",e);
+    });
   // eslint-disable-next-line
+  },[settings]);
+  reconcileRef.current = doSync;
+
+  // Auto-run every 45 seconds
+  useEffect(()=>{
+    const iv = setInterval(()=>reconcileRef.current?.(), 45000);
+    return ()=>clearInterval(iv);
   },[]);
   useEffect(()=>{
     document.documentElement.setAttribute("dir", lang==="en"?"ltr":"rtl");
@@ -693,7 +715,13 @@ function App() {
             addNotif({id:'dedup-'+Date.now(),type:'info',msg:(lang==="en"?`${dupsRemoved} duplicates merged on load`:`${dupsRemoved} כפילויות מוזגו בטעינה`),actions:[]});
           }
         }
-        if(data.locations?.length)    setLocations(data.locations);
+        if(data.locations?.length)    setLocations(incoming) => setLocations(prev => {
+          // Merge: keep local locations not yet in Sheets, update existing ones
+          const merged = [...incoming];
+          const inIds = new Set(incoming.map(l=>l.id));
+          prev.forEach(l => { if(!inIds.has(l.id)) merged.push(l); });
+          return merged;
+        })(data.locations);
         if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
         if(data.researchers?.length)  ; // could store if needed
         setSyncStatus("ok");setSyncMsg("מסונכרן");setLastSync(new Date());
@@ -1045,59 +1073,27 @@ function App() {
             </div>
           </div>
 
-          {/* RIGHT: sync status + load + save + bell */}
+          {/* RIGHT: sync status chip + Sync button + Sheets link + bell */}
           <div style={{display:"flex",alignItems:"center",gap:5}}>
 
-            {/* Sync status chip */}
-            <span style={{fontSize:10,color:"rgba(255,255,255,0.55)",display:"flex",alignItems:"center",gap:3}}>
-              {syncStatus==="syncing"&&<span style={{display:"inline-block",width:7,height:7,border:"2px solid rgba(255,255,255,0.25)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>}
-              {syncStatus==="ok"&&lastSync&&`${lastSync.getHours()}:${String(lastSync.getMinutes()).padStart(2,"0")}`}
-              {(syncStatus==="error"||syncStatus==="idle")&&"●"}
+            {/* Sync status + last time */}
+            <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",display:"flex",alignItems:"center",gap:3,minWidth:30}}>
+              {syncStatus==="syncing"
+                ?<span style={{display:"inline-block",width:7,height:7,border:"2px solid rgba(255,255,255,0.25)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
+                :syncStatus==="ok"&&lastSync
+                  ?`${lastSync.getHours()}:${String(lastSync.getMinutes()).padStart(2,"0")}`
+                  :<span style={{color:"#F87171",fontSize:10}}>✕</span>}
             </span>
 
-            {/* Load + Save — uniform ghost style */}
-            <button title={lang==="en"?"Load from Sheets":"טען מ-Sheets"} onClick={()=>{
-              setSyncStatus("syncing");
-              gsGetAll().then(data=>{
-                if(data.error) throw new Error(data.error);
-                if(data.participants?.length) {
-                  const merged=[];const seen=new Map();
-                  for(const p of data.participants){
-                    const keys=[];
-                    if(p.email) keys.push('e:'+p.email.toLowerCase().replace(/\s/g,''));
-                    if(p.phone&&p.phone.length>5) keys.push('ph:'+p.phone.replace(/[^0-9]/g,''));
-                    keys.push('n:'+p.name.toLowerCase().replace(/\s/g,''));
-                    const ek=keys.find(k=>seen.has(k));
-                    if(ek){const idx=seen.get(ek);const ex=merged[idx];merged[idx]={...ex,...p,id:ex.id,assigned:ex.assigned||p.assigned,status:ex.assigned?ex.status:(p.assigned?p.status:ex.status),availability:{...(ex.availability||{}),...(p.availability||{})},email:ex.email||p.email,phone:ex.phone||p.phone,locPref:[...new Set([...(ex.locPref||[]),...(p.locPref||[])])],surveyDate:p.surveyDate||ex.surveyDate||null};
-                    }else{const idx=merged.length;merged.push(p);keys.forEach(k=>seen.set(k,idx));}
-                  }
-                  setParticipants(merged);
-                  merged.forEach(p=>{if(!p.email)addNotif({id:'no-email-'+p.id,type:'warning',msg:p.name+': חסר אימייל',p,actions:['keep','delete','merge']});});
-                  if(merged.length<data.participants.length) addNotif({id:'dedup-'+Date.now(),type:'info',msg:`${data.participants.length-merged.length} כפילויות מוזגו`,actions:[]});
-                }
-                if(data.locations?.length)    setLocations(data.locations);
-                if(data.settings&&Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
-                setSyncStatus("ok");setLastSync(new Date());
-                showToast("✅ נטען מ-Sheets");
-              }).catch(e=>{setSyncStatus("error");showToast("שגיאה: "+e.message,"error");});
-
-            }} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",borderRadius:5,padding:"0 9px",height:26,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap"}}>
-              ↻ {lang==="en"?"Load":"טען"}
+            {/* Single Sync button */}
+            <button title={lang==="en"?"Sync with Sheets":"סנכרן עם Sheets"} onClick={()=>doSync()} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",borderRadius:5,padding:"0 9px",height:26,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap"}}>
+              ⇄ {lang==="en"?"Sync":"סנכרן"}
             </button>
 
-            {isAdmin&&<button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={()=>{
-              if(!window.confirm(lang==="en"?"Overwrite all Sheets data?":"ישכתב את כל נתוני ה-Sheets. להמשיך?")) return;
-              setSyncStatus("syncing");
-              gsSaveAll({participants,locations,settings,user:settings.currentUser})
-                .then(r=>{
-                  if(r.error) throw new Error(r.error);
-                  setSyncStatus("ok");setLastSync(new Date());
-                  showToast("✅ נשמר ל-Sheets");
-                })
-                .catch(e=>{setSyncStatus("error");showToast("שגיאת שמירה: "+e.message,"error");})
-            }} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",borderRadius:5,padding:"0 9px",height:26,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap"}}>
-              {lang==="en"?"Save":"שמור"}
-            </button>}
+            {/* Open Sheets link */}
+            <a href={GS_URL.replace("/exec","").replace("macros/s/","spreadsheets/d/").split("/exec")[0]+"spreadsheets/d/"+GS_URL.match(/\/s\/([^/]+)\//)?.[1]+"/edit"} target="_blank" rel="noreferrer" title={lang==="en"?"Open Google Sheets":"פתח Google Sheets"} style={{display:"flex",alignItems:"center",height:26,padding:"0 8px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:5,color:"rgba(255,255,255,0.85)",fontSize:13,textDecoration:"none",lineHeight:"26px"}}>
+              📊
+            </a>
 
             {/* Bell — leftmost, opens panel to the LEFT (start) */}
             <div style={{position:"relative"}}>
@@ -1780,7 +1776,7 @@ function App() {
                         {/* Actions */}
                         <td style={{padding:"4px 5px"}}>
                           <div style={{display:"flex",gap:3}}>
-                            {isEditor&&<button title="ערוך" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✏️</button>}
+                            {isEditor&&<button title={lang==="en"?"Details":"פרטים"} onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>{lang==="en"?"🔍":"פרטים"}</button>}
                             {p.email&&(
                               <button title={lang==="en"?"Send email":"שלח מייל"} onClick={e=>{
                                 e.stopPropagation();
@@ -2069,83 +2065,14 @@ function App() {
         )}
 
         {tab==="emails"&&(
-          <div>
-            <div style={{background:"#FFF7ED",border:"1px solid #FDE68A",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#92400E"}}>
-              📬 <strong>Gmail:</strong> לחיצה על "שלח" פותחת Gmail Compose עם הנוסח מוכן. לשליחה ישירה דרך API — הגדר ב-<button onClick={()=>setModal("gmail")} style={{background:"none",border:"none",cursor:"pointer",color:"#D97706",fontWeight:700,fontFamily:"inherit",textDecoration:"underline"}}>הגדרות Gmail</button>.
-            </div>
+          <EmailTab participants={participants} locations={locations} locById={locById} locColor={locColor}
+            settings={settings} T={T} L={L} lang={lang} darkMode={darkMode}
+            sendViaGmail={sendViaGmail} GS_URL={GS_URL} setModal={setModal}
+            dayNames={dayNames} buildEmail={buildEmail} setEmailModal={setEmailModal}
+            setFreeMailModal={setFreeMailModal}
+          />
 
-            {/* ── Manual broadcast composer ── */}
-            <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:16,marginBottom:16}}>
-              <h3 style={{margin:"0 0 10px",fontSize:13,color:T.text}}>✍️ הודעה חופשית לנבדקים</h3>
-              <ManualEmailComposer participants={participants} T={T} sendViaGmail={sendViaGmail} GS_URL={GS_URL} L={L} lang={lang}/>
-            </div>
-
-            {/* ── Thank you to completed ── */}
-            {participants.filter(p=>p.status==="completed").length>0&&(
-              <div style={{background:"#F0FDF4",border:"1px solid #A7F3D0",borderRadius:12,padding:16,marginBottom:16}}>
-                <h3 style={{margin:"0 0 6px",fontSize:13,color:"#166534"}}>🙏 תודה למשתתפים שהשלימו</h3>
-                <p style={{margin:"0 0 10px",fontSize:11,color:"#16a34a"}}>{participants.filter(p=>p.status==="completed").length} {L("emailCompleteCount")}</p>
-                <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
-                  {participants.filter(p=>p.status==="completed").map(p=>(
-                    <div key={p.id} style={{background:"white",border:"1px solid #A7F3D0",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:12,fontWeight:700,color:"#166534"}}>{p.name}</span>
-                      <button onClick={()=>{
-                        const subj=`תודה על השתתפותך בניסוי — ${settings.experimentName}`;
-                        const body=`שלום ${p.name},\n\nתודה רבה על השתתפותך בניסוי "${settings.experimentName}".\nהשתתפותך חשובה מאוד למחקר שלנו ואנו מעריכים את הזמן והמאמץ שהשקעת.\n\nבברכה,\n${settings.currentUser}`;
-                        sendViaGmail(subj,body,p.email);
-                      }} style={{background:"#059669",color:"white",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit",fontWeight:700}}>
-                        ✉️ שלח תודה
-                      </button>
-                    </div>
-                  ))}
-                  <button onClick={()=>{
-                    const ps=participants.filter(p=>p.status==="completed"&&p.email);
-                    const body=ps.map(p=>`─── ${p.name} | ${p.email} ───\nנושא: תודה על השתתפותך בניסוי\n\nשלום ${p.name},\n\nתודה רבה על השתתפותך בניסוי "${settings.experimentName}".\nהשתתפותך חשובה מאוד למחקר שלנו.\n\nבברכה,\n${settings.currentUser}\n`).join("\n═══════════════\n\n");
-                    setEmailModal({subject:"תודה — שליחה לכולם",body,type:"bulk"});
-                  }} style={{background:"#059669",color:"white",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",alignSelf:"center"}}>
-                    📨 שלח תודה לכולם
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-              {[{title:"📨 הזמנות",filter:p=>p.assigned,type:"invitation",color:"#4338CA"},
-                {title:"⚠️ עדכון זמינות",filter:p=>Object.values(p.availability).every(s=>s.length===0),type:"noAvailability",color:"#DC2626"}].map(card=>{
-                const ps=participants.filter(card.filter);
-                return(
-                  <div key={card.title} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:14}}>
-                    <h3 style={{margin:"0 0 4px",fontSize:13,color:T.text}}>{card.title}</h3>
-                    <p style={{margin:"0 0 10px",fontSize:11,color:T.textMuted}}>{ps.length} משתתפים</p>
-                    <button onClick={()=>{
-                      const body=ps.map(p=>{const e=buildEmail(p,card.type);return `─── ${p.name} | ${p.email||"אין"} ───\nנושא: ${e.subject}\n\n${e.body}\n`;}).join("\n═══════════════════════\n\n");
-                      setEmailModal({participant:null,subject:card.title,body,type:"bulk"});
-                    }} style={{background:card.color,color:"white",border:"none",padding:"6px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>הצג</button>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:9}}>
-              {participants.filter(p=>p.assigned).map(p=>{
-                const loc=locById[p.assigned.locationId];
-                const lc=locColor(p.assigned.locationId);
-                return(
-                  <div key={p.id} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,padding:12}}>
-                    <div style={{fontWeight:700,fontSize:12,color:T.text}}>{p.name}</div>
-                    <div style={{fontSize:10,color:T.textMuted,margin:"2px 0 8px",display:"flex",gap:4,flexWrap:"wrap"}}>
-                      <span>{dayNames[p.assigned.day]}</span>·
-                      <span>{p.assigned.slot.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</span>
-                      {loc&&<><span>·</span><span style={{background:lc.bg,color:lc.text,borderRadius:3,padding:"0 4px",fontSize:9,fontWeight:700}}>{loc.name}</span></>}
-                    </div>
-                    <div style={{display:"flex",gap:5}}>
-                      <button onClick={()=>sendViaGmail(buildEmail(p,"invitation").subject,buildEmail(p,"invitation").body,p.email)} style={{background:"#EEF2FF",color:"#4338CA",border:"none",padding:"3px 8px",borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>{L("emailInvite")}</button>
-                      <button onClick={()=>sendViaGmail(buildEmail(p,"reminder").subject,buildEmail(p,"reminder").body,p.email)} style={{background:"#FFF7ED",color:"#D97706",border:"none",padding:"3px 8px",borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>{L("emailReminder")}</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+        )}
         )}
 
         {/* ══ LOCATIONS ════════════════════════════════════════════════════════ */}
@@ -2625,6 +2552,173 @@ function App() {
   );
 }
 
+
+// ── EmailTab Component ────────────────────────────────────────────────────────
+function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,darkMode,sendViaGmail,GS_URL,setModal,dayNames,buildEmail,setEmailModal,setFreeMailModal}) {
+  const TEMPLATES = [
+    {key:"invitation",   icon:"📨", labelHe:"הזמנה לניסוי",         labelEn:"Experiment Invitation",  filter:p=>p.assigned, color:"#4338CA"},
+    {key:"reminder",     icon:"🔔", labelHe:"תזכורת לניסוי",         labelEn:"Experiment Reminder",     filter:p=>p.assigned, color:"#D97706"},
+    {key:"locPrefAsk",   icon:"📍", labelHe:"בקשת העדפת מיקום",      labelEn:"Location Preference Ask", filter:p=>!p.locPref?.length, color:"#059669"},
+    {key:"thankYou",     icon:"🙏", labelHe:"תודה על השתתפות",       labelEn:"Thank You",               filter:p=>p.status==="completed", color:"#7C3AED"},
+    {key:"noAvailability",icon:"⚠️",labelHe:"עדכון זמינות נדרש",     labelEn:"Availability Needed",     filter:p=>Object.values(p.availability).every(s=>s.length===0), color:"#DC2626"},
+    {key:"confirmation", icon:"✅", labelHe:"אישור שיבוץ",           labelEn:"Assignment Confirmation", filter:p=>p.status==="confirmed", color:"#0891B2"},
+  ];
+
+  const buildLocPrefEmail = (p,lang,locations,settings) => {
+    const locList = locations.map((l,i)=>`${i+1}. ${l.name}`).join("\n");
+    if(lang==="en") return {
+      subject:`Location preference for ${settings.experimentName}`,
+      body:`Hello,\n\nWe'd like to know your preferred location for the experiment "${settings.experimentName}".\n\nAvailable locations:\n${locList}\n\nPlease reply with your preference.\n\nBest,\n${settings.currentUser}`
+    };
+    return {
+      subject:`העדפת מיקום — ${settings.experimentName}`,
+      body:`שלום,\n\nאנו רוצים לדעת את העדפת המיקום שלך להשתתפות בניסוי "${settings.experimentName}".\n\nמיקומים זמינים:\n${locList}\n\nניתן להשיב עם העדפתך.\n\nבברכה,\n${settings.currentUser}`
+    };
+  };
+
+  const [selTemplate, setSelTemplate] = React.useState("invitation");
+  const [recipientFilter, setRecipientFilter] = React.useState("auto");
+  const [manualSel, setManualSel] = React.useState(new Set());
+
+  const tmpl = TEMPLATES.find(t=>t.key===selTemplate)||TEMPLATES[0];
+  const autoRecipients = participants.filter(tmpl.filter);
+  const allRecipients = recipientFilter==="auto" ? autoRecipients
+    : recipientFilter==="all" ? participants
+    : [...manualSel].map(id=>participants.find(p=>p.id===id)).filter(Boolean);
+
+  const getEmail = (p) => {
+    if(selTemplate==="locPrefAsk") return buildLocPrefEmail(p,lang,locations,settings);
+    if(selTemplate==="thankYou") {
+      const subj = lang==="en"?`Thank you for your participation — ${settings.experimentName}`:`תודה על השתתפותך — ${settings.experimentName}`;
+      const body = lang==="en"?`Hello,\n\nThank you for participating in "${settings.experimentName}". Your contribution is greatly valued.\n\nBest,\n${settings.currentUser}`:`שלום,\n\nתודה רבה על השתתפותך בניסוי "${settings.experimentName}". השתתפותך חשובה מאוד למחקר שלנו.\n\nבברכה,\n${settings.currentUser}`;
+      return {subject:subj,body};
+    }
+    return buildEmail(p,selTemplate);
+  };
+
+  const inputStyle={padding:"6px 10px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text};
+
+  return(
+    <div>
+      {/* Gmail hint */}
+      <div style={{background:darkMode?"#1a1608":"#FFF7ED",border:"1px solid #FDE68A",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:darkMode?"#FCD34D":"#92400E"}}>
+        📬 <strong>Gmail:</strong> {lang==="en"?"Clicking Send opens Gmail Compose. For direct API sending, configure in":"לחיצה על שלח פותחת Gmail. לשליחה ישירה ב-API — הגדר ב-"}<button onClick={()=>setModal("gmail")} style={{background:"none",border:"none",cursor:"pointer",color:"#D97706",fontWeight:700,fontFamily:"inherit",textDecoration:"underline"}}>{lang==="en"?"Gmail Settings":"הגדרות Gmail"}</button>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"240px 1fr",gap:16}}>
+        {/* LEFT: template selector */}
+        <div>
+          <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:T.textMuted,textTransform:"uppercase",letterSpacing:1}}>{lang==="en"?"Template":"תבנית"}</p>
+          {TEMPLATES.map(t=>(
+            <button key={t.key} onClick={()=>setSelTemplate(t.key)} style={{
+              display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"start",
+              padding:"9px 12px",borderRadius:7,border:`1.5px solid ${selTemplate===t.key?t.color:T.border}`,
+              background:selTemplate===t.key?(darkMode?t.color+"22":t.color+"12"):T.tablehead,
+              color:selTemplate===t.key?t.color:T.text,
+              cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:selTemplate===t.key?700:400,
+              marginBottom:5,transition:"all .12s"
+            }}>
+              <span>{t.icon}</span>
+              <span style={{flex:1}}>{lang==="en"?t.labelEn:t.labelHe}</span>
+              <span style={{fontSize:10,opacity:0.6}}>{participants.filter(t.filter).length}</span>
+            </button>
+          ))}
+          <div style={{borderTop:`1px solid ${T.border}`,marginTop:10,paddingTop:10}}>
+            <button onClick={()=>setFreeMailModal({recipients:allRecipients.filter(p=>p.email)})} style={{
+              display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"start",
+              padding:"9px 12px",borderRadius:7,border:`1px solid ${T.border}`,
+              background:T.tablehead,color:T.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"
+            }}>✍️ {lang==="en"?"Free-write":"הודעה חופשית"}</button>
+          </div>
+        </div>
+
+        {/* RIGHT: recipients + preview */}
+        <div>
+          {/* Recipient filter */}
+          <div style={{marginBottom:12}}>
+            <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:T.textMuted,textTransform:"uppercase",letterSpacing:1}}>{lang==="en"?"Send to":"שלח ל"}</p>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {[
+                {k:"auto", l:lang==="en"?`Suggested (${autoRecipients.length})`:`מוצע (${autoRecipients.length})`},
+                {k:"all",  l:lang==="en"?`All (${participants.length})`:`כולם (${participants.length})`},
+                {k:"manual", l:lang==="en"?"Manual":"בחירה ידנית"},
+              ].map(rf=>(
+                <button key={rf.k} onClick={()=>setRecipientFilter(rf.k)} style={{
+                  padding:"4px 12px",borderRadius:15,border:`1px solid ${recipientFilter===rf.k?tmpl.color:T.border}`,
+                  background:recipientFilter===rf.k?(darkMode?tmpl.color+"33":tmpl.color+"15"):"transparent",
+                  color:recipientFilter===rf.k?tmpl.color:T.textMuted,
+                  cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:recipientFilter===rf.k?700:400
+                }}>{rf.l}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Manual selection */}
+          {recipientFilter==="manual"&&(
+            <div style={{marginBottom:12,padding:"8px 10px",background:T.tablehead,borderRadius:8,border:`1px solid ${T.border}`,maxHeight:120,overflowY:"auto"}}>
+              {participants.map(p=>(
+                <label key={p.id} style={{display:"flex",alignItems:"center",gap:7,padding:"3px 0",cursor:"pointer",fontSize:12}}>
+                  <input type="checkbox" checked={manualSel.has(p.id)} onChange={e=>{
+                    setManualSel(prev=>{const next=new Set(prev);e.target.checked?next.add(p.id):next.delete(p.id);return next;});
+                  }} style={{accentColor:tmpl.color}}/>
+                  <span style={{color:T.text}}>{p.name}</span>
+                  <span style={{color:T.textFaint,fontSize:10}}>{p.email||"—"}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {/* Recipient chips */}
+          {allRecipients.length>0&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:12,padding:"6px 8px",background:T.tablehead,borderRadius:7,border:`1px solid ${T.border}`,maxHeight:70,overflowY:"auto"}}>
+              {allRecipients.map(p=>(
+                <span key={p.id} style={{background:darkMode?tmpl.color+"33":tmpl.color+"15",color:tmpl.color,border:`1px solid ${tmpl.color}44`,borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:600}}>
+                  {p.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {allRecipients.length===0&&<p style={{fontSize:12,color:T.textFaint,margin:"0 0 12px"}}>— {lang==="en"?"No matching recipients":"אין נמענים מתאימים"}</p>}
+
+          {/* Preview of first email */}
+          {allRecipients.length>0&&(()=>{
+            const preview = getEmail(allRecipients[0]);
+            return(
+              <div style={{background:T.tablehead,borderRadius:9,padding:12,marginBottom:12,border:`1px solid ${T.border}`}}>
+                <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:T.textFaint,textTransform:"uppercase",letterSpacing:1}}>{lang==="en"?"Preview (first recipient)":"תצוגה מקדימה (נמען ראשון)"}</p>
+                <p style={{margin:"0 0 6px",fontSize:12,fontWeight:700,color:T.text}}>{preview.subject}</p>
+                <pre style={{margin:0,fontSize:11,color:T.textMuted,whiteSpace:"pre-wrap",fontFamily:"inherit",maxHeight:100,overflowY:"auto"}}>{preview.body}</pre>
+              </div>
+            );
+          })()}
+
+          {/* Send button */}
+          <button disabled={allRecipients.filter(p=>p.email).length===0} onClick={()=>{
+            const withEmail = allRecipients.filter(p=>p.email);
+            if(withEmail.length===0) return;
+            if(withEmail.length===1) {
+              const e=getEmail(withEmail[0]);
+              sendViaGmail(e.subject,e.body,withEmail[0].email);
+            } else {
+              const bcc=withEmail.map(p=>p.email).join(",");
+              const e=getEmail(withEmail[0]);
+              const url=`https://mail.google.com/mail/?view=cm&fs=1&bcc=${encodeURIComponent(bcc)}&su=${encodeURIComponent(e.subject)}&body=${encodeURIComponent(e.body)}`;
+              window.open(url,"_blank");
+            }
+          }} style={{
+            background:allRecipients.filter(p=>p.email).length?tmpl.color:"#9CA3AF",
+            color:"white",border:"none",padding:"9px 20px",borderRadius:8,cursor:"pointer",
+            fontSize:13,fontWeight:700,fontFamily:"inherit",
+            opacity:allRecipients.filter(p=>p.email).length?1:0.5
+          }}>
+            ✉️ {lang==="en"?`Send to ${allRecipients.filter(p=>p.email).length}`:`שלח ל-${allRecipients.filter(p=>p.email).length}`} {lang==="en"?"recipients":"נמענים"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Free-write email modal (from assignments tab selection) ───────────────────
 function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
   if(!L) L=(k)=>k;
@@ -2646,9 +2740,11 @@ function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
         : (lang==="en"
             ? `Fix spelling and grammar in the following message, return only the corrected text:\n\n${body}`
             : `בדוק ותקן שגיאות כתיב ודקדוק בהודעה הבאה, החזר רק את הטקסט המתוקן:\n\n${body}`);
+      const apiKey = window._anthropicKey||"";
+      if(!apiKey){alert(lang==="en"?"Enter your Anthropic API key first (click the key icon)":"יש להזין מפתח Anthropic API קודם (לחץ על אייקון המפתח)");setAiLoading(false);setAiMode(null);return;}
       const res = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+        method:"POST",headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})
       });
       const data = await res.json();
       const text = data.content?.find(c=>c.type==="text")?.text||"";
@@ -2709,6 +2805,10 @@ function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
 
         {/* AI buttons */}
         <div style={{display:"flex",gap:7,marginBottom:16,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+            <span style={{fontSize:10,color:T.textMuted}}>🔑 Anthropic API key:</span>
+            <input type="password" defaultValue={window._anthropicKey||""} onChange={e=>{window._anthropicKey=e.target.value;}} placeholder="sk-ant-..." style={{flex:1,padding:"4px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text}}/>
+          </div>
           <button onClick={()=>callAI("proofread")} disabled={aiLoading||!body.trim()} style={{
             background:aiMode==="proofread"?"#7C3AED":"#EDE9FE",color:aiMode==="proofread"?"white":"#5B21B6",
             border:"none",borderRadius:6,padding:"5px 13px",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700,
@@ -2908,6 +3008,12 @@ function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
           <h3 style={{margin:0,fontSize:15,color:T.text}}>{p.id?L("editParticipant"):L("addParticipant")}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
         </div>
+        {/* Survey metadata row */}
+        {(p.surveyDate||p.locPrefText) && <div style={{background:T.tablehead,borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:11,color:T.textMuted,display:"flex",flexWrap:"wrap",gap:12}}>
+          {p.surveyDate&&<span>📅 {lang==="en"?"Survey filled:":"שאלון מולא:"} <strong style={{color:T.text}}>{new Date(p.surveyDate).toLocaleDateString(lang==="en"?"en-GB":"he-IL")}</strong></span>}
+          {p.locPrefText&&<span>📍 {lang==="en"?"Location pref (form):":"העדפת מיקום (שאלון):"} <strong style={{color:T.text}}>{p.locPrefText}</strong></span>}
+        </div>}
+        {p.visionNote&&<div style={{background:darkMode?"#2d2a1a":"#FFFBEB",border:"1px solid #FDE68A",borderRadius:8,padding:"6px 12px",marginBottom:12,fontSize:11,color:"#92400E"}}>👁 {p.visionNote}</div>}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
           {[{k:"name",l:L("fieldName")},{k:"email",l:L("fieldEmail")},{k:"phone",l:L("fieldPhone")},{k:"age",l:L("fieldAge")}].map(f=>(
             <div key={f.k}>
