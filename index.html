@@ -1090,7 +1090,7 @@ function App() {
             </button>
 
             {/* Open Sheets link */}
-            <a href={GS_URL.replace("/exec","").replace("macros/s/","spreadsheets/d/").split("/exec")[0]+"spreadsheets/d/"+GS_URL.match(/\/s\/([^/]+)\//)?.[1]+"/edit"} target="_blank" rel="noreferrer" title={lang==="en"?"Open Google Sheets":"פתח Google Sheets"} style={{display:"flex",alignItems:"center",height:26,padding:"0 8px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:5,color:"rgba(255,255,255,0.85)",fontSize:13,textDecoration:"none",lineHeight:"26px"}}>
+            <a href="https://docs.google.com/spreadsheets/d/1P5MUNE8ANNwS5UZh-dXT3jPhQzF6qpnWhsCPweClt9M/edit?gid=37937551#gid=37937551" target="_blank" rel="noreferrer" title={lang==="en"?"Open Google Sheets":"פתח Google Sheets"} style={{display:"flex",alignItems:"center",height:26,padding:"0 8px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:5,color:"rgba(255,255,255,0.85)",fontSize:13,textDecoration:"none",lineHeight:"26px"}}>
               📊
             </a>
 
@@ -2153,7 +2153,7 @@ function App() {
       )}
 
       {/* Add/Edit participant */}
-      {modal==="addEdit"&&editP&&<ParticipantModal p={editP} locations={locations} T={T} L={L} onSave={saveParticipant} onClose={()=>{setModal(null);setEditP(null);}}/>}
+      {modal==="addEdit"&&editP&&<ParticipantModal p={editP} locations={locations} T={T} L={L} lang={lang} darkMode={darkMode} onSave={saveParticipant} onClose={()=>{setModal(null);setEditP(null);}}/>}
 
       {/* Location add/edit */}
       {(modal==="addLoc"||modal?.type==="editLoc")&&(
@@ -2981,8 +2981,9 @@ function ModalShell({title,T,onClose,children,wide}) {
 }
 
 // ── Participant add/edit modal ─────────────────────────────────────────────────
-function ParticipantModal({p:initP,locations,T,L,onSave,onClose}) {
+function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose}) {
   if(!L) L=(k)=>k;
+  if(!lang) lang="he";
   const [p,setP]=useState(initP);
   const SLOTS=["בוקר (08:00-12:00)","צהריים (12:00-18:00)"];
   const DAYS=["א","ב","ג","ד","ה","ו"];
