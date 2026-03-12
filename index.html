@@ -612,16 +612,23 @@ function App() {
           (lp.name.toLowerCase()===rp.name.toLowerCase())
         );
         if(idx>=0){
-          // Take remote fields that are richer, keep local assignment
           const lp=merged[idx];
           const remoteNewer = (rp.importedAt||0) > (lp.importedAt||0);
           merged[idx]={
             ...lp,
-            availability: remoteNewer ? {...rp.availability} : lp.availability,
-            surveyDate: rp.surveyDate || lp.surveyDate,
-            email: lp.email||rp.email,
-            phone: lp.phone||rp.phone,
-            locPref: lp.locPref?.length ? lp.locPref : (rp.locPref||[]),
+            // Remote wins for form-filled data
+            availability:  remoteNewer ? {...rp.availability} : lp.availability,
+            surveyDate:    rp.surveyDate  || lp.surveyDate,
+            locPrefText:   rp.locPrefText || lp.locPrefText || "",
+            visionNote:    rp.visionNote  || lp.visionNote  || "",
+            email:         lp.email  || rp.email,
+            phone:         lp.phone  || rp.phone,
+            locPref:       lp.locPref?.length ? lp.locPref : (rp.locPref||[]),
+            // Local ALWAYS wins for assignment data
+            assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
+            startTime:     lp.startTime || rp.startTime || "",
+            status:        lp.assigned  ? lp.status : (rp.assigned ? rp.status : lp.status),
+            notes:         lp.notes || rp.notes || "",
           };
           if(JSON.stringify(merged[idx])!==JSON.stringify(lp)) changed=true;
         } else if(!seenIds.has(rp.id)) {
