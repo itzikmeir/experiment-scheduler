@@ -393,15 +393,13 @@ function parseRow(row, id) {
   });
 
   // Extra fields from Google Form
-  const eligible   = g("מעלגיל18") || g("הינךמעל");
-  const license    = g("רישיוןנהיגה");
-  const vision     = g("הצהרתראייה");
-  const locPrefRaw = g("מיקום") || g("העדפתמיקום") || g("locpref") || "";
-  const visionNote = vision && !vision.includes("תקין") ? vision.substring(0,80) : "";
-  const extraNote = [
-    eligible === "כן" ? "" : eligible ? `גיל 18: ${eligible}` : "",
-    license  === "כן" ? "" : license  ? `רישיון: ${license}`  : "",
-  ].filter(Boolean).join(" | ");
+  const eligible    = g("מעלגיל18") || g("הינךמעל") || "";
+  const license     = g("רישיוןנהיגה") || "";
+  const vision      = g("הצהרתראייה") || "";
+  const hebrewRead  = g("לקרואולהביןטקסטים") || g("עברית") || g("הבנהבעברית") || "";
+  const locPrefRaw  = g("מיקום") || g("העדפתמיקום") || g("locpref") || "";
+  const visionNote  = vision || "";
+  const extraNote   = "";
 
   // Try to parse Google Form timestamp
   const tsRaw = g("חותמתזמן") || g("timestamp") || g("Timestamp") || "";
@@ -421,7 +419,10 @@ function parseRow(row, id) {
     notes: extraNote,
     locPref: [],
     locPrefText: locPrefRaw || "",
-    visionNote: visionNote || "",
+    eligible:    eligible  || "",
+    licenseQ:    license   || "",
+    hebrewRead:  hebrewRead|| "",
+    visionNote:  visionNote|| "",
     surveyDate,
     importedAt: Date.now(),
   };
@@ -621,6 +622,9 @@ function App() {
             surveyDate:    rp.surveyDate  || lp.surveyDate,
             locPrefText:   rp.locPrefText || lp.locPrefText || "",
             visionNote:    rp.visionNote  || lp.visionNote  || "",
+            eligible:      rp.eligible    || lp.eligible    || "",
+            licenseQ:      rp.licenseQ    || lp.licenseQ    || "",
+            hebrewRead:    rp.hebrewRead  || lp.hebrewRead  || "",
             email:         lp.email  || rp.email,
             phone:         lp.phone  || rp.phone,
             locPref:       lp.locPref?.length ? lp.locPref : (rp.locPref||[]),
@@ -1092,8 +1096,11 @@ function App() {
             </span>
 
             {/* Single Sync button */}
-            <button title={lang==="en"?"Sync with Sheets":"סנכרן עם Sheets"} onClick={()=>doSync()} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",borderRadius:5,padding:"0 9px",height:26,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap"}}>
-              ⇄ {lang==="en"?"Sync":"סנכרן"}
+            <button title={lang==="en"?"Sync with Sheets":"סנכרן עם Sheets"} onClick={()=>doSync()} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:5,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
+              {syncStatus==="syncing"
+                ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
+                :<span style={{fontSize:13,lineHeight:1}}>⇄</span>}
+              {syncStatus==="syncing"?(lang==="en"?"Syncing…":"מסנכרן…"):lang==="en"?"Sync":"סנכרן"}
             </button>
 
             {/* Open Sheets link */}
@@ -2580,6 +2587,9 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
   const [selTemplate, setSelTemplate] = React.useState("invitation");
   const [recipientFilter, setRecipientFilter] = React.useState("auto");
   const [manualSel, setManualSel] = React.useState(new Set());
+  const [manualSearch, setManualSearch] = React.useState("");
+  const [editedBodies, setEditedBodies] = React.useState({}); // key: template key, value: {subject,body}
+  const [editedSubjects, setEditedSubjects] = React.useState({});
 
   const tmpl = TEMPLATES.find(t=>t.key===selTemplate)||TEMPLATES[0];
   const autoRecipients = participants.filter(tmpl.filter);
@@ -2587,7 +2597,7 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
     : recipientFilter==="all" ? participants
     : [...manualSel].map(id=>participants.find(p=>p.id===id)).filter(Boolean);
 
-  const getEmail = (p) => {
+  const getBaseEmail = (p) => {
     if(selTemplate==="locPrefAsk") return buildLocPrefEmail(p,lang,locations,settings);
     if(selTemplate==="thankYou") {
       const subj = lang==="en"?`Thank you for your participation — ${settings.experimentName}`:`תודה על השתתפותך — ${settings.experimentName}`;
@@ -2596,6 +2606,24 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
     }
     return buildEmail(p,selTemplate);
   };
+
+  // Get base template (using first recipient as placeholder)
+  const base = getBaseEmail(allRecipients[0]||participants[0]||{name:"[שם]",assigned:{day:"א",slot:"בוקר (08:00-12:00)"},id:0});
+  const currentSubject = editedSubjects[selTemplate] !== undefined ? editedSubjects[selTemplate] : base.subject;
+  const currentBody    = editedBodies[selTemplate]   !== undefined ? editedBodies[selTemplate]   : base.body;
+
+  const getEmail = (p) => {
+    // Replace first recipient placeholder name with actual name
+    const firstName = (allRecipients[0]||{}).name||"";
+    const pName = p.name||"";
+    const subject = currentSubject.replace(firstName, pName);
+    const body    = currentBody   .replace(new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'), pName);
+    return {subject, body};
+  };
+
+  const filteredManual = participants.filter(p=>
+    !manualSearch || p.name.toLowerCase().includes(manualSearch.toLowerCase()) || (p.email||"").toLowerCase().includes(manualSearch.toLowerCase())
+  ).sort((a,b)=>a.name.localeCompare(b.name,"he"));
 
   const inputStyle={padding:"6px 10px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text};
 
@@ -2656,16 +2684,34 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
 
           {/* Manual selection */}
           {recipientFilter==="manual"&&(
-            <div style={{marginBottom:12,padding:"8px 10px",background:T.tablehead,borderRadius:8,border:`1px solid ${T.border}`,maxHeight:120,overflowY:"auto"}}>
-              {participants.map(p=>(
-                <label key={p.id} style={{display:"flex",alignItems:"center",gap:7,padding:"3px 0",cursor:"pointer",fontSize:12}}>
-                  <input type="checkbox" checked={manualSel.has(p.id)} onChange={e=>{
-                    setManualSel(prev=>{const next=new Set(prev);e.target.checked?next.add(p.id):next.delete(p.id);return next;});
-                  }} style={{accentColor:tmpl.color}}/>
-                  <span style={{color:T.text}}>{p.name}</span>
-                  <span style={{color:T.textFaint,fontSize:10}}>{p.email||"—"}</span>
-                </label>
-              ))}
+            <div style={{marginBottom:12,background:T.tablehead,borderRadius:8,border:`1px solid ${T.border}`,overflow:"hidden"}}>
+              {/* Search */}
+              <div style={{padding:"8px 10px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:12,color:T.textFaint}}>🔍</span>
+                <input value={manualSearch} onChange={e=>setManualSearch(e.target.value)} placeholder={lang==="en"?"Search by name or email":"חיפוש לפי שם / אימייל"}
+                  style={{flex:1,border:"none",background:"transparent",fontSize:12,fontFamily:"inherit",color:T.text,outline:"none"}}/>
+                {manualSearch&&<button onClick={()=>setManualSearch("")} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:13}}>×</button>}
+                <span style={{fontSize:10,color:T.textFaint,whiteSpace:"nowrap"}}>{manualSel.size} {lang==="en"?"selected":"נבחרו"}</span>
+              </div>
+              {/* List */}
+              <div style={{maxHeight:220,overflowY:"auto",padding:"4px 0"}}>
+                {filteredManual.map(p=>(
+                  <label key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",cursor:"pointer",background:manualSel.has(p.id)?(darkMode?tmpl.color+"22":tmpl.color+"10"):"transparent",transition:"background .1s"}}>
+                    <input type="checkbox" checked={manualSel.has(p.id)} onChange={e=>{
+                      setManualSel(prev=>{const next=new Set(prev);e.target.checked?next.add(p.id):next.delete(p.id);return next;});
+                    }} style={{accentColor:tmpl.color}}/>
+                    <span style={{color:T.text,fontWeight:manualSel.has(p.id)?700:400,fontSize:12}}>{p.name}</span>
+                    <span style={{color:T.textFaint,fontSize:10,marginRight:"auto"}}>{p.email||"—"}</span>
+                    <span style={{fontSize:10,color:T.textFaint}}>{p.status}</span>
+                  </label>
+                ))}
+                {filteredManual.length===0&&<p style={{padding:"12px",textAlign:"center",color:T.textFaint,fontSize:12}}>אין תוצאות</p>}
+              </div>
+              {/* Select all filtered */}
+              <div style={{padding:"6px 10px",borderTop:`1px solid ${T.border}`,display:"flex",gap:8}}>
+                <button onClick={()=>setManualSel(prev=>{const next=new Set(prev);filteredManual.forEach(p=>next.add(p.id));return next;})} style={{fontSize:10,color:tmpl.color,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>✓ {lang==="en"?"Select all":"סמן הכל"}</button>
+                <button onClick={()=>setManualSel(prev=>{const next=new Set(prev);filteredManual.forEach(p=>next.delete(p.id));return next;})} style={{fontSize:10,color:T.textMuted,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>✕ {lang==="en"?"Clear":"נקה"}</button>
+              </div>
             </div>
           )}
 
@@ -2681,17 +2727,24 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
           )}
           {allRecipients.length===0&&<p style={{fontSize:12,color:T.textFaint,margin:"0 0 12px"}}>— {lang==="en"?"No matching recipients":"אין נמענים מתאימים"}</p>}
 
-          {/* Preview of first email */}
-          {allRecipients.length>0&&(()=>{
-            const preview = getEmail(allRecipients[0]);
-            return(
-              <div style={{background:T.tablehead,borderRadius:9,padding:12,marginBottom:12,border:`1px solid ${T.border}`}}>
-                <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:T.textFaint,textTransform:"uppercase",letterSpacing:1}}>{lang==="en"?"Preview (first recipient)":"תצוגה מקדימה (נמען ראשון)"}</p>
-                <p style={{margin:"0 0 6px",fontSize:12,fontWeight:700,color:T.text}}>{preview.subject}</p>
-                <pre style={{margin:0,fontSize:11,color:T.textMuted,whiteSpace:"pre-wrap",fontFamily:"inherit",maxHeight:100,overflowY:"auto"}}>{preview.body}</pre>
-              </div>
-            );
-          })()}
+          {/* Editable template */}
+          <div style={{background:T.tablehead,borderRadius:9,padding:12,marginBottom:12,border:`1px solid ${T.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <p style={{margin:0,fontSize:10,fontWeight:700,color:T.textFaint,textTransform:"uppercase",letterSpacing:1}}>
+                {lang==="en"?"Edit template (changes apply to all sends)":"ערוך תבנית — הנוסח ישמר לשליחות"}
+              </p>
+              <button onClick={()=>{
+                setEditedBodies(prev=>({...prev,[selTemplate]:undefined}));
+                setEditedSubjects(prev=>({...prev,[selTemplate]:undefined}));
+              }} style={{background:"none",border:"none",fontSize:10,color:T.textFaint,cursor:"pointer",fontFamily:"inherit"}}>↺ {lang==="en"?"Reset":"אפס"}</button>
+            </div>
+            <input value={currentSubject} onChange={e=>setEditedSubjects(prev=>({...prev,[selTemplate]:e.target.value}))}
+              style={{width:"100%",padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",marginBottom:6,fontWeight:700}}
+              placeholder={lang==="en"?"Subject":"נושא"}/>
+            <textarea value={currentBody} onChange={e=>setEditedBodies(prev=>({...prev,[selTemplate]:e.target.value}))}
+              rows={6} style={{width:"100%",padding:"6px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",resize:"vertical",lineHeight:1.5}}/>
+            {allRecipients.length>0&&<p style={{margin:"4px 0 0",fontSize:10,color:T.textFaint}}>{lang==="en"?"Tip: first recipient's name will be replaced for each send":"שם הנמען הראשון יוחלף לכל נמען בשליחה"}</p>}
+          </div>
 
           {/* Send button */}
           <button disabled={allRecipients.filter(p=>p.email).length===0} onClick={()=>{
@@ -3010,12 +3063,33 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose}) 
           <h3 style={{margin:0,fontSize:15,color:T.text}}>{p.id?L("editParticipant"):L("addParticipant")}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
         </div>
-        {/* Survey metadata row */}
-        {(p.surveyDate||p.locPrefText) && <div style={{background:T.tablehead,borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:11,color:T.textMuted,display:"flex",flexWrap:"wrap",gap:12}}>
-          {p.surveyDate&&<span>📅 {lang==="en"?"Survey filled:":"שאלון מולא:"} <strong style={{color:T.text}}>{new Date(p.surveyDate).toLocaleDateString(lang==="en"?"en-GB":"he-IL")}</strong></span>}
-          {p.locPrefText&&<span>📍 {lang==="en"?"Location pref (form):":"העדפת מיקום (שאלון):"} <strong style={{color:T.text}}>{p.locPrefText}</strong></span>}
-        </div>}
-        {p.visionNote&&<div style={{background:darkMode?"#2d2a1a":"#FFFBEB",border:"1px solid #FDE68A",borderRadius:8,padding:"6px 12px",marginBottom:12,fontSize:11,color:"#92400E"}}>👁 {p.visionNote}</div>}
+        {/* Survey data card */}
+        {(p.surveyDate||p.locPrefText||p.eligible||p.licenseQ||p.hebrewRead||p.visionNote)&&(
+          <div style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:9,padding:"10px 14px",marginBottom:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <span style={{fontSize:11,fontWeight:800,color:T.textMuted,textTransform:"uppercase",letterSpacing:1}}>📋 {lang==="en"?"Survey answers":"תשובות שאלון"}</span>
+              {p.surveyDate&&<span style={{fontSize:10,color:T.textFaint,marginRight:"auto"}}>({new Date(p.surveyDate).toLocaleDateString(lang==="en"?"en-GB":"he-IL")})</span>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
+              {[
+                {q:"גיל 18+",  v:p.eligible  ||"—"},
+                {q:"רישיון נהיגה", v:p.licenseQ||"—"},
+                {q:"קריאה בעברית",  v:p.hebrewRead||"—"},
+                {q:"העדפת מיקום",  v:p.locPrefText||"—"},
+              ].map(row=>(
+                <div key={row.q} style={{background:T.surface,borderRadius:6,padding:"5px 8px"}}>
+                  <div style={{color:T.textFaint,fontSize:10,marginBottom:2}}>{row.q}</div>
+                  <div style={{color:T.text,fontWeight:600}}>{row.v}</div>
+                </div>
+              ))}
+            </div>
+            {p.visionNote&&(
+              <div style={{marginTop:8,padding:"6px 8px",background:darkMode?"#2d2a1a":"#FFFBEB",borderRadius:6,fontSize:11,color:darkMode?"#fde68a":"#92400E"}}>
+                <span style={{fontWeight:700}}>👁 הצהרת ראייה: </span>{p.visionNote}
+              </div>
+            )}
+          </div>
+        )}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
           {[{k:"name",l:L("fieldName")},{k:"email",l:L("fieldEmail")},{k:"phone",l:L("fieldPhone")},{k:"age",l:L("fieldAge")}].map(f=>(
             <div key={f.k}>
