@@ -1695,22 +1695,19 @@ function App() {
                       const ageOpts=[...new Set(participants.map(p=>String(p.age||"")).filter(Boolean))].sort((a,b)=>parseInt(a)-parseInt(b)).map(v=>({v,l:v}));
                       const availOpts=[...new Set(participants.flatMap(p=>Object.entries(p.availability||{}).filter(([,s])=>s.length>0).map(([d,])=>`יום ${dayNames[d]||d}`)))].sort().map(v=>({v:v.replace("יום ",""),l:v}));
                       return (<>
-                        <ExcelTh col="surveyDate" label={lang==="en"?"Survey Date":"תאריך שאלון"} fkey="surveyDate" options={[]}/>
-                      <ExcelTh col="age"     label={L("colAge")}         fkey="age"     options={ageOpts}/>
-                        <ExcelTh col="gender"  label={L("colGender")}        fkey="gender"  options={genderOpts}/>
-                        {(()=>{
-                          const availDayOpts = DAYS.map(d=>({v:d, l:lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:d}));
-                          return <ExcelTh col="avail" label={L("colAvail")} fkey="avail" options={availDayOpts}/>;
-                        })()}
-                        <ExcelTh col="assigned_day"  label={L("colDay")}   fkey="day"     options={dayOpts}/>
-                        <ExcelTh col="assigned_slot" label={L("colSlot")} fkey="slot"    options={slotOpts}/>
+                        <ExcelTh col="surveyDate" label={lang==="en"?"Survey":"שאלון"} fkey="surveyDate" options={[]}/>
+                        <ExcelTh col="age"     label={L("colAge")}    fkey="age"     options={ageOpts}/>
+                        <ExcelTh col="gender"  label={L("colGender")} fkey="gender"  options={genderOpts}/>
+                        <ExcelTh col="avail"   label={L("colAvail")}  fkey="avail"   options={DAYS.map(d=>({v:d,l:lang==="en"?["Su","Mo","Tu","We","Th","Fr"]["אבגדהו".indexOf(d)]||d:d}))}/>
+                        <ExcelTh col="assigned_day"  label={L("colDay")}      fkey="day"      options={dayOpts}/>
+                        <ExcelTh col="assigned_slot" label={L("colSlot")}     fkey="slot"     options={slotOpts}/>
                         <ExcelTh col="assigned_loc"  label={L("colLocation")} fkey="location" options={locOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colRoom")}</th>
-                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap",minWidth:90}}>{lang==="en"?"Time":"שעה"}</th>
-                        <ExcelTh col="status"  label={L("colStatus")}       fkey="status"  options={statusOpts}/>
-                        <ExcelTh col="locPref" label={L("colLocPref")} fkey="locPref" options={locPrefOpts}/>
-                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colNotes")}</th>
-                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colActions")}</th>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{lang==="en"?"Time":"שעה"}</th>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{lang==="en"?"Exp. Date":"תאריך ניסוי"}</th>
+                        <ExcelTh col="status"  label={L("colStatus")} fkey="status"  options={statusOpts}/>
+                        <ExcelTh col="locPref" label={L("colLocPref")}fkey="locPref" options={locPrefOpts}/>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>⋮</th>
                       </>);
                     })()}
                   </tr>
@@ -1738,25 +1735,25 @@ function App() {
                           {p.gender&&<span style={{fontSize:11,color:T.textMuted}}>{p.gender==="גבר"?L("genderM"):p.gender==="אישה"?L("genderF"):p.gender}</span>}
                         </td>
                         {/* Availability — all days, 2 dots: morning=blue, afternoon=orange */}
-                        <td style={{padding:"4px 6px",minWidth:100}}>
-                          <div style={{display:"flex",gap:3,flexWrap:"nowrap"}}>
+                        <td style={{padding:"4px 6px",minWidth:90}}>
+                          <div style={{display:"flex",gap:4,justifyContent:"space-between",width:"100%"}}>
                             {DAYS.map(d=>{
                               const slots=p.availability[d]||[];
                               const hasMorn=slots.some(s=>s.includes("בוקר"));
                               const hasAft=slots.some(s=>s.includes("צהריים"));
                               const dayLabel=lang==="en"?["Su","Mo","Tu","We","Th","Fr"]["אבגדהו".indexOf(d)]||d:d;
                               return(
-                                <div key={d} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
-                                  <span style={{fontSize:7,color:T.textFaint,fontWeight:600,lineHeight:1}}>{dayLabel}</span>
+                                <div key={d} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
+                                  <span style={{fontSize:8,color:T.textFaint,fontWeight:600,lineHeight:1,letterSpacing:1}}>{dayLabel}</span>
                                   <span title={lang==="en"?"Morning":"בוקר"} style={{
-                                    width:6,height:6,borderRadius:1,display:"block",
+                                    width:"100%",height:5,borderRadius:2,display:"block",
                                     background:hasMorn?"#3B82F6":T.border,
-                                    opacity:hasMorn?1:0.25
+                                    opacity:hasMorn?1:0.2
                                   }}/>
                                   <span title={lang==="en"?"Afternoon":"צהריים"} style={{
-                                    width:6,height:6,borderRadius:1,display:"block",
+                                    width:"100%",height:5,borderRadius:2,display:"block",
                                     background:hasAft?"#F97316":T.border,
-                                    opacity:hasAft?1:0.25
+                                    opacity:hasAft?1:0.2
                                   }}/>
                                 </div>
                               );
@@ -1787,7 +1784,7 @@ function App() {
                           <select value={p.assigned?.locationId||""} disabled={!p.assigned} onChange={e=>{
                             const locId=parseInt(e.target.value)||null;
                             updP(p.id,{assigned:{...p.assigned,locationId:locId,room:locById[locId]?.rooms[0]||""}});
-                          }} style={{padding:"3px 4px",border:`1px solid ${lc?.border||T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:lc?.bg||T.tablehead,color:lc?.text||T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:60,opacity:p.assigned?1:0.5}}>
+                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:p.assigned?"pointer":"default",minWidth:60,opacity:p.assigned?1:0.5}}>
                             <option value="">— מיקום —</option>
                             {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
                           </select>
@@ -1823,7 +1820,7 @@ function App() {
                         {/* Experiment Date */}
                         <td style={{padding:"4px 5px"}}>
                           <input type="date" value={p.expDate||""} onChange={e=>updP(p.id,{expDate:e.target.value})}
-                            style={{padding:"2px 4px",border:`1px solid ${p.expDate?T.accent:T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:p.expDate?(darkMode?"#1e2a3a":T.rowSel):T.inputBg,color:p.expDate?T.accent:T.textFaint,cursor:"pointer",width:110}}/>
+                            style={{padding:"2px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:110}}/>
                         </td>
                         {/* Status */}
                         <td style={{padding:"4px 5px"}}>
@@ -1858,19 +1855,17 @@ function App() {
                             })}
                           </div>
                         </td>
-                        {/* Notes */}
+                        {/* 3-dot menu button — orange dot if notes exist */}
                         <td style={{padding:"4px 5px"}}>
-                          <input value={p.notes||""} onChange={e=>updP(p.id,{notes:e.target.value})} placeholder="הערות…"
-                            style={{padding:"3px 7px",border:`1px solid ${p.notes?(darkMode?"#854d0e":"#FDE68A"):T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:100,background:p.notes?(darkMode?"#292310":"#FFFBEB"):T.inputBg,color:T.text}}/>
-                        </td>
-                        {/* 3-dot menu button */}
-                        <td style={{padding:"4px 5px"}}>
-                          <button onClick={e=>{
-                            e.stopPropagation();
-                            const r=e.currentTarget.getBoundingClientRect();
-                            setRowMenu(rowMenu?.pid===p.id?null:{pid:p.id,x:r.right,y:r.bottom+4,p});
-                            setRowEmailMenu(null);
-                          }} style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:15,color:T.textMuted,fontFamily:"inherit",lineHeight:1}}>⋮</button>
+                          <div style={{position:"relative",display:"inline-block"}}>
+                            <button title={p.notes||undefined} onClick={e=>{
+                              e.stopPropagation();
+                              const r=e.currentTarget.getBoundingClientRect();
+                              setRowMenu(rowMenu?.pid===p.id?null:{pid:p.id,x:r.right,y:r.bottom+4,p});
+                              setRowEmailMenu(null);
+                            }} style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:15,color:T.textMuted,fontFamily:"inherit",lineHeight:1}}>⋮</button>
+                            {p.notes&&<span style={{position:"absolute",top:-3,right:-3,width:7,height:7,borderRadius:"50%",background:"#F97316",border:`1px solid ${T.surface}`,pointerEvents:"none"}}/>}
+                          </div>
                         </td>
                       </tr>
                     );
