@@ -278,7 +278,7 @@ const STATUS_COLORS = {
   pending:   { dot:"#4B6BFB", bg:"#F0F4FF", text:"#4B6BFB", border:"#C7D4FF" },
   assigned:  { dot:"#059669", bg:"#ECFDF5", text:"#059669", border:"#A7F3D0" },
   confirmed: { dot:"#D97706", bg:"#FFF7ED", text:"#D97706", border:"#FDE68A" },
-  completed: { dot:"#6B7280", bg:"#F3F4F6", text:"#374151", border:"#D1D5DB" },
+  completed: { dot:"#059669", bg:"#D1FAE5", text:"#065F46", border:"#34D399" },
   declined:  { dot:"#DC2626", bg:"#FEF2F2", text:"#DC2626", border:"#FECACA" },
 };
 // Static STATUS_META (Hebrew) used for non-component contexts
@@ -423,6 +423,7 @@ function parseRow(row, id) {
     licenseQ:    license   || "",
     hebrewRead:  hebrewRead|| "",
     visionNote:  visionNote|| "",
+    expDate:     "",
     surveyDate,
     importedAt: Date.now(),
   };
@@ -444,7 +445,7 @@ function exportCSV(rows,filename) {
 const emptyP = () => ({
   id:null,name:"",email:"",phone:"",age:"",gender:"",
   availability:{א:[],ב:[],ג:[],ד:[],ה:[],ו:[]},
-  assigned:null,startTime:"",status:"pending",notes:"",importedAt:Date.now()
+  assigned:null,startTime:"",expDate:"",status:"pending",notes:"",importedAt:Date.now()
 });
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
@@ -556,7 +557,8 @@ function App() {
   const [sortDir,setSortDir]     = useState("asc");
   const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[]});
   const [colMenu,setColMenu]       = useState(null); // {col, x, y}
-  const [rowEmailMenu,setRowEmailMenu] = useState(null); // {pid, x, y}
+  const [rowEmailMenu,setRowEmailMenu] = useState(null);
+  const [rowMenu,setRowMenu] = useState(null); // {pid, x, y, p} // {pid, x, y}
   const [emailModal,setEmailModal] = useState(null);
   const [toast,setToast]           = useState(null);
   const [dupModal,setDupModal]     = useState(null);
@@ -633,6 +635,7 @@ function App() {
             // Local ALWAYS wins for assignment data
             assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
             startTime:     lp.startTime || rp.startTime || "",
+            expDate:       lp.expDate  || rp.expDate  || "",
             status:        lp.assigned  ? lp.status : (rp.assigned ? rp.status : lp.status),
             notes:         lp.notes || rp.notes || "",
           };
@@ -714,6 +717,7 @@ function App() {
                 // Local ALWAYS wins for assignment data
                 assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
                 startTime:     lp.startTime || rp.startTime || "",
+            expDate:       lp.expDate  || rp.expDate  || "",
                 status:        lp.assigned  ? lp.status : (rp.assigned ? rp.status : lp.status),
                 notes:         lp.notes || rp.notes || "",
               };
@@ -1024,8 +1028,69 @@ function App() {
   // ── Gmail OAuth (mailto fallback in artifact) ──────────────────────────────
   function sendViaGmail(subject,body,to) {
     // In an artifact we cannot use OAuth directly — we open Gmail compose with prefill
-    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,"_blank");
+    const rtlBody = lang!=="en" ? "\u200F" + body : body;
+    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(rtlBody)}`,"_blank");
     addLog("מייל",`נשלח מייל ל: ${to}`);
+  }
+
+  function openGoogleCalendar(p) {
+    const loc = locById[p.assigned?.locationId];
+    const room = p.assigned?.room ? ` — ${p.assigned.room}` : "";
+    // Build date/time: use expDate if set, otherwise weekDates based on assigned day
+    let dateStr = "";
+    if(p.expDate) {
+      dateStr = p.expDate.replace(/-/g,"");
+    } else {
+      const dayIdx = ["א","ב","ג","ד","ה","ו"].indexOf(p.assigned?.day||"");
+      if(dayIdx>=0 && weekDates[dayIdx]) {
+        const d = weekDates[dayIdx];
+        dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+      }
+    }
+    const startHour = (p.startTime || (p.assigned?.slot?.includes("בוקר")?"08:00":"12:00")).replace(":","");
+    const endHourNum = parseInt(startHour.slice(0,2)) + 1;
+    const endHour = `${String(endHourNum).padStart(2,"0")}${startHour.slice(2)}`;
+    const dates = dateStr ? `${dateStr}T${startHour}00/${dateStr}T${endHour}00` : "";
+    const details = [
+      `שם: ${p.name}`,
+      p.phone ? `טלפון: ${p.phone}` : "",
+      p.email ? `מייל: ${p.email}` : "",
+      p.age ? `גיל: ${p.age}` : "",
+      p.assigned?.slot ? `משמרת: ${p.assigned.slot.includes("בוקר")?"בוקר":"צהריים"}` : "",
+      loc ? `מיקום: ${loc.name}${room}` : "",
+      p.notes ? `הערות: ${p.notes}` : "",
+    ].filter(Boolean).join("\n");
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE`
+      + `&text=${encodeURIComponent(settings.experimentName + " — " + p.name)}`
+      + (dates ? `&dates=${dates}` : "")
+      + `&details=${encodeURIComponent(details)}`
+      + (loc ? `&location=${encodeURIComponent(loc.name + room)}` : "");
+    window.open(url, "_blank");
+  }
+
+  function buildInviteWithRSVP(p) {
+    const loc = locById[p.assigned?.locationId];
+    const room = p.assigned?.room ? ` — ${p.assigned.room}` : "";
+    const dayStr = dayNames[p.assigned?.day]||"";
+    const slot = p.assigned?.slot?.includes("בוקר") ? L("slotMorning") : L("slotAfternoon");
+    const timeStr = p.startTime ? `🕐 שעת התחלה: ${p.startTime}` : "";
+    const dateStr = p.expDate ? `📅 תאריך: ${new Date(p.expDate+"T12:00").toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long"})}` : `📅 יום: ${dayStr}`;
+    // ICS calendar link for participant
+    let icsText = "";
+    if(p.expDate) {
+      const d = p.expDate.replace(/-/g,"");
+      const sh = (p.startTime||"08:00").replace(":","");
+      const eh = String(parseInt(sh.slice(0,2))+1).padStart(2,"0") + sh.slice(2);
+      icsText = `\n\n📆 הוסף ליומן: https://calendar.google.com/calendar/render?action=TEMPLATE`
+        + `&text=${encodeURIComponent(settings.experimentName)}`
+        + `&dates=${d}T${sh}00/${d}T${eh}00`
+        + (loc ? `&location=${encodeURIComponent(loc.name+room)}` : "")
+        + `&details=${encodeURIComponent("ניסוי: "+settings.experimentName)}`;
+    }
+    const body = lang==="en"
+      ? `Hello ${p.name},\n\nYou are invited to participate in "${settings.experimentName}".\n\n${dateStr}\n⏰ Shift: ${slot}\n${timeStr}${loc?"\n📍 Location: "+loc.name+room:""}\n⏱ Duration: ${settings.duration}\n${icsText}\n\n✅ Confirm attendance: Reply YES\n❌ Cannot attend: Reply NO\n\nBest,\n${settings.currentUser}`
+      : `שלום ${p.name},\n\nאנחנו שמחים להזמין אותך להשתתף בניסוי "${settings.experimentName}"!\n\n${dateStr}\n⏰ משמרת: ${slot}\n${timeStr}${loc?"\n📍 מיקום: "+loc.name+room:""}\n⏱ משך: ${settings.duration}\n${icsText}\n\n✅ אישור הגעה: ענה/י כן\n❌ לא יכול/ה להגיע: ענה/י לא\n\nבברכה,\n${settings.currentUser}`;
+    return {subject: lang==="en"?`Invitation — ${settings.experimentName}`:`הזמנה — ${settings.experimentName}`, body};
   }
 
   // ── Calendar ───────────────────────────────────────────────────────────────
@@ -1043,7 +1108,7 @@ function App() {
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div data-dark={darkMode?"true":"false"} dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setColMenu(null);setNotifOpen(false);}}>
+    <div data-dark={darkMode?"true":"false"} dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setRowMenu(null);setColMenu(null);setNotifOpen(false);}}>
 
 
       {/* ── Header ── */}
@@ -1755,6 +1820,11 @@ function App() {
                           })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
                         </td>
 
+                        {/* Experiment Date */}
+                        <td style={{padding:"4px 5px"}}>
+                          <input type="date" value={p.expDate||""} onChange={e=>updP(p.id,{expDate:e.target.value})}
+                            style={{padding:"2px 4px",border:`1px solid ${p.expDate?T.accent:T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:p.expDate?(darkMode?"#1e2a3a":T.rowSel):T.inputBg,color:p.expDate?T.accent:T.textFaint,cursor:"pointer",width:110}}/>
+                        </td>
                         {/* Status */}
                         <td style={{padding:"4px 5px"}}>
                           <select value={p.status} onChange={e=>updP(p.id,{status:e.target.value},`סטטוס ${p.name}: ${statusMeta[e.target.value].label}`)}
@@ -1793,35 +1863,14 @@ function App() {
                           <input value={p.notes||""} onChange={e=>updP(p.id,{notes:e.target.value})} placeholder="הערות…"
                             style={{padding:"3px 7px",border:`1px solid ${p.notes?(darkMode?"#854d0e":"#FDE68A"):T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:100,background:p.notes?(darkMode?"#292310":"#FFFBEB"):T.inputBg,color:T.text}}/>
                         </td>
-                        {/* Actions */}
+                        {/* 3-dot menu button */}
                         <td style={{padding:"4px 5px"}}>
-                          <div style={{display:"flex",gap:3}}>
-                            {isEditor&&<button title={lang==="en"?"Details":"פרטים"} onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>{lang==="en"?"🔍":"פרטים"}</button>}
-                            {p.email&&(
-                              <button title={lang==="en"?"Send email":"שלח מייל"} onClick={e=>{
-                                e.stopPropagation();
-                                const r=e.currentTarget.getBoundingClientRect();
-                                setRowEmailMenu(rowEmailMenu?.pid===p.id?null:{pid:p.id,x:r.left,right:window.innerWidth-r.right,y:r.bottom+4,p});
-                              }} style={{background:T.tablehead,color:T.accent,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>
-                                ✉️
-                              </button>
-                            )}
-                            {p.assigned&&isEditor&&<button title="נקה שיבוץ" onClick={()=>clearA(p.id)} style={{background:"#FEF2F2",color:"#9CA3AF",border:"none",padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>✕</button>}
-                            <button title="מחק" onClick={()=>{
-  if(isViewer) return;
-  if(isAdmin){
-    if(window.confirm(`${lang==="en"?"Delete":"למחוק"} ${p.name}?`)){
-      setParticipantsUndo(prev=>prev.filter(x=>x.id!==p.id),`${lang==="en"?"Delete":"מחק"}: ${p.name}`);
-      addLog("מחיקה",`נמחק: ${p.name}`);
-    }
-  } else {
-    // Editor: request approval
-    setPendingDeletes(prev=>[...prev.filter(x=>x.id!==p.id),{id:p.id,name:p.name,requestedBy:userName||"editor",requestedAt:Date.now()}]);
-    addNotif({id:"del-req-"+p.id,type:"warning",msg:`🗑 ${lang==="en"?"Delete request:":"בקשת מחיקה:"} ${p.name} (${lang==="en"?"by":"מאת"}: ${userName||"editor"})`,p,actions:["approve-delete","reject-delete"]});
-    showToast(lang==="en"?"Delete request sent to admin":"בקשת מחיקה נשלחה למנהל");
-  }
-}} style={{background:T.tablehead,color:T.textFaint,border:`1px solid ${T.border}`,padding:"3px 6px",borderRadius:4,fontSize:11,cursor:"pointer"}}>🗑</button>
-                          </div>
+                          <button onClick={e=>{
+                            e.stopPropagation();
+                            const r=e.currentTarget.getBoundingClientRect();
+                            setRowMenu(rowMenu?.pid===p.id?null:{pid:p.id,x:r.right,y:r.bottom+4,p});
+                            setRowEmailMenu(null);
+                          }} style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:15,color:T.textMuted,fontFamily:"inherit",lineHeight:1}}>⋮</button>
                         </td>
                       </tr>
                     );
@@ -2428,6 +2477,64 @@ function App() {
 
       {/* Toast */}
       {/* Per-row email dropdown */}
+      {/* Row 3-dot context menu */}
+      {rowMenu&&(
+        <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setRowMenu(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",left:Math.max(10,Math.min(rowMenu.x-200,window.innerWidth-220)),top:Math.min(rowMenu.y,window.innerHeight-320),background:T.surface,border:`1px solid ${T.border}`,borderRadius:11,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",zIndex:1500,minWidth:210,overflow:"hidden"}}>
+            {(()=>{const p=participants.find(x=>x.id===rowMenu.pid)||rowMenu.p; return(<>
+              <div style={{padding:"10px 14px",borderBottom:`1px solid ${T.border}`,fontSize:12,fontWeight:800,color:T.text}}>{p.name}</div>
+              {/* פרטים */}
+              <button onClick={()=>{setRowMenu(null);setEditP({...p});setModal("addEdit");}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
+                🔍 {lang==="en"?"Details":"פרטים"}
+              </button>
+              {/* שלח מייל */}
+              {p.email&&<button onClick={()=>{setRowMenu(null);setFreeMailModal({recipients:[p]});}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
+                ✉️ {lang==="en"?"Send email":"שלח מייל"}
+              </button>}
+              {/* מייל זימון עם RSVP */}
+              {p.email&&p.assigned&&<button onClick={()=>{
+                setRowMenu(null);
+                const e=buildInviteWithRSVP(p);
+                sendViaGmail(e.subject,e.body,p.email);
+              }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#4338CA"}}>
+                📨 {lang==="en"?"Invite + RSVP":"הזמנה + RSVP"}
+              </button>}
+              {/* צור אירוע ביומן */}
+              {p.assigned&&<button onClick={()=>{
+                setRowMenu(null);
+                if(!p.expDate){
+                  const d=window.prompt(lang==="en"?"Enter experiment date (YYYY-MM-DD):":"הזן תאריך ניסוי (YYYY-MM-DD):",new Date().toISOString().slice(0,10));
+                  if(d){updP(p.id,{expDate:d});setTimeout(()=>openGoogleCalendar({...p,expDate:d}),100);}
+                } else {
+                  openGoogleCalendar(p);
+                }
+              }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#059669"}}>
+                📅 {lang==="en"?"Add to Google Calendar":"צור אירוע ביומן גוגל"}
+              </button>}
+              {/* נקה שיבוץ */}
+              {p.assigned&&isEditor&&<button onClick={()=>{setRowMenu(null);clearA(p.id);}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#D97706"}}>
+                ✕ {lang==="en"?"Clear assignment":"נקה שיבוץ"}
+              </button>}
+              {/* מחק */}
+              {!isViewer&&<button onClick={()=>{
+                setRowMenu(null);
+                if(isAdmin){
+                  if(window.confirm(`${lang==="en"?"Delete":"למחוק"} ${p.name}?`)){
+                    setParticipantsUndo(prev=>prev.filter(x=>x.id!==p.id),`מחק: ${p.name}`);
+                    addLog("מחיקה",`נמחק: ${p.name}`);
+                  }
+                } else {
+                  setPendingDeletes(prev=>[...prev.filter(x=>x.id!==p.id),{id:p.id,name:p.name,requestedBy:userName||"editor",requestedAt:Date.now()}]);
+                  addNotif({id:"del-req-"+p.id,type:"warning",msg:`🗑 בקשת מחיקה: ${p.name}`,p,actions:["approve-delete","reject-delete"]});
+                  showToast(lang==="en"?"Delete request sent to admin":"בקשת מחיקה נשלחה למנהל");
+                }
+              }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:darkMode?"#2d1a1a":"#FEF2F2",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#DC2626"}}>
+                🗑 {lang==="en"?"Delete":"מחק"}
+              </button>}
+            </>);})()} 
+          </div>
+        </div>
+      )}
       {rowEmailMenu&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setRowEmailMenu(null)}/>
@@ -2599,8 +2706,13 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
   const [recipientFilter, setRecipientFilter] = React.useState("auto");
   const [manualSel, setManualSel] = React.useState(new Set());
   const [manualSearch, setManualSearch] = React.useState("");
-  const [editedBodies, setEditedBodies] = React.useState({}); // key: template key, value: {subject,body}
-  const [editedSubjects, setEditedSubjects] = React.useState({});
+  const TMPL_KEYS = ["invitation","reminder","locPrefAsk","thankYou","noAvailability","confirmation"];
+  const [editedBodies, setEditedBodies] = React.useState(()=>{
+    const s={};try{TMPL_KEYS.forEach(k=>{const v=localStorage.getItem("emailTmpl_"+k);if(v){const p=JSON.parse(v);s[k]=p.body;}});}catch{}return s;
+  });
+  const [editedSubjects, setEditedSubjects] = React.useState(()=>{
+    const s={};try{TMPL_KEYS.forEach(k=>{const v=localStorage.getItem("emailTmpl_"+k);if(v){const p=JSON.parse(v);s[k]=p.subject;}});}catch{}return s;
+  });
 
   const tmpl = TEMPLATES.find(t=>t.key===selTemplate)||TEMPLATES[0];
   const autoRecipients = participants.filter(tmpl.filter);
@@ -2744,10 +2856,17 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
               <p style={{margin:0,fontSize:10,fontWeight:700,color:T.textFaint,textTransform:"uppercase",letterSpacing:1}}>
                 {lang==="en"?"Edit template (changes apply to all sends)":"ערוך תבנית — הנוסח ישמר לשליחות"}
               </p>
-              <button onClick={()=>{
-                setEditedBodies(prev=>({...prev,[selTemplate]:undefined}));
-                setEditedSubjects(prev=>({...prev,[selTemplate]:undefined}));
-              }} style={{background:"none",border:"none",fontSize:10,color:T.textFaint,cursor:"pointer",fontFamily:"inherit"}}>↺ {lang==="en"?"Reset":"אפס"}</button>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>{
+                  try{localStorage.setItem("emailTmpl_"+selTemplate, JSON.stringify({subject:currentSubject,body:currentBody}));}catch{}
+                  showToast&&showToast("✅ " + (lang==="en"?"Template saved":"תבנית נשמרה"));
+                }} style={{background:"none",border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 8px",fontSize:10,color:T.accent,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>💾 {lang==="en"?"Save":"שמור"}</button>
+                <button onClick={()=>{
+                  setEditedBodies(prev=>({...prev,[selTemplate]:undefined}));
+                  setEditedSubjects(prev=>({...prev,[selTemplate]:undefined}));
+                  try{localStorage.removeItem("emailTmpl_"+selTemplate);}catch{}
+                }} style={{background:"none",border:"none",fontSize:10,color:T.textFaint,cursor:"pointer",fontFamily:"inherit"}}>↺ {lang==="en"?"Reset":"אפס"}</button>
+              </div>
             </div>
             <input value={currentSubject} onChange={e=>setEditedSubjects(prev=>({...prev,[selTemplate]:e.target.value}))}
               style={{width:"100%",padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",marginBottom:6,fontWeight:700}}
