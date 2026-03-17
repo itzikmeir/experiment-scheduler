@@ -452,7 +452,11 @@ const emptyP = () => ({
 function App() {
   const saved = loadState();
   const [participants,setParticipants] = useState(()=>saved?.participants||SEED.map((p,i)=>({...p,id:i,assigned:null,status:"pending",notes:"",importedAt:0})));
-  const [locations,setLocations]       = useState(()=>saved?.locations||[{id:1,name:"נמל",rooms:["כיתה א","כיתה ב"]},{id:2,name:"הר",rooms:["חדר 1"]}]);
+  const [locations,setLocations] = useState(()=>{
+    const locs = saved?.locations||[{id:1,name:"נמל",rooms:["כיתה א","כיתה ב"]},{id:2,name:"הר",rooms:["חדר 1"]}];
+    // Migrate old name
+    return locs.map(l=>l.name==="גבעת ברנר"?{...l,name:"ג' ברנר"}:l);
+  });
   const [settings,setSettings]         = useState(()=>saved?.settings||{perSlot:1,maxPerDay:6,totalTarget:30,experimentName:"ניסוי תכנון מסלול נסיעה עם AI",researcherName:"החוקר",duration:"90 דקות",baseDate:new Date().toISOString().split("T")[0],gmailToken:"",currentUser:"חוקר 1"});
   const [changelog,setChangelog]       = useState(()=>saved?.changelog||[]);
   const [darkMode,setDarkMode]         = useState(()=>saved?.darkMode||false);
@@ -1692,7 +1696,7 @@ function App() {
                       const genderOpts=[{v:"גבר",l:L("genderM")},{v:"אישה",l:L("genderF")},{v:"אחר",l:L("genderO")}];
                       const locPrefOpts=locations.map(l=>({v:String(l.id),l:l.name}));
                       const ageOpts=[...new Set(participants.map(p=>String(p.age||"")).filter(Boolean))].sort((a,b)=>parseInt(a)-parseInt(b)).map(v=>({v,l:v}));
-                      const SepTh = ()=><th style={{padding:0,width:4,background:`linear-gradient(to bottom, transparent, ${T.border}, transparent)`,border:"none"}}/>;
+                      const SepTh = ()=><th style={{padding:0,width:1,background:T.border,border:"none",opacity:0.4}}/>;
                       return (<>
                         <ExcelTh col="surveyDate" label={lang==="en"?"Survey":"שאלון"} fkey="surveyDate" options={[]}/>
                         <ExcelTh col="age"     label={L("colAge")}    fkey="age"     options={ageOpts}/>
@@ -1706,6 +1710,7 @@ function App() {
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{lang==="en"?"Time":"שעה"}</th>
                         <ExcelTh col="assigned_loc"  label={L("colLocation")} fkey="location" options={locOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colRoom")}</th>
+                        <SepTh/>
                         <ExcelTh col="status"  label={L("colStatus")} fkey="status"  options={statusOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>⋮</th>
                       </>);
@@ -1735,8 +1740,8 @@ function App() {
                           {p.gender&&<span style={{fontSize:11,color:T.textMuted}}>{p.gender==="גבר"?L("genderM"):p.gender==="אישה"?L("genderF"):p.gender}</span>}
                         </td>
                         {/* Location preference */}
-                        <td style={{padding:"4px 5px",width:120,minWidth:120,maxWidth:120}}>
-                          <div style={{display:"flex",flexWrap:"wrap",gap:2,width:"100%"}}>
+                        <td style={{padding:"2px 3px",width:165,minWidth:165,maxWidth:165}}>
+                          <div style={{display:"flex",flexWrap:"nowrap",gap:2,width:"100%"}}>
                             {locations.slice(0,3).map(loc=>{
                               const pref=p.locPref||[];
                               const on=pref.map(Number).includes(Number(loc.id));
@@ -1749,9 +1754,10 @@ function App() {
                                   background:on?(darkMode?"#4338CA33":"#EEF2FF"):T.tablehead,
                                   color:on?(darkMode?"#a5b4fc":"#4338CA"):T.textFaint,
                                   border:`1px solid ${on?(darkMode?"#4338CA88":"#C7D4FF"):T.border}`,
-                                  borderRadius:4,padding:"2px 5px",fontSize:10,
+                                  borderRadius:4,padding:"1px 4px",fontSize:9,
                                   cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:400,
                                   transition:"all .12s",whiteSpace:"nowrap",
+                                  flex:1,overflow:"hidden",textOverflow:"ellipsis",textAlign:"center",
                                 }}>
                                   {on?"✓ ":""}{loc.name}
                                 </button>
@@ -1786,14 +1792,14 @@ function App() {
                           </div>
                         </td>
                         {/* Visual separator before assignment columns */}
-                        <td style={{padding:0,width:3,background:`linear-gradient(to bottom, transparent 10%, ${T.border} 50%, transparent 90%)`,border:"none",pointerEvents:"none"}}/>
+                        <td style={{padding:0,width:1,background:T.border,border:"none",opacity:0.4,pointerEvents:"none"}}/>
 {/* Experiment Date */}
-                        <td style={{padding:"4px 5px"}}>
+                        <td style={{padding:"2px 2px"}}>
                           <input type="date" value={p.expDate||""} onChange={e=>updP(p.id,{expDate:e.target.value})}
                             style={{padding:"2px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:110}}/>
                         </td>
 {/* Day */}
-                        <td style={{padding:"4px 5px"}}>
+                        <td style={{padding:"2px 2px"}}>
                           <select value={p.assigned?.day||""} onChange={e=>{
                             const day=e.target.value;
                             if(!day){clearA(p.id);return;}
@@ -1805,14 +1811,14 @@ function App() {
                           </select>
                         </td>
 {/* Slot */}
-                        <td style={{padding:"4px 5px"}}>
+                        <td style={{padding:"2px 2px"}}>
                           <select value={p.assigned?.slot||""} disabled={!p.assigned} onChange={e=>updP(p.id,{assigned:{...p.assigned,slot:e.target.value}})}
                             style={{padding:"3px 4px",border:`1px solid ${p.assigned?T.border:T.disabledBorder||T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.disabledBg||T.tablehead,color:p.assigned?T.accent:T.disabledText||T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:90}}>
                             {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</option>)}
                           </select>
                         </td>
 {/* Time */}
-                        <td style={{padding:"4px 5px"}}>
+                        <td style={{padding:"2px 2px"}}>
                           {p.assigned?(()=>{
                             const autoTime=p.assigned.slot?.includes("בוקר")?"08:00":"12:00";
                             return(
@@ -1827,7 +1833,7 @@ function App() {
                           })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
                         </td>
 {/* Location */}
-                        <td style={{padding:"4px 5px"}}>
+                        <td style={{padding:"2px 2px"}}>
                           <select value={p.assigned?.locationId||""} disabled={!p.assigned} onChange={e=>{
                             const locId=parseInt(e.target.value)||null;
                             updP(p.id,{assigned:{...p.assigned,locationId:locId,room:locById[locId]?.rooms[0]||""}});
@@ -1837,7 +1843,7 @@ function App() {
                           </select>
                         </td>
 {/* Room */}
-                        <td style={{padding:"4px 5px"}}>
+                        <td style={{padding:"2px 2px"}}>
                           {p.assigned&&p.assigned.locationId?(()=>{
                             const rms=locById[p.assigned.locationId]?.rooms||[];
                             return rms.length>0
@@ -1848,8 +1854,10 @@ function App() {
                               :<input value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} placeholder="ידני" style={{padding:"3px 5px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:65,background:T.inputBg,color:T.text}}/>;
                           })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
                         </td>
-{/* Status */}
-                        <td style={{padding:"4px 5px"}}>
+                        {/* Sep after Room */}
+                        <td style={{padding:0,width:1,background:T.border,border:"none",opacity:0.4,pointerEvents:"none"}}/>
+                        {/* Status */}
+                        <td style={{padding:"2px 2px"}}>
                           <select value={p.status} onChange={e=>updP(p.id,{status:e.target.value},`סטטוס ${p.name}: ${statusMeta[e.target.value].label}`)}
                             style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
                             {Object.entries(statusMeta).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
