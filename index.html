@@ -631,7 +631,7 @@ function App() {
             hebrewRead:    rp.hebrewRead  || lp.hebrewRead  || "",
             email:         lp.email  || rp.email,
             phone:         lp.phone  || rp.phone,
-            locPref:       lp.locPref?.length ? lp.locPref : (rp.locPref||[]),
+            locPref:       [...new Set([...(lp.locPref||[]),...(rp.locPref||[])].map(Number).filter(n=>!isNaN(n)))].slice(0,locations.length),
             // Local ALWAYS wins for assignment data
             assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
             startTime:     lp.startTime || rp.startTime || "",
@@ -713,7 +713,7 @@ function App() {
                 hebrewRead:    rp.hebrewRead   || lp.hebrewRead   || "",
                 email:         lp.email  || rp.email,
                 phone:         lp.phone  || rp.phone,
-                locPref:       lp.locPref?.length ? lp.locPref : (rp.locPref||[]),
+                locPref:       [...new Set([...(lp.locPref||[]),...(rp.locPref||[])].map(Number).filter(n=>!isNaN(n)))].slice(0,locations.length),
                 // Local ALWAYS wins for assignment data
                 assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
                 startTime:     lp.startTime || rp.startTime || "",
@@ -1659,7 +1659,7 @@ function App() {
                     ))}
                     {(()=>{
                       // Excel-style column header: sort + filter dropdown
-                      const ExcelTh = ({col, label, options, fkey, valFn}) => {
+                      const ExcelTh = ({col, label, options, fkey}) => {
                         const active = (filters[fkey]||[]).length > 0 || sortCol===col;
                         const isOpen = colMenu?.col===col;
                         const selected_vals = filters[fkey]||[];
@@ -1672,7 +1672,6 @@ function App() {
                               <button onClick={e=>{
                                 e.stopPropagation();
                                 const r=e.currentTarget.getBoundingClientRect();
-                                // Use left for LTR, clamp so dropdown doesn't go off-screen right
                                 const dropW=190;
                                 const bestLeft=Math.min(r.left, window.innerWidth-dropW-8);
                                 setColMenu(isOpen?null:{col,fkey,options,left:Math.max(4,bestLeft),y:r.bottom+4});
@@ -1693,20 +1692,21 @@ function App() {
                       const genderOpts=[{v:"גבר",l:L("genderM")},{v:"אישה",l:L("genderF")},{v:"אחר",l:L("genderO")}];
                       const locPrefOpts=locations.map(l=>({v:String(l.id),l:l.name}));
                       const ageOpts=[...new Set(participants.map(p=>String(p.age||"")).filter(Boolean))].sort((a,b)=>parseInt(a)-parseInt(b)).map(v=>({v,l:v}));
-                      const availOpts=[...new Set(participants.flatMap(p=>Object.entries(p.availability||{}).filter(([,s])=>s.length>0).map(([d,])=>`יום ${dayNames[d]||d}`)))].sort().map(v=>({v:v.replace("יום ",""),l:v}));
+                      const SepTh = ()=><th style={{padding:0,width:4,background:`linear-gradient(to bottom, transparent, ${T.border}, transparent)`,border:"none"}}/>;
                       return (<>
                         <ExcelTh col="surveyDate" label={lang==="en"?"Survey":"שאלון"} fkey="surveyDate" options={[]}/>
                         <ExcelTh col="age"     label={L("colAge")}    fkey="age"     options={ageOpts}/>
                         <ExcelTh col="gender"  label={L("colGender")} fkey="gender"  options={genderOpts}/>
+                        <ExcelTh col="locPref" label={L("colLocPref")}fkey="locPref" options={locPrefOpts}/>
                         <ExcelTh col="avail"   label={L("colAvail")}  fkey="avail"   options={DAYS.map(d=>({v:d,l:lang==="en"?["Su","Mo","Tu","We","Th","Fr"]["אבגדהו".indexOf(d)]||d:d}))}/>
+                        <SepTh/>
+                        <ExcelTh col="expDate"       label={lang==="en"?"Exp. Date":"תאריך ניסוי"} fkey="expDate"   options={[]}/>
                         <ExcelTh col="assigned_day"  label={L("colDay")}      fkey="day"      options={dayOpts}/>
                         <ExcelTh col="assigned_slot" label={L("colSlot")}     fkey="slot"     options={slotOpts}/>
+                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{lang==="en"?"Time":"שעה"}</th>
                         <ExcelTh col="assigned_loc"  label={L("colLocation")} fkey="location" options={locOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{L("colRoom")}</th>
-                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{lang==="en"?"Time":"שעה"}</th>
-                        <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>{lang==="en"?"Exp. Date":"תאריך ניסוי"}</th>
                         <ExcelTh col="status"  label={L("colStatus")} fkey="status"  options={statusOpts}/>
-                        <ExcelTh col="locPref" label={L("colLocPref")}fkey="locPref" options={locPrefOpts}/>
                         <th style={{padding:"8px 6px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap"}}>⋮</th>
                       </>);
                     })()}
@@ -1728,13 +1728,38 @@ function App() {
                         <td style={{padding:"4px 6px",fontSize:10,color:T.textFaint,whiteSpace:"nowrap",textAlign:"center"}}>
                           {p.surveyDate?new Date(p.surveyDate).toLocaleDateString(lang==="en"?"en-GB":"he-IL",{day:"2-digit",month:"2-digit"})+(new Date(p.surveyDate).getFullYear()!==new Date().getFullYear()?" "+new Date(p.surveyDate).getFullYear():""):"—"}
                         </td>
-                        {/* Age */}
+{/* Age */}
                         <td style={{padding:"6px 10px",fontSize:12,color:T.textMuted,textAlign:"center"}}>{p.age||"—"}</td>
-                        {/* Gender */}
+{/* Gender */}
                         <td style={{padding:"6px 10px",fontSize:11}}>
                           {p.gender&&<span style={{fontSize:11,color:T.textMuted}}>{p.gender==="גבר"?L("genderM"):p.gender==="אישה"?L("genderF"):p.gender}</span>}
                         </td>
-                        {/* Availability — all days, 2 dots: morning=blue, afternoon=orange */}
+                        {/* Location preference */}
+                        <td style={{padding:"4px 5px",width:120,minWidth:120,maxWidth:120}}>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:2,width:"100%"}}>
+                            {locations.slice(0,3).map(loc=>{
+                              const pref=p.locPref||[];
+                              const on=pref.map(Number).includes(Number(loc.id));
+                              return(
+                                <button key={loc.id} onClick={()=>{
+                                  const cur=(p.locPref||[]).map(Number);
+                                  const next=on?cur.filter(x=>x!==Number(loc.id)):[...new Set([...cur,Number(loc.id)])];
+                                  updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
+                                }} style={{
+                                  background:on?(darkMode?"#4338CA33":"#EEF2FF"):T.tablehead,
+                                  color:on?(darkMode?"#a5b4fc":"#4338CA"):T.textFaint,
+                                  border:`1px solid ${on?(darkMode?"#4338CA88":"#C7D4FF"):T.border}`,
+                                  borderRadius:4,padding:"2px 5px",fontSize:10,
+                                  cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:400,
+                                  transition:"all .12s",whiteSpace:"nowrap",
+                                }}>
+                                  {on?"✓ ":""}{loc.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </td>
+{/* Availability — all days, 2 dots: morning=blue, afternoon=orange */}
                         <td style={{padding:"4px 6px",minWidth:90}}>
                           <div style={{display:"flex",gap:4,justifyContent:"space-between",width:"100%"}}>
                             {DAYS.map(d=>{
@@ -1760,7 +1785,14 @@ function App() {
                             })}
                           </div>
                         </td>
-                        {/* Day */}
+                        {/* Visual separator before assignment columns */}
+                        <td style={{padding:0,width:3,background:`linear-gradient(to bottom, transparent 10%, ${T.border} 50%, transparent 90%)`,border:"none",pointerEvents:"none"}}/>
+{/* Experiment Date */}
+                        <td style={{padding:"4px 5px"}}>
+                          <input type="date" value={p.expDate||""} onChange={e=>updP(p.id,{expDate:e.target.value})}
+                            style={{padding:"2px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:110}}/>
+                        </td>
+{/* Day */}
                         <td style={{padding:"4px 5px"}}>
                           <select value={p.assigned?.day||""} onChange={e=>{
                             const day=e.target.value;
@@ -1772,36 +1804,14 @@ function App() {
                             {DAYS.map(d=><option key={d} value={d}>{p.availability[d]?.length>0?"✓ ":"  "}יום {dayNames[d]}</option>)}
                           </select>
                         </td>
-                        {/* Slot */}
+{/* Slot */}
                         <td style={{padding:"4px 5px"}}>
                           <select value={p.assigned?.slot||""} disabled={!p.assigned} onChange={e=>updP(p.id,{assigned:{...p.assigned,slot:e.target.value}})}
                             style={{padding:"3px 4px",border:`1px solid ${p.assigned?T.border:T.disabledBorder||T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.disabledBg||T.tablehead,color:p.assigned?T.accent:T.disabledText||T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:90}}>
                             {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</option>)}
                           </select>
                         </td>
-                        {/* Location */}
-                        <td style={{padding:"4px 5px"}}>
-                          <select value={p.assigned?.locationId||""} disabled={!p.assigned} onChange={e=>{
-                            const locId=parseInt(e.target.value)||null;
-                            updP(p.id,{assigned:{...p.assigned,locationId:locId,room:locById[locId]?.rooms[0]||""}});
-                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:p.assigned?"pointer":"default",minWidth:60,opacity:p.assigned?1:0.5}}>
-                            <option value="">— מיקום —</option>
-                            {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
-                          </select>
-                        </td>
-                        {/* Room */}
-                        <td style={{padding:"4px 5px"}}>
-                          {p.assigned&&p.assigned.locationId?(()=>{
-                            const rms=locById[p.assigned.locationId]?.rooms||[];
-                            return rms.length>0
-                              ?<select value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:70}}>
-                                <option value="">— חדר —</option>
-                                {rms.map(r=><option key={r} value={r}>{r}</option>)}
-                              </select>
-                              :<input value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} placeholder="ידני" style={{padding:"3px 5px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:65,background:T.inputBg,color:T.text}}/>;
-                          })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
-                        </td>
-                        {/* Time */}
+{/* Time */}
                         <td style={{padding:"4px 5px"}}>
                           {p.assigned?(()=>{
                             const autoTime=p.assigned.slot?.includes("בוקר")?"08:00":"12:00";
@@ -1816,46 +1826,36 @@ function App() {
                             );
                           })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
                         </td>
-
-                        {/* Experiment Date */}
+{/* Location */}
                         <td style={{padding:"4px 5px"}}>
-                          <input type="date" value={p.expDate||""} onChange={e=>updP(p.id,{expDate:e.target.value})}
-                            style={{padding:"2px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:110}}/>
+                          <select value={p.assigned?.locationId||""} disabled={!p.assigned} onChange={e=>{
+                            const locId=parseInt(e.target.value)||null;
+                            updP(p.id,{assigned:{...p.assigned,locationId:locId,room:locById[locId]?.rooms[0]||""}});
+                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:p.assigned?"pointer":"default",minWidth:60,opacity:p.assigned?1:0.5}}>
+                            <option value="">— מיקום —</option>
+                            {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+                          </select>
                         </td>
-                        {/* Status */}
+{/* Room */}
+                        <td style={{padding:"4px 5px"}}>
+                          {p.assigned&&p.assigned.locationId?(()=>{
+                            const rms=locById[p.assigned.locationId]?.rooms||[];
+                            return rms.length>0
+                              ?<select value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:70}}>
+                                <option value="">— חדר —</option>
+                                {rms.map(r=><option key={r} value={r}>{r}</option>)}
+                              </select>
+                              :<input value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} placeholder="ידני" style={{padding:"3px 5px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:65,background:T.inputBg,color:T.text}}/>;
+                          })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
+                        </td>
+{/* Status */}
                         <td style={{padding:"4px 5px"}}>
                           <select value={p.status} onChange={e=>updP(p.id,{status:e.target.value},`סטטוס ${p.name}: ${statusMeta[e.target.value].label}`)}
                             style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
                             {Object.entries(statusMeta).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
                           </select>
                         </td>
-                        {/* Location preference */}
-                        <td style={{padding:"4px 5px",minWidth:110}}>
-                          <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
-                            {locations.map(loc=>{
-                              const pref=p.locPref||[];
-                              const on=pref.includes(loc.id);
-                              const c=LOC_COLORS[(locations.findIndex(l=>l.id===loc.id))%LOC_COLORS.length];
-                              return(
-                                <button key={loc.id} onClick={()=>{
-                                  const cur=p.locPref||[];
-                                  const next=on?cur.filter(x=>x!==loc.id):[...cur,loc.id];
-                                  updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
-                                }} style={{
-                                  background:on?(darkMode?c.dot+"30":c.bg):T.tablehead,
-                                  color:on?(darkMode?"#ffffff":c.text):T.textFaint,
-                                  border:`1px solid ${on?(darkMode?c.dot+"BB":c.border):T.border}`,
-                                  borderRadius:4,padding:"2px 6px",fontSize:10,
-                                  cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:400,
-                                  transition:"all .15s",opacity:on?1:0.55
-                                }}>
-                                  {on?"✓ ":""}{loc.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </td>
-                        {/* 3-dot menu button — orange dot if notes exist */}
+{/* 3-dot menu button — orange dot if notes exist */}
                         <td style={{padding:"4px 5px"}}>
                           <div style={{position:"relative",display:"inline-block"}}>
                             <button title={p.notes||undefined} onClick={e=>{
@@ -2317,7 +2317,7 @@ function App() {
             <h2 style={{margin:"0 0 4px",fontSize:18}}>{L("appName")}</h2>
             <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>גרסה {APP_VERSION}</div>
             <div style={{fontSize:12,color:T.textMuted,lineHeight:1.7}}>
-              <p>מערכת לניהול וסיאום משתתפים במחקר</p>
+              <p>מערכת לניהול ותיאום משתתפים במחקר</p>
               <p>כל הנתונים שמורים מקומית בדפדפן</p>
               <p>לשיתוף בזמן אמת — ראה מדריך Google Sheets</p>
             </div>
@@ -3269,7 +3269,7 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose}) 
             {locations.length===0 && <span style={{fontSize:11,color:T.textFaint}}>{L("noLocations")}</span>}
             {locations.map((loc,i)=>{
               const pref=p.locPref||[];
-              const on=pref.includes(loc.id);
+              const on=pref.map(Number).includes(Number(loc.id));
               const colors=[
                 {bg:"#EEF2FF",text:"#4338CA",border:"#C7D4FF"},
                 {bg:"#FFF7ED",text:"#C2410C",border:"#FED7AA"},
