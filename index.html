@@ -1161,7 +1161,7 @@ function App() {
               {(stats.byStatus?.completed||0)}<span style={{fontSize:13,opacity:0.6,fontWeight:400}}>/{settings.totalTarget}</span>
             </div>
             <div style={{fontSize:9,opacity:0.6,letterSpacing:"0.5px",textTransform:"uppercase"}}>{L("completed")}</div>
-            <div style={{background:"rgba(255,255,255,0.2)",borderRadius:3,height:3,width:70}}>
+            <div style={{background:"#34D399",borderRadius:3,height:3,width:70}}>
               <div style={{background:"#34D399",height:3,borderRadius:3,width:`${Math.min(100,(stats.byStatus?.completed||0)/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
             </div>
           </div>
