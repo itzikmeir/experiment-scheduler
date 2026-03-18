@@ -1613,7 +1613,7 @@ function App() {
                                   <span style={{fontSize:10,color:T.textMuted,background:T.tablehead,borderRadius:10,padding:"1px 7px"}}>{targets.length}</span>
                                 </button>
                               );
-                            });})()}
+                            })}
                             {/* Free-write option */}
                             <button onClick={()=>{setBulkEmailOpen(false);setFreeMailModal(true);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"#F0FDF4",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#166534",fontWeight:700}}>
                               <span>✍️</span>
@@ -1776,10 +1776,9 @@ function App() {
                                   {on?"✓ ":""}{loc.name}
                                 </button>
                               );
-                            })}
+                            });})()}
                           </div>
                         </td>
-{/* Availability — all days, 2 dots: morning=blue, afternoon=orange */}
                         <td style={{padding:"4px 6px",minWidth:90}}>
                           <div style={{display:"flex",gap:4,justifyContent:"space-between",width:"100%"}}>
                             {DAYS.map(d=>{
