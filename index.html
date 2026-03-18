@@ -68,7 +68,7 @@ const LANG = {
     colNotes:"הערות", colActions:"פעולות",
     sortAsc:"↑ סדר עולה", sortDesc:"↓ סדר יורד", clearColFilter:"✕ נקה סינון עמודה",
     statusPending:"ממתין", statusAssigned:"שובץ", statusConfirmed:"אישר",
-    statusCompleted:"השלים", statusDeclined:"ביטל",
+    statusCompleted:"השלים", statusDeclined:"ביטל", statusIrrelevant:"לא רלוונטי",
     dayA:"ראשון", dayB:"שני", dayC:"שלישי", dayD:"רביעי", dayE:"חמישי", dayF:"שישי",
     dayPrefix:"יום ",
     slotMorning:"בוקר", slotAfternoon:"צהריים",
@@ -152,7 +152,7 @@ const LANG = {
     colNotes:"Notes", colActions:"Actions",
     sortAsc:"↑ Ascending", sortDesc:"↓ Descending", clearColFilter:"✕ Clear column filter",
     statusPending:"Pending", statusAssigned:"Assigned", statusConfirmed:"Confirmed",
-    statusCompleted:"Completed", statusDeclined:"Declined",
+    statusCompleted:"Completed", statusDeclined:"Declined", statusIrrelevant:"Irrelevant",
     dayA:"Sunday", dayB:"Monday", dayC:"Tuesday", dayD:"Wednesday", dayE:"Thursday", dayF:"Friday",
     dayPrefix:"",
     slotMorning:"Morning", slotAfternoon:"Afternoon",
@@ -279,7 +279,8 @@ const STATUS_COLORS = {
   assigned:  { dot:"#059669", bg:"#ECFDF5", text:"#059669", border:"#A7F3D0" },
   confirmed: { dot:"#D97706", bg:"#FFF7ED", text:"#D97706", border:"#FDE68A" },
   completed: { dot:"#059669", bg:"#059669", text:"#ffffff", border:"#047857" },
-  declined:  { dot:"#DC2626", bg:"#FEF2F2", text:"#DC2626", border:"#FECACA" },
+  declined:    { dot:"#DC2626", bg:"#FEF2F2", text:"#DC2626", border:"#FECACA" },
+  irrelevant:  { dot:"#9CA3AF", bg:"#F3F4F6", text:"#6B7280", border:"#D1D5DB" },
 };
 // Static STATUS_META (Hebrew) used for non-component contexts
 const STATUS_META = {
@@ -287,7 +288,8 @@ const STATUS_META = {
   assigned:  { label:"שובץ",   ...STATUS_COLORS.assigned },
   confirmed: { label:"אישר",   ...STATUS_COLORS.confirmed },
   completed: { label:"השלים", ...STATUS_COLORS.completed },
-  declined:  { label:"ביטל",  ...STATUS_COLORS.declined },
+  declined:    { label:"ביטל",       ...STATUS_COLORS.declined },
+  irrelevant:  { label:"לא רלוונטי", ...STATUS_COLORS.irrelevant },
 };
 const LOC_COLORS = [
   {bg:"#EEF2FF",text:"#4338CA",border:"#C7D4FF",dot:"#4338CA",chart:"#4338CA"},
@@ -503,7 +505,8 @@ function App() {
     assigned:  { label:L("statusAssigned"), ...STATUS_COLORS.assigned },
     confirmed: { label:L("statusConfirmed"),...STATUS_COLORS.confirmed },
     completed: { label:L("statusCompleted"),...STATUS_COLORS.completed },
-    declined:  { label:L("statusDeclined"), ...STATUS_COLORS.declined },
+    declined:    { label:L("statusDeclined"),   ...STATUS_COLORS.declined },
+    irrelevant:  { label:L("statusIrrelevant"), ...STATUS_COLORS.irrelevant },
   }),[lang]);
 
   // Dynamic day names using L()
@@ -974,16 +977,16 @@ function App() {
       if(filters.name && !p.name.includes(filters.name) && !(p.email||"").includes(filters.name)) return false;
       if(filters.assigned==="yes" && !p.assigned) return false;
       if(filters.assigned==="no" && p.assigned) return false;
-      if(filters.status.length>0 && !filters.status.includes(p.status)) return false;
-      if(filters.gender.length>0 && !filters.gender.includes(p.gender||"")) return false;
+      if(filters.status.length>0 && filters.status.includes(p.status)) return false;
+      if(filters.gender.length>0 && filters.gender.includes(p.gender||"")) return false;
       if(filters.location.length>0 && !filters.location.includes(String(p.assigned?.locationId||""))) return false;
-      if(filters.day.length>0 && !filters.day.includes(p.assigned?.day||"")) return false;
+      if(filters.day.length>0 && filters.day.includes(p.assigned?.day||"")) return false;
       if(filters.avail&&filters.avail.length>0 && !filters.avail.some(d=>(p.availability||{})[d]?.length>0)) return false;
       if(filters.slot.length>0 && !filters.slot.some(s=>
         (p.assigned?.slot||"").includes(s)||Object.values(p.availability||{}).flat().some(a=>a.includes(s))
       )) return false;
-      if(filters.locPref.length>0 && !filters.locPref.some(lp=>(p.locPref||[]).map(String).includes(String(lp)))) return false;
-      if(filters.age.length>0 && !filters.age.includes(String(p.age||""))) return false;
+      if(filters.locPref.length>0 && filters.locPref.every(lp=>(p.locPref||[]).map(String).includes(String(lp)))) return false;
+      if(filters.age.length>0 && filters.age.includes(String(p.age||""))) return false;
       return true;
     });
     list.sort((a,b)=>{
@@ -1610,7 +1613,7 @@ function App() {
                                   <span style={{fontSize:10,color:T.textMuted,background:T.tablehead,borderRadius:10,padding:"1px 7px"}}>{targets.length}</span>
                                 </button>
                               );
-                            })}
+                            });})()}
                             {/* Free-write option */}
                             <button onClick={()=>{setBulkEmailOpen(false);setFreeMailModal(true);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"#F0FDF4",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#166534",fontWeight:700}}>
                               <span>✍️</span>
@@ -1742,14 +1745,19 @@ function App() {
                         {/* Location preference */}
                         <td style={{padding:"2px 3px",width:165,minWidth:165,maxWidth:165}}>
                           <div style={{display:"flex",flexWrap:"nowrap",gap:2,width:"100%"}}>
-                            {locations.slice(0,3).map((loc,li)=>{
-                              const pref=p.locPref||[];
-                              const on=pref.map(Number).includes(Number(loc.id));
-                              const LC=[
+                            {(()=>{
+                              // Stable color palette: assigned once per location id, sorted by id ascending
+                              const PALETTE=[
                                 {on:{bg:"#EEF2FF",text:"#4338CA",border:"#C7D4FF"},dk:{bg:"#4338CA44",text:"#a5b4fc",border:"#4338CA88"}},
                                 {on:{bg:"#FFF7ED",text:"#C2410C",border:"#FED7AA"},dk:{bg:"#C2410C44",text:"#fb923c",border:"#C2410C88"}},
                                 {on:{bg:"#F5F3FF",text:"#7C3AED",border:"#DDD6FE"},dk:{bg:"#7C3AED44",text:"#c4b5fd",border:"#7C3AED88"}},
-                              ][li]||{on:{bg:"#F0FDF4",text:"#059669",border:"#A7F3D0"},dk:{bg:"#05966944",text:"#6ee7b7",border:"#05966988"}};
+                              ];
+                              // Sort locations by id to get stable order regardless of array position
+                              const sortedLocs=[...locations].sort((a,b)=>Number(a.id)-Number(b.id)).slice(0,3);
+                              return sortedLocs.map((loc,li)=>{
+                              const pref=p.locPref||[];
+                              const on=pref.map(Number).includes(Number(loc.id));
+                              const LC=PALETTE[li]||PALETTE[2];
                               const c=darkMode?LC.dk:LC.on;
                               return(
                                 <button key={loc.id} onClick={()=>{
@@ -2596,26 +2604,38 @@ function App() {
                 </button>
               </div>
             )}
+            {(()=>{
+              // "checked" = item is SHOWN (not filtered out).
+              // filters[fkey] = list of HIDDEN values (empty = show all).
+              const fkey=colMenu.fkey;
+              const hidden=filters[fkey]||[];
+              const allVals=colMenu.options.map(o=>o.v);
+              const allShown=hidden.length===0;
+              const someHidden=hidden.length>0&&hidden.length<allVals.length;
+              return(<>
             <div style={{padding:"5px 12px",borderBottom:`1px solid ${T.border}`}}>
               <label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12,color:T.text}}>
                 <input type="checkbox"
-                  checked={(filters[colMenu.fkey]||[]).length===0}
-                  onChange={()=>setFilters(f=>({...f,[colMenu.fkey]:[]}))}
-                  style={{cursor:"pointer"}}/>
+                  ref={el=>{if(el) el.indeterminate=someHidden;}}
+                  checked={allShown}
+                  onChange={()=>setFilters(f=>({...f,[fkey]:allShown?allVals:[]}))}
+                  style={{cursor:"pointer",accentColor:T.accent}}/>
                 <strong>{L("filterAll")}</strong>
               </label>
             </div>
             {colMenu.options.map(opt=>{
-              const active=(filters[colMenu.fkey]||[]).includes(opt.v);
+              const isHidden=(filters[colMenu.fkey]||[]).includes(opt.v);
+              const shown=!isHidden;
               return(
                 <div key={opt.v} style={{padding:"4px 12px"}}>
                   <label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12,color:T.text}}>
-                    <input type="checkbox" checked={active} onChange={()=>{
+                    <input type="checkbox" checked={shown} onChange={()=>{
                       setFilters(f=>{
                         const cur=f[colMenu.fkey]||[];
-                        return {...f,[colMenu.fkey]:active?cur.filter(x=>x!==opt.v):[...cur,opt.v]};
+                        // toggle: if shown→hide it, if hidden→show it
+                        return {...f,[colMenu.fkey]:shown?[...cur,opt.v]:cur.filter(x=>x!==opt.v)};
                       });
-                    }} style={{cursor:"pointer"}}/>
+                    }} style={{cursor:"pointer",accentColor:T.accent}}/>
                     {opt.l}
                     <span style={{marginInlineStart:"auto",fontSize:10,color:T.textFaint}}>
                       ({participants.filter(p=>{
@@ -2642,6 +2662,7 @@ function App() {
                 </button>
               </div>
             )}
+            </>);})()}
           </div>
         </>
       )}
