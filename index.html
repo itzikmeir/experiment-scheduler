@@ -278,7 +278,7 @@ const STATUS_COLORS = {
   pending:   { dot:"#4B6BFB", bg:"#F0F4FF", text:"#4B6BFB", border:"#C7D4FF" },
   assigned:  { dot:"#059669", bg:"#ECFDF5", text:"#059669", border:"#A7F3D0" },
   confirmed: { dot:"#D97706", bg:"#FFF7ED", text:"#D97706", border:"#FDE68A" },
-  completed: { dot:"#059669", bg:"#34D399", text:"#ffffff", border:"#047857" },
+  completed: { dot:"#059669", bg:"#059669", text:"#ffffff", border:"#047857" },
   declined:    { dot:"#DC2626", bg:"#FEF2F2", text:"#DC2626", border:"#FECACA" },
   irrelevant:  { dot:"#9CA3AF", bg:"#F3F4F6", text:"#6B7280", border:"#D1D5DB" },
 };
@@ -426,6 +426,7 @@ function parseRow(row, id) {
     hebrewRead:  hebrewRead|| "",
     visionNote:  visionNote|| "",
     expDate:     "",
+    participantId: "",
     surveyDate,
     importedAt: Date.now(),
   };
@@ -447,7 +448,7 @@ function exportCSV(rows,filename) {
 const emptyP = () => ({
   id:null,name:"",email:"",phone:"",age:"",gender:"",
   availability:{א:[],ב:[],ג:[],ד:[],ה:[],ו:[]},
-  assigned:null,startTime:"",expDate:"",status:"pending",notes:"",importedAt:Date.now()
+  assigned:null,startTime:"",expDate:"",participantId:"",status:"pending",notes:"",importedAt:Date.now()
 });
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
@@ -456,8 +457,10 @@ function App() {
   const [participants,setParticipants] = useState(()=>saved?.participants||SEED.map((p,i)=>({...p,id:i,assigned:null,status:"pending",notes:"",importedAt:0})));
   const [locations,setLocations] = useState(()=>{
     const locs = saved?.locations||[{id:1,name:"נמל",rooms:["כיתה א","כיתה ב"]},{id:2,name:"הר",rooms:["חדר 1"]}];
-    // Migrate old name
-    return locs.map(l=>l.name==="גבעת ברנר"?{...l,name:"ג' ברנר"}:l);
+    const migrated = locs.map(l=>l.name==="גבעת ברנר"?{...l,name:"ג' ברנר"}:l);
+    // Deduplicate by id
+    const seen=new Map();migrated.forEach(l=>seen.set(l.id,l));
+    return [...seen.values()];
   });
   const [settings,setSettings]         = useState(()=>saved?.settings||{perSlot:1,maxPerDay:6,totalTarget:30,experimentName:"ניסוי תכנון מסלול נסיעה עם AI",researcherName:"החוקר",duration:"90 דקות",baseDate:new Date().toISOString().split("T")[0],gmailToken:"",currentUser:"חוקר 1"});
   const [changelog,setChangelog]       = useState(()=>saved?.changelog||[]);
@@ -643,6 +646,8 @@ function App() {
             assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
             startTime:     lp.startTime || rp.startTime || "",
             expDate:       lp.expDate  || rp.expDate  || "",
+            participantId: lp.participantId || rp.participantId || "",
+            participantId: lp.participantId || rp.participantId || "",
             status:        lp.assigned  ? lp.status : (rp.assigned ? rp.status : lp.status),
             notes:         lp.notes || rp.notes || "",
           };
@@ -661,7 +666,9 @@ function App() {
           const next=[...remote.locations];
           const inIds=new Set(remote.locations.map(l=>l.id));
           prev.forEach(l=>{if(!inIds.has(l.id)) next.push(l);});
-          return next;
+          // Deduplicate by id (keep last)
+          const seen=new Map();next.forEach(l=>seen.set(l.id,l));
+          return [...seen.values()];
         });
       }
       // Push local state to Sheets
@@ -752,7 +759,8 @@ function App() {
           const merged = [...data.locations];
           const inIds = new Set(data.locations.map(l=>l.id));
           prev.forEach(l => { if(!inIds.has(l.id)) merged.push(l); });
-          return merged;
+          const seen=new Map();merged.forEach(l=>seen.set(l.id,l));
+          return [...seen.values()];
         });
         if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
         if(data.researchers?.length)  ; // could store if needed
@@ -2243,7 +2251,7 @@ function App() {
       )}
 
       {/* Add/Edit participant */}
-      {modal==="addEdit"&&editP&&<ParticipantModal p={editP} locations={locations} T={T} L={L} lang={lang} darkMode={darkMode} onSave={saveParticipant} onClose={()=>{setModal(null);setEditP(null);}}/>}
+      {modal==="addEdit"&&editP&&<ParticipantModal p={editP} locations={locations} T={T} L={L} lang={lang} darkMode={darkMode} onSave={saveParticipant} onClose={()=>{setModal(null);setEditP(null);}} allParticipants={participants}/>}
 
       {/* Location add/edit */}
       {(modal==="addLoc"||modal?.type==="editLoc")&&(
@@ -3200,7 +3208,7 @@ function ModalShell({title,T,onClose,children,wide}) {
 }
 
 // ── Participant add/edit modal ─────────────────────────────────────────────────
-function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose}) {
+function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose,allParticipants}) {
   if(!L) L=(k)=>k;
   if(!lang) lang="he";
   const [p,setP]=useState(initP);
@@ -3264,8 +3272,12 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose}) 
           </div>
           <div>
             <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{L("fieldStatus")}</label>
-            <select value={p.status} onChange={e=>setP(prev=>({...prev,status:e.target.value}))} style={{...inputStyle}}>
-              {["pending","assigned","confirmed","completed","declined"].map(v=><option key={v} value={v}>{L("status"+v.charAt(0).toUpperCase()+v.slice(1))}</option>)}
+            <select value={p.status} onChange={e=>{
+              const newStatus=e.target.value;
+              if(newStatus==="completed"&&!p.participantId){alert(lang==="en"?"Assign a participant ID first":"בחר מזהה נבדק קודם");return;}
+              setP(prev=>({...prev,status:newStatus}));
+            }} style={{...inputStyle}}>
+              {["pending","assigned","confirmed","completed","declined","irrelevant"].map(v=><option key={v} value={v}>{L("status"+v.charAt(0).toUpperCase()+v.slice(1))}</option>)}
             </select>
           </div>
         </div>
@@ -3335,9 +3347,38 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose}) 
           <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{L("colNotes")}</label>
           <textarea value={p.notes||""} onChange={e=>setP(prev=>({...prev,notes:e.target.value}))} rows={2} style={{...inputStyle,resize:"vertical"}}/>
         </div>
+        {/* Participant ID — P001-P030 */}
+        {(()=>{
+          const usedIds=new Set((allParticipants||[]).filter(x=>x.id!==p.id&&x.participantId).map(x=>x.participantId));
+          const options=Array.from({length:30},(_,i)=>`P${String(i+1).padStart(3,"0")}`);
+          return(
+            <div style={{marginBottom:14,background:p.participantId?(darkMode?"#052e16":"#F0FDF4"):T.tablehead,borderRadius:9,padding:"10px 14px",border:`1px solid ${p.participantId?(darkMode?"#166534":"#A7F3D0"):T.border}`}}>
+              <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:6,fontWeight:700}}>
+                🔬 {lang==="en"?"Participant ID (for completed experiments)":"מזהה נבדק (לניסוי שהושלם)"}
+              </label>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <select value={p.participantId||""} onChange={e=>{
+                  const pid=e.target.value;
+                  setP(prev=>({...prev,participantId:pid,...(pid?{status:"completed"}:{})}));
+                }} style={{...inputStyle,flex:1,fontWeight:700,color:p.participantId?"#059669":T.text}}>
+                  <option value="">— {lang==="en"?"No ID assigned":"ללא מזהה"} —</option>
+                  {options.map(pid=>(
+                    <option key={pid} value={pid} disabled={usedIds.has(pid)}>
+                      {pid}{usedIds.has(pid)?(lang==="en"?" (taken)":" (תפוס)"):""}
+                    </option>
+                  ))}
+                </select>
+                {p.participantId&&<span style={{fontSize:12,color:"#059669",fontWeight:800,whiteSpace:"nowrap"}}>✓ השלים</span>}
+              </div>
+              {!p.participantId&&p.status==="completed"&&(
+                <p style={{margin:"6px 0 0",fontSize:11,color:"#DC2626"}}>⚠️ {lang==="en"?"Must assign a participant ID to mark as completed":"חובה לבחור מזהה נבדק לפני סימון כ-השלים"}</p>
+              )}
+            </div>
+          );
+        })()}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"8px 15px",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"inherit"}}>{L("btnCancel")}</button>
-          <button onClick={()=>onSave(p)} disabled={!p.name.trim()} style={{background:"#059669",color:"white",border:"none",padding:"8px 18px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",opacity:p.name.trim()?1:0.5}}>
+          <button onClick={()=>{if(p.status==="completed"&&!p.participantId){alert(lang==="en"?"Please assign a participant ID before marking as Completed":"יש לבחור מזהה נבדק לפני שמירה עם סטטוס השלים");return;}onSave(p);}} disabled={!p.name.trim()} style={{background:"#059669",color:"white",border:"none",padding:"8px 18px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",opacity:p.name.trim()?1:0.5}}>
             {p.id?L("btnSaveChanges"):L("btnAddConfirm")}
           </button>
         </div>
