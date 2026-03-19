@@ -641,7 +641,7 @@ function App() {
             hebrewRead:    rp.hebrewRead  || lp.hebrewRead  || "",
             email:         lp.email  || rp.email,
             phone:         lp.phone  || rp.phone,
-            locPref:       [...new Set([...(lp.locPref||[]),...(rp.locPref||[])].map(Number).filter(n=>!isNaN(n)))].slice(0,locations.length),
+            locPref:       [...new Set([...(lp.locPref||[]),...(rp.locPref||[])].map(Number).filter(n=>!isNaN(n) && n>0))],
             // Local ALWAYS wins for assignment data
             assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
             startTime:     lp.startTime || rp.startTime || "",
@@ -662,14 +662,9 @@ function App() {
       }
       // Merge locations
       if(remote.locations?.length){
-        setLocations(prev=>{
-          const next=[...remote.locations];
-          const inIds=new Set(remote.locations.map(l=>l.id));
-          prev.forEach(l=>{if(!inIds.has(l.id)) next.push(l);});
-          // Deduplicate by id (keep last)
-          const seen=new Map();next.forEach(l=>seen.set(l.id,l));
-          return [...seen.values()];
-        });
+        // Remote is authoritative for locations — use as-is, dedup by id
+        const seen=new Map();remote.locations.forEach(l=>seen.set(l.id,l));
+        setLocations([...seen.values()]);
       }
       // Push local state to Sheets
       return gsSaveAll({participants:merged,locations:locationsRef.current,settings,user:settings.currentUser});
@@ -727,7 +722,7 @@ function App() {
                 hebrewRead:    rp.hebrewRead   || lp.hebrewRead   || "",
                 email:         lp.email  || rp.email,
                 phone:         lp.phone  || rp.phone,
-                locPref:       [...new Set([...(lp.locPref||[]),...(rp.locPref||[])].map(Number).filter(n=>!isNaN(n)))].slice(0,locations.length),
+                locPref:       [...new Set([...(lp.locPref||[]),...(rp.locPref||[])].map(Number).filter(n=>!isNaN(n) && n>0))],
                 // Local ALWAYS wins for assignment data
                 assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
                 startTime:     lp.startTime || rp.startTime || "",
@@ -755,13 +750,10 @@ function App() {
             addNotif({id:'dedup-'+Date.now(),type:'info',msg:(lang==="en"?`${dupsRemoved} duplicates merged on load`:`${dupsRemoved} כפילויות מוזגו בטעינה`),actions:[]});
           }
         }
-        if(data.locations?.length) setLocations(prev => {
-          const merged = [...data.locations];
-          const inIds = new Set(data.locations.map(l=>l.id));
-          prev.forEach(l => { if(!inIds.has(l.id)) merged.push(l); });
-          const seen=new Map();merged.forEach(l=>seen.set(l.id,l));
-          return [...seen.values()];
-        });
+        if(data.locations?.length){
+          const seen=new Map();data.locations.forEach(l=>seen.set(l.id,l));
+          setLocations([...seen.values()]);
+        }
         if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
         if(data.researchers?.length)  ; // could store if needed
         setSyncStatus("ok");setSyncMsg("מסונכרן");setLastSync(new Date());
@@ -1817,7 +1809,7 @@ function App() {
 {/* Experiment Date */}
                         <td style={{padding:"2px 2px"}}>
                           <input type="date" value={p.expDate||""} onChange={e=>updP(p.id,{expDate:e.target.value})}
-                            style={{padding:"2px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:110}}/>
+                            style={{padding:"2px 3px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:95}}/>
                         </td>
 {/* Day */}
                         <td style={{padding:"2px 2px"}}>
@@ -1878,10 +1870,17 @@ function App() {
                         {/* Sep after Room */}
                         <td style={{padding:0,width:1,background:T.border,border:"none",opacity:0.4,pointerEvents:"none"}}/>
                         {/* Status */}
-                        <td style={{padding:"2px 2px"}}>
-                          <select value={p.status} onChange={e=>updP(p.id,{status:e.target.value},`סטטוס ${p.name}: ${statusMeta[e.target.value].label}`)}
-                            style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-                            {Object.entries(statusMeta).map(([v,m])=><option key={v} value={v}>{m.label}</option>)}
+                        <td style={{padding:"2px 2px",minWidth:p.status==="completed"?115:85}}>
+                          <select value={p.status} onChange={e=>{
+                            const newSt=e.target.value;
+                            if(newSt==="completed"){setEditP({...p});setModal("addEdit");return;}
+                            updP(p.id,{status:newSt},`סטטוס ${p.name}: ${statusMeta[newSt].label}`);
+                          }} style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
+                            {Object.entries(statusMeta).map(([v,m])=>(
+                              v==="completed"
+                                ?<option key={v} value={v}>{p.participantId?`✓ ${p.participantId}`:m.label+" →"}</option>
+                                :<option key={v} value={v}>{m.label}</option>
+                            ))}
                           </select>
                         </td>
 {/* 3-dot menu button — orange dot if notes exist */}
@@ -2520,7 +2519,7 @@ function App() {
                 setRowMenu(null);
                 const e=buildInviteWithRSVP(p);
                 sendViaGmail(e.subject,e.body,p.email);
-              }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#4338CA"}}>
+              }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
                 📨 {lang==="en"?"Invite + RSVP":"הזמנה + RSVP"}
               </button>}
               {/* צור אירוע ביומן */}
@@ -2532,11 +2531,11 @@ function App() {
                 } else {
                   openGoogleCalendar(p);
                 }
-              }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#059669"}}>
+              }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
                 📅 {lang==="en"?"Add to Google Calendar":"צור אירוע ביומן גוגל"}
               </button>}
               {/* נקה שיבוץ */}
-              {p.assigned&&isEditor&&<button onClick={()=>{setRowMenu(null);clearA(p.id);}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#D97706"}}>
+              {p.assigned&&isEditor&&<button onClick={()=>{setRowMenu(null);clearA(p.id);}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
                 ✕ {lang==="en"?"Clear assignment":"נקה שיבוץ"}
               </button>}
               {/* מחק */}
