@@ -459,8 +459,8 @@ function App() {
     const locs = saved?.locations||[{id:1,name:"נמל",rooms:["כיתה א","כיתה ב"]},{id:2,name:"הר",rooms:["חדר 1"]}];
     const migrated = locs.map(l=>l.name==="גבעת ברנר"?{...l,name:"ג' ברנר"}:l);
     // Deduplicate by id
-    const seen=new Map();migrated.forEach(l=>seen.set(l.id,l));
-    return [...seen.values()];
+    const byName=new Map();migrated.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
+    return [...byName.values()];
   });
   const [settings,setSettings]         = useState(()=>saved?.settings||{perSlot:1,maxPerDay:6,totalTarget:30,experimentName:"ניסוי תכנון מסלול נסיעה עם AI",researcherName:"החוקר",duration:"90 דקות",baseDate:new Date().toISOString().split("T")[0],gmailToken:"",currentUser:"חוקר 1"});
   const [changelog,setChangelog]       = useState(()=>saved?.changelog||[]);
@@ -662,9 +662,17 @@ function App() {
       }
       // Merge locations
       if(remote.locations?.length){
-        // Remote is authoritative for locations — use as-is, dedup by id
-        const seen=new Map();remote.locations.forEach(l=>seen.set(l.id,l));
-        setLocations([...seen.values()]);
+        // Dedup remote by name (first wins), then set
+        const byName=new Map();
+        remote.locations.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
+        const dedupedLocs=[...byName.values()];
+        setLocations(dedupedLocs);
+        // Clean participants' locPref to only valid ids
+        const validIds=new Set(dedupedLocs.map(l=>l.id));
+        setParticipants(prev=>prev.map(p=>({
+          ...p,
+          locPref:(p.locPref||[]).map(Number).filter(id=>validIds.has(id)),
+        })));
       }
       // Push local state to Sheets
       return gsSaveAll({participants:merged,locations:locationsRef.current,settings,user:settings.currentUser});
@@ -751,8 +759,9 @@ function App() {
           }
         }
         if(data.locations?.length){
-          const seen=new Map();data.locations.forEach(l=>seen.set(l.id,l));
-          setLocations([...seen.values()]);
+          const byName=new Map();
+          data.locations.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
+          setLocations([...byName.values()]);
         }
         if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
         if(data.researchers?.length)  ; // could store if needed
@@ -1110,6 +1119,32 @@ function App() {
   }
   const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset,settings.baseDate]);
 
+  // ── Countdown to next experiment ──────────────────────────────────────────
+  const [countdown,setCountdown] = useState("");
+  useEffect(()=>{
+    function calcCountdown() {
+      // Find earliest future expDate among assigned participants
+      const now = Date.now();
+      const futureDates = participants
+        .filter(p=>p.expDate && p.assigned)
+        .map(p=>({ name:p.name, pid:p.participantId, ts: new Date(p.expDate+"T"+(p.startTime||"08:00")).getTime() }))
+        .filter(x=>x.ts > now)
+        .sort((a,b)=>a.ts-b.ts);
+      if(!futureDates.length){ setCountdown(""); return; }
+      const next = futureDates[0];
+      const diff = next.ts - now;
+      const d = Math.floor(diff/86400000);
+      const h = Math.floor((diff%86400000)/3600000);
+      const m = Math.floor((diff%3600000)/60000);
+      const s = Math.floor((diff%60000)/1000);
+      if(d>0) setCountdown(`${d}י ${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")} לניסוי הבא`);
+      else    setCountdown(`${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")} לניסוי הבא`);
+    }
+    calcCountdown();
+    const iv=setInterval(calcCountdown,1000);
+    return ()=>clearInterval(iv);
+  },[participants]);
+
   // ── CSS vars via style tag ─────────────────────────────────────────────────
   const baseStyle={fontFamily:"Arial,sans-serif",background:T.bg,height:"100vh",display:"flex",flexDirection:"column",overflow:"hidden",color:T.text,transition:"background .3s,color .3s"};
 
@@ -1166,8 +1201,13 @@ function App() {
             </div>
           </div>
 
-          {/* RIGHT: sync status chip + Sync button + Sheets link + bell */}
+          {/* RIGHT: countdown + sync status chip + Sync button + Sheets link + bell */}
           <div style={{display:"flex",alignItems:"center",gap:5}}>
+            {countdown&&(
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.75)",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:5,padding:"0 8px",height:26,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums",letterSpacing:0.3}}>
+                ⏱ {countdown}
+              </span>
+            )}
 
             {/* Sync status + last time */}
             <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",display:"flex",alignItems:"center",gap:3,minWidth:30}}>
@@ -1878,7 +1918,7 @@ function App() {
                           }} style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
                             {Object.entries(statusMeta).map(([v,m])=>(
                               v==="completed"
-                                ?<option key={v} value={v}>{p.participantId?`✓ ${p.participantId}`:m.label+" →"}</option>
+                                ?<option key={v} value={v}>{p.participantId?`הושלם ${p.participantId}`:m.label+" →"}</option>
                                 :<option key={v} value={v}>{m.label}</option>
                             ))}
                           </select>
