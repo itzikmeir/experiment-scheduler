@@ -1190,7 +1190,7 @@ function App() {
             </div>
           </div>
 
-          {/* CENTER: completed progress + countdown */}
+          {/* CENTER: completed progress */}
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
             <div style={{fontSize:22,fontWeight:900,lineHeight:1,letterSpacing:"-0.5px"}}>
               {(stats.byStatus?.completed||0)}<span style={{fontSize:13,opacity:0.6,fontWeight:400}}>/{settings.totalTarget}</span>
@@ -1199,11 +1199,6 @@ function App() {
             <div style={{background:"rgba(255,255,255,0.2)",borderRadius:3,height:3,width:70}}>
               <div style={{background:"#34D399",height:3,borderRadius:3,width:`${Math.min(100,(stats.byStatus?.completed||0)/settings.totalTarget*100)}%`,transition:"width .5s"}}/>
             </div>
-            {countdown&&(
-              <div style={{fontSize:9,color:"rgba(255,255,255,0.7)",marginTop:2,fontVariantNumeric:"tabular-nums",letterSpacing:0.5,whiteSpace:"nowrap"}}>
-                ⏱ {countdown}
-              </div>
-            )}
           </div>
 
           {/* RIGHT: sync status chip + Sync button + Sheets link + bell */}
@@ -1420,12 +1415,17 @@ function App() {
 
       {/* ── Tabs ── */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"0 22px"}}>
-        <div style={{maxWidth:1500,margin:"0 auto",display:"flex"}}>
+        <div style={{maxWidth:1500,margin:"0 auto",display:"flex",alignItems:"center"}}>
           {[{id:"assignments",l:L("tabAssign")},{id:"calendar",l:L("tabCalendar")},{id:"charts",l:L("tabCharts")},{id:"emails",l:L("tabEmails")},{id:"locations",l:L("tabLocations")}].map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:400,color:tab===t.id?T.accent:T.textMuted,borderBottom:tab===t.id?`2px solid ${T.accent}`:"2px solid transparent",fontFamily:"inherit",transition:"color .2s"}}>
               {t.l}
             </button>
           ))}
+          {countdown&&(
+            <span style={{marginInlineStart:"auto",fontSize:11,color:T.textMuted,fontVariantNumeric:"tabular-nums",letterSpacing:0.3,whiteSpace:"nowrap",paddingInlineEnd:4}}>
+              ⏱ {countdown}
+            </span>
+          )}
         </div>
       </div>
 
