@@ -1130,15 +1130,15 @@ function App() {
         .map(p=>({ name:p.name, pid:p.participantId, ts: new Date(p.expDate+"T"+(p.startTime||"08:00")).getTime() }))
         .filter(x=>x.ts > now)
         .sort((a,b)=>a.ts-b.ts);
-      if(!futureDates.length){ setCountdown(""); return; }
+      if(!futureDates.length){ setCountdown("--:--:--"); return; }
       const next = futureDates[0];
       const diff = next.ts - now;
       const d = Math.floor(diff/86400000);
       const h = Math.floor((diff%86400000)/3600000);
       const m = Math.floor((diff%3600000)/60000);
       const s = Math.floor((diff%60000)/1000);
-      if(d>0) setCountdown(`${d}י ${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")} לניסוי הבא`);
-      else    setCountdown(`${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")} לניסוי הבא`);
+      if(d>0) setCountdown(`${d}י ${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}`);
+      else    setCountdown(`${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`);
     }
     calcCountdown();
     const iv=setInterval(calcCountdown,1000);
@@ -1421,11 +1421,13 @@ function App() {
               {t.l}
             </button>
           ))}
-          {countdown&&(
-            <span style={{marginInlineStart:"auto",fontSize:11,color:T.textMuted,fontVariantNumeric:"tabular-nums",letterSpacing:0.3,whiteSpace:"nowrap",paddingInlineEnd:4}}>
-              ⏱ {countdown}
+          <span style={{marginInlineStart:"auto",display:"flex",alignItems:"center",gap:5,border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 10px",background:countdown!=="--:--:--"?(darkMode?"rgba(52,211,153,0.1)":"rgba(5,150,105,0.06)"):"transparent",fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",flexShrink:0}}>
+            <span style={{fontSize:10,color:T.textFaint}}>⏱</span>
+            <span style={{fontSize:11,fontWeight:countdown!=="--:--:--"?700:400,color:countdown!=="--:--:--"?(darkMode?"#34D399":"#059669"):T.textFaint,letterSpacing:0.5}}>
+              {countdown}
             </span>
-          )}
+            {countdown!=="--:--:--"&&<span style={{fontSize:9,color:T.textFaint}}>לניסוי הבא</span>}
+          </span>
         </div>
       </div>
 
@@ -1911,17 +1913,25 @@ function App() {
                         <td style={{padding:0,width:1,background:T.border,border:"none",opacity:0.4,pointerEvents:"none"}}/>
                         {/* Status */}
                         <td style={{padding:"2px 2px",minWidth:p.status==="completed"?115:85}}>
-                          <select value={p.status} onChange={e=>{
-                            const newSt=e.target.value;
-                            if(newSt==="completed"){setEditP({...p});setModal("addEdit");return;}
-                            updP(p.id,{status:newSt},`סטטוס ${p.name}: ${statusMeta[newSt].label}`);
-                          }} style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
-                            {Object.entries(statusMeta).map(([v,m])=>(
-                              v==="completed"
-                                ?<option key={v} value={v}>{p.participantId?`הושלם ${p.participantId}`:m.label+" →"}</option>
-                                :<option key={v} value={v}>{m.label}</option>
-                            ))}
-                          </select>
+                          {p.status==="completed"
+                            ? <div style={{display:"flex",alignItems:"center",gap:3}}>
+                                <span style={{background:sm.bg,color:sm.text,border:`1px solid ${sm.border}`,borderRadius:5,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flex:1,textAlign:"center"}}>
+                                  {p.participantId?`הושלם ${p.participantId}`:sm.label}
+                                </span>
+                                <button title="שנה" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10,color:T.textMuted,flexShrink:0}}>✏️</button>
+                              </div>
+                            : <select value={p.status} onChange={e=>{
+                                const newSt=e.target.value;
+                                if(newSt==="completed"){setEditP({...p});setModal("addEdit");return;}
+                                updP(p.id,{status:newSt},`סטטוס ${p.name}: ${statusMeta[newSt].label}`);
+                              }} style={{padding:"3px 5px",borderRadius:5,border:`1px solid ${sm.border}`,background:sm.bg,color:sm.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
+                                {Object.entries(statusMeta).map(([v,m])=>(
+                                  v==="completed"
+                                    ?<option key={v} value={v}>{m.label+" →"}</option>
+                                    :<option key={v} value={v}>{m.label}</option>
+                                ))}
+                              </select>
+                          }
                         </td>
 {/* 3-dot menu button — orange dot if notes exist */}
                         <td style={{padding:"4px 5px"}}>
