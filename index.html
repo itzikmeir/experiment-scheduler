@@ -652,8 +652,10 @@ function App() {
             notes:         lp.notes || rp.notes || "",
           };
           if(JSON.stringify(merged[idx])!==JSON.stringify(lp)) changed=true;
-        } else if(!seenIds.has(rp.id)) {
-          merged.push(rp); seenIds.add(rp.id); changed=true;
+        } else {
+          // New participant — add regardless of id collision
+          const safeRp = seenIds.has(rp.id) ? {...rp, id: Math.max(...[...seenIds])+1} : rp;
+          merged.push(safeRp); seenIds.add(safeRp.id); changed=true;
         }
       });
       if(changed){
@@ -738,8 +740,10 @@ function App() {
                 status:        lp.assigned  ? lp.status : (rp.assigned ? rp.status : lp.status),
                 notes:         lp.notes || rp.notes || "",
               };
-            } else if(!seenIds.has(rp.id)) {
-              merged.push(rp); seenIds.add(rp.id);
+            } else {
+              // New participant — add regardless of id collision
+              const safeRp = seenIds.has(rp.id) ? {...rp, id: Math.max(...[...seenIds])+1} : rp;
+              merged.push(safeRp); seenIds.add(safeRp.id);
             }
           }
           setParticipants(merged);
