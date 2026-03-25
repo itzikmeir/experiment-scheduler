@@ -3446,6 +3446,7 @@ function AuthPanel({T,lang,userRole,userName,authPwds,setAuthPwds,onLogin,onLogo
   const [mode,setMode] = React.useState("switch"); // "switch" | "pwdSettings"
   const [inputName,setInputName] = React.useState(userName||"");
   const [inputPwd,setInputPwd] = React.useState("");
+  const [showPwd,setShowPwd] = React.useState(false);
   const [targetRole,setTargetRole] = React.useState("admin");
   const [pwdError,setPwdError] = React.useState("");
   const [newPwds,setNewPwds] = React.useState({admin:"",editor:""});
@@ -3543,10 +3544,16 @@ function AuthPanel({T,lang,userRole,userName,authPwds,setAuthPwds,onLogin,onLogo
       {/* Password field (not for viewer) */}
       {targetRole!=="viewer"&&(
         <>
-          <input type="password" value={inputPwd} onChange={e=>{setInputPwd(e.target.value);setPwdError("");}}
-            onKeyDown={e=>e.key==="Enter"&&tryLogin(targetRole)}
-            placeholder={lang==="en"?"Password":"סיסמה"}
-            style={{...inputStyle,borderColor:pwdError?"#EF4444":T.border}}/>
+          <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+            <input type={showPwd?"text":"password"} value={inputPwd} onChange={e=>{setInputPwd(e.target.value);setPwdError("");}}
+              onKeyDown={e=>e.key==="Enter"&&tryLogin(targetRole)}
+              placeholder={lang==="en"?"Password":"סיסמה"}
+              style={{...inputStyle,borderColor:pwdError?"#EF4444":T.border,paddingInlineEnd:34,width:"100%",boxSizing:"border-box"}}/>
+            <button type="button" onClick={()=>setShowPwd(v=>!v)}
+              style={{position:"absolute",insetInlineEnd:8,background:"none",border:"none",cursor:"pointer",color:T.textMuted,fontSize:16,lineHeight:1,padding:2}}>
+              {showPwd?"🙈":"👁"}
+            </button>
+          </div>
           {!authPwds[targetRole]&&(
             <p style={{margin:"-6px 0 10px",fontSize:11,color:"#F59E0B"}}>
               ⚠️ {lang==="en"?"No password set — free entry (bootstrap mode)":"אין סיסמה — כניסה חופשית (הגדר סיסמה מיד)"}
