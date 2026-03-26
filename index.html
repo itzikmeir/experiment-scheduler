@@ -646,9 +646,13 @@ function App() {
             assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
             startTime:     lp.startTime || rp.startTime || "",
             expDate:       lp.expDate  || rp.expDate  || "",
-            participantId: lp.participantId || rp.participantId || "",
-            participantId: lp.participantId || rp.participantId || "",
-            status:        lp.assigned  ? lp.status : (rp.assigned ? rp.status : lp.status),
+            participantId: rp.participantId || lp.participantId || "",
+            // Status: prefer whichever is "further along" — completed beats assigned, remote beats local if richer
+            status: (()=>{
+              const rank={pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
+              const rpRank=rank[rp.status]??0, lpRank=rank[lp.status]??0;
+              return rpRank>lpRank ? rp.status : lp.status;
+            })(),
             notes:         lp.notes || rp.notes || "",
           };
           if(JSON.stringify(merged[idx])!==JSON.stringify(lp)) changed=true;
@@ -737,7 +741,11 @@ function App() {
                 assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
                 startTime:     lp.startTime || rp.startTime || "",
             expDate:       lp.expDate  || rp.expDate  || "",
-                status:        lp.assigned  ? lp.status : (rp.assigned ? rp.status : lp.status),
+                status: (()=>{
+                  const rank={pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
+                  const rpRank=rank[rp.status]??0, lpRank=rank[lp.status]??0;
+                  return rpRank>lpRank ? rp.status : lp.status;
+                })(),
                 notes:         lp.notes || rp.notes || "",
               };
             } else {
