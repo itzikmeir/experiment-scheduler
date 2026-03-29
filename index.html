@@ -605,6 +605,86 @@ function App() {
   // eslint-disable-next-line
   },[]);
 
+  // ── Robust merge: Sheets = source of truth ─────────────────────────────────
+  // Rules:
+  // 1. Every record in Sheets is included (no dropping)
+  // 2. For matching records: take the "richer" value field by field
+  // 3. Dedup by email > phone > name (keep first)
+  // 4. Local-only records (not in Sheets) are kept until next gsSaveAll writes them
+  function mergeSheets(remotePs, localPs) {
+    const STATUS_RANK = {pending:0, assigned:1, confirmed:2, completed:3, declined:1, irrelevant:0};
+    const norm = s => (s||"").toString().toLowerCase().replace(/\s+/g,"");
+
+    // Build a lookup of local records by multiple keys
+    const byId    = new Map(localPs.map(p=>[String(p.id), p]));
+    const byEmail = new Map(localPs.filter(p=>p.email).map(p=>[norm(p.email), p]));
+    const byName  = new Map(localPs.map(p=>[norm(p.name), p]));
+
+    const result = [];
+    const usedLocalIds = new Set();
+
+    // Step 1: process every remote record
+    for (const rp of remotePs) {
+      // Find matching local record
+      let lp = byId.get(String(rp.id))
+            || (rp.email ? byEmail.get(norm(rp.email)) : null)
+            || byName.get(norm(rp.name));
+
+      if (lp) usedLocalIds.add(lp.id);
+
+      const merged = lp ? {
+        // Identity: prefer local id (stable), take remote name/email/phone if richer
+        id:           lp.id,
+        name:         lp.name || rp.name,
+        email:        lp.email || rp.email || "",
+        phone:        lp.phone || rp.phone || "",
+        age:          lp.age   || rp.age   || "",
+        gender:       lp.gender|| rp.gender|| "",
+        // Form data: remote wins (it comes from the form directly)
+        availability:  rp.availability || lp.availability,
+        surveyDate:    rp.surveyDate   || lp.surveyDate   || null,
+        locPrefText:   rp.locPrefText  || lp.locPrefText  || "",
+        visionNote:    rp.visionNote   || lp.visionNote   || "",
+        eligible:      rp.eligible     || lp.eligible     || "",
+        licenseQ:      rp.licenseQ     || lp.licenseQ     || "",
+        hebrewRead:    rp.hebrewRead   || lp.hebrewRead   || "",
+        // Collaboration: take the richer value
+        participantId: rp.participantId || lp.participantId || "",
+        expDate:       rp.expDate  || lp.expDate  || "",
+        startTime:     rp.startTime|| lp.startTime|| "",
+        notes:         rp.notes || lp.notes || "",
+        locPref:       [...new Set([...(rp.locPref||[]),...(lp.locPref||[])].map(Number).filter(n=>n>0))],
+        // Assignment: take whichever is set (remote wins if both set)
+        assigned:      rp.assigned || lp.assigned || null,
+        // Status: take highest rank
+        status: (STATUS_RANK[rp.status]??0) >= (STATUS_RANK[lp.status]??0) ? rp.status : lp.status,
+        importedAt:    rp.importedAt || lp.importedAt || Date.now(),
+      } : {
+        // Brand new from Sheets — take as-is
+        ...rp,
+      };
+
+      result.push(merged);
+    }
+
+    // Step 2: keep local-only records (edited offline, not yet in Sheets)
+    for (const lp of localPs) {
+      if (!usedLocalIds.has(lp.id)) {
+        result.push(lp); // will be pushed to Sheets on next gsSaveAll
+      }
+    }
+
+    // Step 3: dedup by email then name (keep first occurrence)
+    const seen = new Map();
+    return result.filter(p => {
+      const key = norm(p.email) || norm(p.name);
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.set(key, true);
+      return true;
+    });
+  }
+
   // ── Bidirectional reconcile helper (also called by "Sync" button) ────────
   const reconcileRef = React.useRef(null);
   const isSyncingRef = React.useRef(false);
@@ -614,74 +694,38 @@ function App() {
     setSyncStatus("syncing");
     return gsGetAll().then(remote=>{
       if(remote.error) throw new Error(remote.error);
-      const localPs = participantsRef.current;
-      // Merge: for each remote participant, update local with newer data;
-      // keep local participants not yet pushed (they'll be written on next save).
-      let changed = false;
-      const merged = [...localPs];
-      const seenIds = new Set(localPs.map(p=>p.id));
-      (remote.participants||[]).forEach(rp=>{
-        const idx = merged.findIndex(lp=>
-          lp.id===rp.id ||
-          (rp.email && lp.email && rp.email.toLowerCase()===lp.email.toLowerCase()) ||
-          (lp.name.toLowerCase()===rp.name.toLowerCase())
-        );
-        if(idx>=0){
-          const lp=merged[idx];
-          const remoteNewer = (rp.importedAt||0) > (lp.importedAt||0);
-          merged[idx]={
-            ...lp,
-            // Remote wins for form-filled data
-            availability:  remoteNewer ? {...rp.availability} : lp.availability,
-            surveyDate:    rp.surveyDate  || lp.surveyDate,
-            locPrefText:   rp.locPrefText || lp.locPrefText || "",
-            visionNote:    rp.visionNote  || lp.visionNote  || "",
-            eligible:      rp.eligible    || lp.eligible    || "",
-            licenseQ:      rp.licenseQ    || lp.licenseQ    || "",
-            hebrewRead:    rp.hebrewRead  || lp.hebrewRead  || "",
-            email:         lp.email  || rp.email,
-            phone:         lp.phone  || rp.phone,
-            locPref:       [...new Set([...(lp.locPref||[]),...(rp.locPref||[])].map(Number).filter(n=>!isNaN(n) && n>0))],
-            // Local ALWAYS wins for assignment data
-            assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
-            startTime:     lp.startTime || rp.startTime || "",
-            expDate:       lp.expDate  || rp.expDate  || "",
-            participantId: rp.participantId || lp.participantId || "",
-            // Status: prefer whichever is "further along" — completed beats assigned, remote beats local if richer
-            status: (()=>{
-              const rank={pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
-              const rpRank=rank[rp.status]??0, lpRank=rank[lp.status]??0;
-              return rpRank>lpRank ? rp.status : lp.status;
-            })(),
-            notes:         lp.notes || rp.notes || "",
-          };
-          if(JSON.stringify(merged[idx])!==JSON.stringify(lp)) changed=true;
-        } else {
-          // New participant — add regardless of id collision
-          const safeRp = seenIds.has(rp.id) ? {...rp, id: Math.max(...[...seenIds])+1} : rp;
-          merged.push(safeRp); seenIds.add(safeRp.id); changed=true;
+
+      // ── Participants: robust merge ──
+      if(remote.participants?.length) {
+        const merged = mergeSheets(remote.participants, participantsRef.current);
+        const prev = participantsRef.current;
+        if(JSON.stringify(merged) !== JSON.stringify(prev)) {
+          setParticipants(merged);
+          const newCount = merged.length - prev.length;
+          if(newCount > 0) showToast(`📥 ${newCount} ${lang==="en"?"new participant(s)":"נבדקים חדשים"}`);
         }
-      });
-      if(changed){
-        setParticipants(merged);
-        showToast(lang==="en"?"📥 Synced new data from Sheets":"📥 עודכן מ-Sheets");
       }
-      // Merge locations
+
+      // ── Locations: remote is authoritative, dedup by name ──
       if(remote.locations?.length){
-        // Dedup remote by name (first wins), then set
         const byName=new Map();
         remote.locations.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
         const dedupedLocs=[...byName.values()];
         setLocations(dedupedLocs);
-        // Clean participants' locPref to only valid ids
         const validIds=new Set(dedupedLocs.map(l=>l.id));
         setParticipants(prev=>prev.map(p=>({
           ...p,
           locPref:(p.locPref||[]).map(Number).filter(id=>validIds.has(id)),
         })));
       }
-      // Push local state to Sheets
-      return gsSaveAll({participants:merged,locations:locationsRef.current,settings,user:settings.currentUser});
+
+      // ── Push merged state back to Sheets ──
+      return gsSaveAll({
+        participants: participantsRef.current,
+        locations: locationsRef.current,
+        settings,
+        user: settings.currentUser,
+      });
     }).then(()=>{
       isSyncingRef.current = false;
       setSyncStatus("ok"); setLastSync(new Date()); lastSyncRef.current=Date.now();
@@ -691,7 +735,7 @@ function App() {
       setSyncStatus("error"); console.warn("Sync error:",e);
     });
   // eslint-disable-next-line
-  },[settings]); // isSyncingRef guards re-entry instead of syncStatus closure
+  },[settings]);
   reconcileRef.current = doSync;
 
   // Auto-run every 45 seconds
@@ -711,49 +755,7 @@ function App() {
       .then(data=>{
         if(data.error) throw new Error(data.error);
         if(data.participants?.length) {
-          // Merge remote into local: local assignment/startTime always wins
-          const local = participantsRef.current;
-          const merged = [...local];
-          const seenIds = new Set(local.map(p=>p.id));
-          for(const rp of data.participants) {
-            const idx = merged.findIndex(lp=>
-              lp.id===rp.id ||
-              (rp.email && lp.email && rp.email.toLowerCase()===lp.email.toLowerCase()) ||
-              (lp.name.toLowerCase()===rp.name.toLowerCase())
-            );
-            if(idx>=0) {
-              const lp = merged[idx];
-              const remoteNewer = (rp.importedAt||0) > (lp.importedAt||0);
-              merged[idx] = {
-                ...lp,
-                // Remote wins for form data
-                availability:  remoteNewer ? {...rp.availability} : lp.availability,
-                surveyDate:    rp.surveyDate   || lp.surveyDate,
-                locPrefText:   rp.locPrefText  || lp.locPrefText  || "",
-                visionNote:    rp.visionNote   || lp.visionNote   || "",
-                eligible:      rp.eligible     || lp.eligible     || "",
-                licenseQ:      rp.licenseQ     || lp.licenseQ     || "",
-                hebrewRead:    rp.hebrewRead   || lp.hebrewRead   || "",
-                email:         lp.email  || rp.email,
-                phone:         lp.phone  || rp.phone,
-                locPref:       [...new Set([...(lp.locPref||[]),...(rp.locPref||[])].map(Number).filter(n=>!isNaN(n) && n>0))],
-                // Local ALWAYS wins for assignment data
-                assigned:      lp.assigned  !== undefined ? lp.assigned  : rp.assigned,
-                startTime:     lp.startTime || rp.startTime || "",
-            expDate:       lp.expDate  || rp.expDate  || "",
-                status: (()=>{
-                  const rank={pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
-                  const rpRank=rank[rp.status]??0, lpRank=rank[lp.status]??0;
-                  return rpRank>lpRank ? rp.status : lp.status;
-                })(),
-                notes:         lp.notes || rp.notes || "",
-              };
-            } else {
-              // New participant — add regardless of id collision
-              const safeRp = seenIds.has(rp.id) ? {...rp, id: Math.max(...[...seenIds])+1} : rp;
-              merged.push(safeRp); seenIds.add(safeRp.id);
-            }
-          }
+          const merged = mergeSheets(data.participants, participantsRef.current);
           setParticipants(merged);
           // Alert for missing email
           merged.forEach(p=>{
