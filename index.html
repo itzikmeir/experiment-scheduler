@@ -1239,7 +1239,10 @@ function App() {
               )}
             </div>
             <div>
-              <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"Arial,sans-serif"}}>{L("appName")}</h1>
+              <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"Arial,sans-serif"}}>{L("appName")}</h1>
+                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v1.8</span>
+              </div>
               <p style={{margin:0,opacity:0.55,fontSize:10,marginTop:2}}>{settings.experimentName}</p>
             </div>
           </div>
@@ -1905,7 +1908,7 @@ function App() {
 {/* Experiment Date */}
                         <td style={{padding:"2px 2px"}}>
                           <input type="date" value={p.expDate||""} onChange={e=>updP(p.id,{expDate:e.target.value})}
-                            style={{padding:"2px 3px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:95}}/>
+                            style={{padding:"2px 3px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:95,colorScheme:darkMode?"dark":"light"}}/>
                         </td>
 {/* Day */}
                         <td style={{padding:"2px 2px"}}>
