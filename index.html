@@ -615,8 +615,8 @@ function App() {
     const STATUS_RANK = {pending:0, assigned:1, confirmed:2, completed:3, declined:1, irrelevant:0};
     const norm = s => (s||"").toString().toLowerCase().replace(/\s+/g,"");
 
-    // Build a lookup of local records by multiple keys
-    const byId    = new Map(localPs.map(p=>[String(p.id), p]));
+    // Build a lookup of local records — match by email first, then name
+    // Do NOT match by id alone (ids from different clients can collide)
     const byEmail = new Map(localPs.filter(p=>p.email).map(p=>[norm(p.email), p]));
     const byName  = new Map(localPs.map(p=>[norm(p.name), p]));
 
@@ -625,9 +625,9 @@ function App() {
 
     // Step 1: process every remote record
     for (const rp of remotePs) {
-      // Find matching local record
-      let lp = byId.get(String(rp.id))
-            || (rp.email ? byEmail.get(norm(rp.email)) : null)
+      if (!rp.name && !rp.email) continue; // skip truly empty rows
+      // Find matching local record — email match is definitive, name is fallback
+      let lp = (rp.email ? byEmail.get(norm(rp.email)) : null)
             || byName.get(norm(rp.name));
 
       if (lp) usedLocalIds.add(lp.id);
@@ -891,7 +891,42 @@ function App() {
       addLog("הוספה ידנית",`נוסף: ${np.name}`);
       showToast(`✅ ${np.name} נוסף`);
     } else {
-      updP(p.id,p,`עריכה: ${p.name}`);
+      // Flatten participant to column-level patch matching P_HEADERS
+      const patch = {
+        name:          p.name || "",
+        email:         p.email || "",
+        phone:         p.phone || "",
+        age:           p.age || "",
+        gender:        p.gender || "",
+        "avail_א":     (p.availability?.["א"]||[]).join("|"),
+        "avail_ב":     (p.availability?.["ב"]||[]).join("|"),
+        "avail_ג":     (p.availability?.["ג"]||[]).join("|"),
+        "avail_ד":     (p.availability?.["ד"]||[]).join("|"),
+        "avail_ה":     (p.availability?.["ה"]||[]).join("|"),
+        "avail_ו":     (p.availability?.["ו"]||[]).join("|"),
+        assigned_day:  p.assigned?.day || "",
+        assigned_slot: p.assigned?.slot || "",
+        assigned_locId:p.assigned?.locationId || "",
+        assigned_room: p.assigned?.room || "",
+        startTime:     p.startTime || "",
+        expDate:       p.expDate || "",
+        participantId: p.participantId || "",
+        status:        p.status || "pending",
+        notes:         p.notes || "",
+        locPref:       (p.locPref||[]).join("|"),
+        locPrefText:   p.locPrefText || "",
+        eligible:      p.eligible || "",
+        licenseQ:      p.licenseQ || "",
+        hebrewRead:    p.hebrewRead || "",
+        visionNote:    p.visionNote || "",
+      };
+      // Update local state
+      setParticipantsUndo(prev=>prev.map(q=>q.id===p.id?{...q,...p}:q), `עריכה: ${p.name}`);
+      addLog("עדכון", `עריכה: ${p.name}`);
+      // Push to Sheets
+      gsUpdateP(p.id, patch, settings.currentUser)
+        .then(()=>{setSyncStatus("ok");setLastSync(new Date());})
+        .catch(()=>setSyncStatus("error"));
       showToast(`✅ ${p.name} עודכן`);
     }
     setModal(null);setEditP(null);
