@@ -648,16 +648,16 @@ function App() {
         eligible:      rp.eligible     || lp.eligible     || "",
         licenseQ:      rp.licenseQ     || lp.licenseQ     || "",
         hebrewRead:    rp.hebrewRead   || lp.hebrewRead   || "",
-        // Collaboration: take the richer value
-        participantId: rp.participantId || lp.participantId || "",
-        expDate:       rp.expDate  || lp.expDate  || "",
-        startTime:     rp.startTime|| lp.startTime|| "",
-        notes:         rp.notes || lp.notes || "",
-        locPref:       [...new Set([...(rp.locPref||[]),...(lp.locPref||[])].map(Number).filter(n=>n>0))],
-        // Assignment: take whichever is set (remote wins if both set)
-        assigned:      rp.assigned || lp.assigned || null,
+        // Collaboration: local wins for user-entered scheduling fields
+        participantId: lp.participantId || rp.participantId || "",
+        expDate:       lp.expDate   || rp.expDate   || "",
+        startTime:     lp.startTime || rp.startTime || "",
+        notes:         lp.notes     || rp.notes     || "",
+        locPref:       lp.locPref?.length ? lp.locPref : [...new Set([...(rp.locPref||[])].map(Number).filter(n=>n>0))],
+        // Assignment: local wins (user set it here)
+        assigned:      lp.assigned  ?? rp.assigned ?? null,
         // Status: take highest rank
-        status: (STATUS_RANK[rp.status]??0) >= (STATUS_RANK[lp.status]??0) ? rp.status : lp.status,
+        status: (STATUS_RANK[rp.status]??0) > (STATUS_RANK[lp.status]??0) ? rp.status : lp.status,
         importedAt:    rp.importedAt || lp.importedAt || Date.now(),
       } : {
         // Brand new from Sheets — take as-is
@@ -696,6 +696,7 @@ function App() {
       if(remote.error) throw new Error(remote.error);
 
       // ── Participants: robust merge ──
+      let finalParticipants = participantsRef.current;
       if(remote.participants?.length) {
         const merged = mergeSheets(remote.participants, participantsRef.current);
         const prev = participantsRef.current;
@@ -704,25 +705,29 @@ function App() {
           const newCount = merged.length - prev.length;
           if(newCount > 0) showToast(`📥 ${newCount} ${lang==="en"?"new participant(s)":"נבדקים חדשים"}`);
         }
+        finalParticipants = merged; // use merged, not stale ref
       }
 
       // ── Locations: remote is authoritative, dedup by name ──
+      let finalLocations = locationsRef.current;
       if(remote.locations?.length){
         const byName=new Map();
         remote.locations.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
         const dedupedLocs=[...byName.values()];
         setLocations(dedupedLocs);
+        finalLocations = dedupedLocs;
         const validIds=new Set(dedupedLocs.map(l=>l.id));
-        setParticipants(prev=>prev.map(p=>({
+        finalParticipants = finalParticipants.map(p=>({
           ...p,
           locPref:(p.locPref||[]).map(Number).filter(id=>validIds.has(id)),
-        })));
+        }));
+        setParticipants(finalParticipants);
       }
 
       // ── Push merged state back to Sheets ──
       return gsSaveAll({
-        participants: participantsRef.current,
-        locations: locationsRef.current,
+        participants: finalParticipants,
+        locations: finalLocations,
         settings,
         user: settings.currentUser,
       });
