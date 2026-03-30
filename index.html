@@ -20,6 +20,17 @@ select:disabled, input:disabled { opacity: 0.6; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
     @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+    /* Thin subtle scrollbars */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(120,120,140,0.25); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(120,120,140,0.45); }
+    [data-dark="true"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+    [data-dark="true"] ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+    /* Firefox */
+    * { scrollbar-width: thin; scrollbar-color: rgba(120,120,140,0.3) transparent; }
+    [data-dark="true"] * { scrollbar-color: rgba(255,255,255,0.15) transparent; }
   </style>
   <script src="https://unpkg.com/react@17.0.2/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@17.0.2/umd/react-dom.production.min.js"></script>
@@ -2307,7 +2318,7 @@ function App() {
         {/* ══ SETTINGS ══════════════════════════════════════════════════════════ */}
         {modal==="settings"&&(
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)setModal(null);}}>
-            <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:480,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:480,width:"100%",boxShadow:"0 24px 80px rgba(0,0,0,0.45)",border:`1px solid ${T.border}`,maxHeight:"90vh",overflowY:"auto"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                 <h3 style={{margin:0,fontSize:15,color:T.text}}>{L("settingsTitle")}</h3>
                 <button onClick={()=>setModal(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
@@ -3084,7 +3095,7 @@ function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:T.surface,borderRadius:14,padding:24,maxWidth:560,width:"100%",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,0.35)"}}>
+      <div style={{background:T.surface,borderRadius:14,padding:24,maxWidth:560,width:"100%",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.45)",border:`1px solid ${T.border}`}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -3302,7 +3313,7 @@ function ManualEmailComposer({participants, T, sendViaGmail, GS_URL, L, lang}) {
 function ModalShell({title,T,onClose,children,wide}) {
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:wide?680:460,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(0,0,0,0.3)"}}>
+      <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:wide?680:460,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 80px rgba(0,0,0,0.45)",border:`1px solid ${T.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <h3 style={{margin:0,fontSize:15,color:T.text}}>{title}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
@@ -3331,7 +3342,7 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose,al
   const inputStyle={width:"100%",padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",boxSizing:"border-box",background:T.inputBg,color:T.text};
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,0.3)"}}>
+      <div style={{background:T.surface,borderRadius:13,padding:24,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.45)",border:`1px solid ${T.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <h3 style={{margin:0,fontSize:15,color:T.text}}>{p.id?L("editParticipant"):L("addParticipant")}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
