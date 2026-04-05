@@ -721,11 +721,13 @@ function App() {
         finalParticipants = merged; // use merged, not stale ref
       }
 
-      // ── Locations: remote is authoritative, dedup by name ──
+      // ── Locations: merge remote + local-only (local-only = added but not yet in Sheets)
       let finalLocations = locationsRef.current;
       if(remote.locations?.length){
         const byName=new Map();
         remote.locations.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
+        // Keep local locations not in remote (newly added, not yet saved to Sheets)
+        locationsRef.current.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
         const dedupedLocs=[...byName.values()];
         setLocations(dedupedLocs);
         finalLocations = dedupedLocs;
@@ -793,6 +795,10 @@ function App() {
         if(data.locations?.length){
           const byName=new Map();
           data.locations.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
+          // Keep local-only locations (added offline, not yet in Sheets)
+          participantsRef.current; // access ref to ensure fresh
+          const localLocs = locationsRef.current || [];
+          localLocs.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
           setLocations([...byName.values()]);
         }
         if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
@@ -1871,21 +1877,22 @@ function App() {
                               const on=pref.map(Number).includes(Number(loc.id));
                               const LC=PALETTE[li]||PALETTE[2];
                               const c=darkMode?LC.dk:LC.on;
+                              const abbr = loc.name.length<=3 ? loc.name : loc.name.charAt(0).toUpperCase();
                               return(
-                                <button key={loc.id} onClick={()=>{
+                                <button key={loc.id} title={loc.name} onClick={()=>{
                                   const cur=(p.locPref||[]).map(Number);
                                   const next=on?cur.filter(x=>x!==Number(loc.id)):[...new Set([...cur,Number(loc.id)])];
                                   updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
                                 }} style={{
                                   background:on?c.bg:T.tablehead,
                                   color:on?c.text:T.textFaint,
-                                  border:`1px solid ${on?c.border:T.border}`,
-                                  borderRadius:4,padding:"1px 4px",fontSize:9,
-                                  cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:400,
-                                  transition:"all .12s",whiteSpace:"nowrap",
-                                  flex:1,overflow:"hidden",textOverflow:"ellipsis",textAlign:"center",
+                                  border:`1.5px solid ${on?c.border:T.border}`,
+                                  borderRadius:4,padding:"0",width:22,height:22,
+                                  cursor:"pointer",fontFamily:"inherit",fontWeight:800,
+                                  transition:"all .12s",fontSize:9,
+                                  display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
                                 }}>
-                                  {on?"✓ ":""}{loc.name}
+                                  {on?"✓":abbr}
                                 </button>
                               );
                             });})()}
