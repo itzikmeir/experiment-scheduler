@@ -579,7 +579,8 @@ function App() {
   const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[]});
   const [colMenu,setColMenu]       = useState(null); // {col, x, y}
   const [rowEmailMenu,setRowEmailMenu] = useState(null);
-  const [rowMenu,setRowMenu] = useState(null); // {pid, x, y, p} // {pid, x, y}
+  const [rowMenu,setRowMenu] = useState(null); // {pid, x, y, p}
+  const [locPrefPopup,setLocPrefPopup] = useState(null); // {pid, x, y} // {pid, x, y}
   const [emailModal,setEmailModal] = useState(null);
   const [toast,setToast]           = useState(null);
   const [dupModal,setDupModal]     = useState(null);
@@ -1223,7 +1224,7 @@ function App() {
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div data-dark={darkMode?"true":"false"} dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setRowMenu(null);setColMenu(null);setNotifOpen(false);}}>
+    <div data-dark={darkMode?"true":"false"} dir={lang==="en"?"ltr":"rtl"} style={baseStyle} onClick={()=>{setMenuOpen(false);setExportMenu(false);setBulkEmailOpen(false);setRowEmailMenu(null);setRowMenu(null);setLocPrefPopup(null);setColMenu(null);setNotifOpen(false);}}>
 
 
       {/* ── Header ── */}
@@ -1822,7 +1823,7 @@ function App() {
                         <ExcelTh col="surveyDate" label={lang==="en"?"Survey":"שאלון"} fkey="surveyDate" options={[]}/>
                         <ExcelTh col="age"     label={L("colAge")}    fkey="age"     options={ageOpts}/>
                         <ExcelTh col="gender"  label={L("colGender")} fkey="gender"  options={genderOpts}/>
-                        <ExcelTh col="locPref" label={L("colLocPref")}fkey="locPref" options={locPrefOpts}/>
+                        <th style={{padding:"8px 4px",fontSize:11,color:T.textMuted,fontWeight:700,whiteSpace:"nowrap",width:44,textAlign:"center"}}>📍</th>
                         <ExcelTh col="avail"   label={L("colAvail")}  fkey="avail"   options={DAYS.map(d=>({v:d,l:lang==="en"?["Su","Mo","Tu","We","Th","Fr"]["אבגדהו".indexOf(d)]||d:d}))}/>
                         <SepTh/>
                         <ExcelTh col="expDate"       label={lang==="en"?"Exp. Date":"תאריך ניסוי"} fkey="expDate"   options={[]}/>
@@ -1860,43 +1861,33 @@ function App() {
                         <td style={{padding:"6px 10px",fontSize:11}}>
                           {p.gender&&<span style={{fontSize:11,color:T.textMuted}}>{p.gender==="גבר"?L("genderM"):p.gender==="אישה"?L("genderF"):p.gender}</span>}
                         </td>
-                        {/* Location preference */}
-                        <td style={{padding:"2px 3px",width:165,minWidth:165,maxWidth:165}}>
-                          <div style={{display:"flex",flexWrap:"nowrap",gap:2,width:"100%"}}>
-                            {(()=>{
-                              // Stable color palette: assigned once per location id, sorted by id ascending
-                              const PALETTE=[
-                                {on:{bg:"#EEF2FF",text:"#4338CA",border:"#C7D4FF"},dk:{bg:"#4338CA44",text:"#a5b4fc",border:"#4338CA88"}},
-                                {on:{bg:"#FFF7ED",text:"#C2410C",border:"#FED7AA"},dk:{bg:"#C2410C44",text:"#fb923c",border:"#C2410C88"}},
-                                {on:{bg:"#F5F3FF",text:"#7C3AED",border:"#DDD6FE"},dk:{bg:"#7C3AED44",text:"#c4b5fd",border:"#7C3AED88"}},
-                              ];
-                              // Sort locations by id to get stable order regardless of array position
-                              const sortedLocs=[...locations].sort((a,b)=>Number(a.id)-Number(b.id)).slice(0,3);
-                              return sortedLocs.map((loc,li)=>{
-                              const pref=p.locPref||[];
-                              const on=pref.map(Number).includes(Number(loc.id));
-                              const LC=PALETTE[li]||PALETTE[2];
-                              const c=darkMode?LC.dk:LC.on;
-                              const abbr = loc.name.length<=3 ? loc.name : loc.name.charAt(0).toUpperCase();
-                              return(
-                                <button key={loc.id} title={loc.name} onClick={()=>{
-                                  const cur=(p.locPref||[]).map(Number);
-                                  const next=on?cur.filter(x=>x!==Number(loc.id)):[...new Set([...cur,Number(loc.id)])];
-                                  updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
-                                }} style={{
-                                  background:on?c.bg:T.tablehead,
-                                  color:on?c.text:T.textFaint,
-                                  border:`1.5px solid ${on?c.border:T.border}`,
-                                  borderRadius:4,padding:"0",width:22,height:22,
-                                  cursor:"pointer",fontFamily:"inherit",fontWeight:800,
-                                  transition:"all .12s",fontSize:9,
-                                  display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+                        {/* Location preference — compact badge, click to expand */}
+                        <td style={{padding:"2px 4px",width:44,minWidth:44,maxWidth:44,textAlign:"center"}}>
+                          {(()=>{
+                            const pref=(p.locPref||[]).map(Number);
+                            const count=pref.filter(id=>locations.some(l=>Number(l.id)===id)).length;
+                            const isOpen=locPrefPopup?.pid===p.id;
+                            return(
+                              <div style={{position:"relative",display:"inline-block"}}>
+                                <button onClick={e=>{
+                                  e.stopPropagation();
+                                  const r=e.currentTarget.getBoundingClientRect();
+                                  setLocPrefPopup(isOpen?null:{pid:p.id,x:r.left,y:r.bottom+4});
+                                }} title={pref.length?locations.filter(l=>pref.includes(Number(l.id))).map(l=>l.name).join(", "):"העדפת מיקום"}
+                                style={{
+                                  background:count>0?(darkMode?"#4338CA33":"#EEF2FF"):T.tablehead,
+                                  color:count>0?(darkMode?"#a5b4fc":"#4338CA"):T.textFaint,
+                                  border:`1px solid ${count>0?(darkMode?"#4338CA88":"#C7D4FF"):T.border}`,
+                                  borderRadius:12,padding:"1px 7px",fontSize:10,fontWeight:700,
+                                  cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                                  minWidth:28,height:20,display:"flex",alignItems:"center",justifyContent:"center",gap:2,
                                 }}>
-                                  {on?"✓":abbr}
+                                  <span>📍</span>
+                                  {count>0&&<span>{count}</span>}
                                 </button>
-                              );
-                            });})()}
-                          </div>
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td style={{padding:"4px 6px",minWidth:90}}>
                           <div style={{display:"flex",gap:4,justifyContent:"space-between",width:"100%"}}>
@@ -2630,6 +2621,53 @@ function App() {
 
       {/* Toast */}
       {/* Per-row email dropdown */}
+      {/* locPref popup panel */}
+      {locPrefPopup&&(()=>{
+        const p=participants.find(x=>x.id===locPrefPopup.pid);
+        if(!p) return null;
+        const PALETTE=[
+          {on:{bg:"#EEF2FF",text:"#4338CA",border:"#C7D4FF"},dk:{bg:"#4338CA44",text:"#a5b4fc",border:"#4338CA88"}},
+          {on:{bg:"#FFF7ED",text:"#C2410C",border:"#FED7AA"},dk:{bg:"#C2410C44",text:"#fb923c",border:"#C2410C88"}},
+          {on:{bg:"#F5F3FF",text:"#7C3AED",border:"#DDD6FE"},dk:{bg:"#7C3AED44",text:"#c4b5fd",border:"#7C3AED88"}},
+          {on:{bg:"#F0FDF4",text:"#059669",border:"#A7F3D0"},dk:{bg:"#05966944",text:"#6ee7b7",border:"#05966988"}},
+          {on:{bg:"#FFF1F2",text:"#BE123C",border:"#FECDD3"},dk:{bg:"#BE123C44",text:"#fb7185",border:"#BE123C88"}},
+        ];
+        const sortedLocs=[...locations].sort((a,b)=>Number(a.id)-Number(b.id));
+        const left=Math.min(locPrefPopup.x, window.innerWidth-220);
+        const top=Math.min(locPrefPopup.y, window.innerHeight-280);
+        return(
+          <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setLocPrefPopup(null)}>
+            <div onClick={e=>e.stopPropagation()} style={{position:"fixed",left,top,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 28px rgba(0,0,0,0.22)",zIndex:1500,minWidth:180,padding:"8px 0",overflow:"hidden"}}>
+              <div style={{padding:"6px 12px 8px",fontSize:11,fontWeight:700,color:T.textMuted,borderBottom:`1px solid ${T.border}`}}>📍 {lang==="en"?"Location preference":"העדפת מיקום"}</div>
+              <div style={{padding:"6px 8px",display:"flex",flexDirection:"column",gap:4}}>
+                {sortedLocs.map((loc,li)=>{
+                  const pref=(p.locPref||[]).map(Number);
+                  const on=pref.includes(Number(loc.id));
+                  const LC=PALETTE[li%PALETTE.length];
+                  const c=darkMode?LC.dk:LC.on;
+                  return(
+                    <button key={loc.id} onClick={()=>{
+                      const cur=(p.locPref||[]).map(Number);
+                      const next=on?cur.filter(x=>x!==Number(loc.id)):[...new Set([...cur,Number(loc.id)])];
+                      updP(p.id,{locPref:next},`העדפת מיקום ${p.name}`);
+                    }} style={{
+                      display:"flex",alignItems:"center",gap:8,padding:"5px 8px",border:"none",
+                      background:on?c.bg:"transparent",borderRadius:6,cursor:"pointer",
+                      fontFamily:"inherit",fontSize:12,color:on?c.text:T.text,fontWeight:on?700:400,
+                      textAlign:"start",transition:"background .1s",
+                    }}>
+                      <span style={{width:14,height:14,borderRadius:3,border:`1.5px solid ${on?c.border:T.border}`,background:on?c.bg:T.tablehead,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,flexShrink:0}}>
+                        {on?"✓":""}
+                      </span>
+                      {loc.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Row 3-dot context menu */}
       {rowMenu&&(
         <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setRowMenu(null)}>
