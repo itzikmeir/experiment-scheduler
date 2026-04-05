@@ -80,9 +80,9 @@ const LANG = {
     sortAsc:"↑ סדר עולה", sortDesc:"↓ סדר יורד", clearColFilter:"✕ נקה סינון עמודה",
     statusPending:"ממתין", statusAssigned:"שובץ", statusConfirmed:"אישר",
     statusCompleted:"השלים", statusDeclined:"ביטל", statusIrrelevant:"לא רלוונטי",
-    dayA:"ראשון", dayB:"שני", dayC:"שלישי", dayD:"רביעי", dayE:"חמישי", dayF:"שישי",
+    dayA:"ראשון", dayB:"שני", dayC:"שלישי", dayD:"רביעי", dayE:"חמישי", dayF:"שישי", dayG:"שבת",
     dayPrefix:"יום ",
-    slotMorning:"בוקר", slotAfternoon:"צהריים",
+    slotMorning:"בוקר", slotAfternoon:"צהריים", slotEvening:"ערב",
     editParticipant:"עריכת נבדק", addParticipant:"הוספת נבדק ידנית",
     fieldName:"שם מלא *", fieldEmail:"אימייל", fieldPhone:"טלפון",
     fieldAge:"גיל", fieldGender:"מגדר", fieldStatus:"סטטוס",
@@ -164,9 +164,9 @@ const LANG = {
     sortAsc:"↑ Ascending", sortDesc:"↓ Descending", clearColFilter:"✕ Clear column filter",
     statusPending:"Pending", statusAssigned:"Assigned", statusConfirmed:"Confirmed",
     statusCompleted:"Completed", statusDeclined:"Declined", statusIrrelevant:"Irrelevant",
-    dayA:"Sunday", dayB:"Monday", dayC:"Tuesday", dayD:"Wednesday", dayE:"Thursday", dayF:"Friday",
+    dayA:"Sunday", dayB:"Monday", dayC:"Tuesday", dayD:"Wednesday", dayE:"Thursday", dayF:"Friday", dayG:"Saturday",
     dayPrefix:"",
-    slotMorning:"Morning", slotAfternoon:"Afternoon",
+    slotMorning:"Morning", slotAfternoon:"Afternoon", slotEvening:"Evening",
     editParticipant:"Edit Participant", addParticipant:"Add Participant Manually",
     fieldName:"Full Name *", fieldEmail:"Email", fieldPhone:"Phone",
     fieldAge:"Age", fieldGender:"Gender", fieldStatus:"Status",
@@ -279,9 +279,9 @@ async function gsUpdateP(id, patch, user) {
 const SEED = [{"name":"יריב איצקוביץ'","email":"Yarivitzko@gmail.com","phone":"0547829570","age":"29","gender":"גבר","availability":{"א":[],"ב":[],"ג":[],"ד":["בוקר (08:00-12:00)"],"ה":[],"ו":[]}},{"name":"דודו בחבוט","email":"Dudub987@gmail.com","phone":"0505949885","age":"26","gender":"גבר","availability":{"א":[],"ב":["צהריים (12:00-18:00)"],"ג":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ד":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"מוחמד שלאעטה","email":"mshalata79@gmail.com","phone":"0547425877","age":"24","gender":"גבר","availability":{"א":[],"ב":[],"ג":[],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"רימא חנגר","email":"reema.kh99@gmail.com","phone":"0547972793","age":"22","gender":"אישה","availability":{"א":[],"ב":["צהריים (12:00-18:00)"],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":[],"ו":[]}},{"name":"חן הוכשטט","email":"chen100h@gmail.com","phone":"0542863524","age":"34","gender":"גבר","availability":{"א":[],"ב":[],"ג":[],"ד":[],"ה":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"]}},{"name":"שרה אגבריה","email":"Ag.saraosh@gmail.com","phone":"0549939105","age":"24","gender":"אישה","availability":{"א":[],"ב":[],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"נגה הררי","email":"Nogush212@gmail.com","phone":"052-3262666","age":"26","gender":"אישה","availability":{"א":[],"ב":[],"ג":["צהריים (12:00-18:00)"],"ד":[],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"רנת קרימוב","email":"Karmant8@gmail.com","phone":"0549409320","age":"35","gender":"גבר","availability":{"א":["צהריים (12:00-18:00)"],"ב":[],"ג":[],"ד":[],"ה":["בוקר (08:00-12:00)"],"ו":["צהריים (12:00-18:00)"]}},{"name":"דריה גליקמן","email":"","phone":"0528759788","age":"25","gender":"אישה","availability":{"א":["צהריים (12:00-18:00)"],"ב":["צהריים (12:00-18:00)"],"ג":[],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"אליסה קולסניק","email":"kolesnikalisa29@gmail.com","phone":"0559635724","age":"28","gender":"אישה","availability":{"א":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ב":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ג":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ד":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ה":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"]}},{"name":"גאורגי דורוגוי","email":"gdorogoy@gmail.com","phone":"0586838206","age":"19","gender":"גבר","availability":{"א":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ב":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ג":[],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)"]}},{"name":"נור אדביה","email":"Nouredbia@gmail.com","phone":"058-7676773","age":"26","gender":"אישה","availability":{"א":["צהריים (12:00-18:00)"],"ב":["בוקר (08:00-12:00)"],"ג":["בוקר (08:00-12:00)"],"ד":["בוקר (08:00-12:00)"],"ה":["בוקר (08:00-12:00)"],"ו":["בוקר (08:00-12:00)"]}},{"name":"ראיה זובידאת","email":"raya.zubidat2002@gmail.com","phone":"0522096678","age":"23","gender":"אישה","availability":{"א":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ב":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ג":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ד":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ה":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"]}},{"name":"שאדה עיסאווי","email":"esawishada@gmail.com","phone":"0584886401","age":"22","gender":"אישה","availability":{"א":["בוקר (08:00-12:00)"],"ב":["בוקר (08:00-12:00)"],"ג":["בוקר (08:00-12:00)"],"ד":["בוקר (08:00-12:00)"],"ה":["בוקר (08:00-12:00)"],"ו":[]}},{"name":"הילה שק","email":"hillashek@gmail.com","phone":"0546444179","age":"23","gender":"אישה","availability":{"א":[],"ב":[],"ג":[],"ד":[],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"דניאל פייגר","email":"daniellefaiger@gmail.com","phone":"0533356876","age":"21","gender":"אישה","availability":{"א":[],"ב":[],"ג":[],"ד":[],"ה":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)","צהריים (12:00-18:00)"]}},{"name":"אלאא יוסף","email":"ay1260127@gmail.com","phone":"0522201826","age":"22","gender":"אישה","availability":{"א":[],"ב":["צהריים (12:00-18:00)"],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":[],"ו":[]}},{"name":"ליאן טרביה","email":"Layan.tarabeih@gmail.com","phone":"0505990406","age":"23","gender":"אישה","availability":{"א":["צהריים (12:00-18:00)"],"ב":["צהריים (12:00-18:00)"],"ג":[],"ד":[],"ה":[],"ו":["בוקר (08:00-12:00)"]}},{"name":"כרמל בר","email":"Carmel2882@gmail.com","phone":"0548103777","age":"32","gender":"אישה","availability":{"א":[],"ב":[],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":["בוקר (08:00-12:00)"]}},{"name":"אלן ווקר","email":"ajwecker@gmail.com","phone":"0546476275","age":"65","gender":"גבר","availability":{"א":[],"ב":[],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":[],"ו":[]}},{"name":"עידן הלפרן","email":"idanhalpern@gmail.com","phone":"0526708800","age":"23","gender":"גבר","availability":{"א":["צהריים (12:00-18:00)"],"ב":["צהריים (12:00-18:00)"],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":[]}},{"name":"מלאק דראושה","email":"mlkdrr7@icloud.com","phone":"0547419334","age":"21","gender":"אישה","availability":{"א":["צהריים (12:00-18:00)"],"ב":["צהריים (12:00-18:00)"],"ג":["צהריים (12:00-18:00)"],"ד":["צהריים (12:00-18:00)"],"ה":["צהריים (12:00-18:00)"],"ו":["צהריים (12:00-18:00)"]}}];
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const DAYS = ["א","ב","ג","ד","ה","ו"];
-const DAY_NAMES = {"א":"ראשון","ב":"שני","ג":"שלישי","ד":"רביעי","ה":"חמישי","ו":"שישי"};
-const SLOTS = ["בוקר (08:00-12:00)","צהריים (12:00-18:00)"];
+const DAYS = ["א","ב","ג","ד","ה","ו","ש"];
+const DAY_NAMES = {"א":"ראשון","ב":"שני","ג":"שלישי","ד":"רביעי","ה":"חמישי","ו":"שישי","ש":"שבת"};
+const SLOTS = ["בוקר (08:00-12:00)","צהריים (12:00-18:00)","ערב (18:00-22:00)"];
 const DAY_SUB = {"א":"יום א","ב":"יום ב","ג":"יום ג","ד":"יום ד","ה":"יום ה","ו":"יום ו"};
 const HEBREW_MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 
@@ -525,7 +525,7 @@ function App() {
 
   // Dynamic day names using L()
   const dayNames = useMemo(()=>({
-    "א":L("dayA"),"ב":L("dayB"),"ג":L("dayC"),"ד":L("dayD"),"ה":L("dayE"),"ו":L("dayF")
+    "א":L("dayA"),"ב":L("dayB"),"ג":L("dayC"),"ד":L("dayD"),"ה":L("dayE"),"ו":L("dayF"),"ש":L("dayG")
   }),[lang]);
 
   // ── Sync state ────────────────────────────────────────────────────────────
@@ -667,8 +667,10 @@ function App() {
         locPref:       lp.locPref?.length ? lp.locPref : [...new Set([...(rp.locPref||[])].map(Number).filter(n=>n>0))],
         // Assignment: local wins (user set it here)
         assigned:      lp.assigned  ?? rp.assigned ?? null,
-        // Status: take highest rank
-        status: (STATUS_RANK[rp.status]??0) > (STATUS_RANK[lp.status]??0) ? rp.status : lp.status,
+        // Status: if remote has participantId set → completed always wins
+        status: (rp.participantId && rp.participantId !== lp.participantId)
+          ? "completed"
+          : (STATUS_RANK[rp.status]??0) > (STATUS_RANK[lp.status]??0) ? rp.status : lp.status,
         importedAt:    rp.importedAt || lp.importedAt || Date.now(),
       } : {
         // Brand new from Sheets — take as-is
@@ -1599,7 +1601,7 @@ function App() {
                     e.target.value="";
                   }} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer"}}>
                     <option value="">{lang==="en"?"Shift for selected…":"משמרת לנבחרים…"}</option>
-                    {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</option>)}
+                    {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):s.includes("צהריים")?L("slotAfternoon"):L("slotEvening")}</option>)}
                   </select>
 
                   {/* Bulk set location */}
@@ -1802,7 +1804,7 @@ function App() {
                           </th>
                         );
                       };
-                      const slotOpts=[{v:"בוקר (08:00-12:00)",l:L("slotMorning")},{v:"צהריים (12:00-18:00)",l:L("slotAfternoon")}];
+                      const slotOpts=[{v:"בוקר (08:00-12:00)",l:L("slotMorning")},{v:"צהריים (12:00-18:00)",l:L("slotAfternoon")},{v:"ערב (18:00-22:00)",l:L("slotEvening")}];
                       const dayOpts=DAYS.map(d=>({v:d,l:lang==="en"?["SUN","MON","TUE","WED","THU","FRI"]["אבגדהו".indexOf(d)]||d:d}));
                       const locOpts=locations.map(l=>({v:String(l.id),l:l.name}));
                       const statusOpts=Object.entries(statusMeta).map(([v,m])=>({v,l:m.label}));
@@ -1895,20 +1897,14 @@ function App() {
                               const slots=p.availability[d]||[];
                               const hasMorn=slots.some(s=>s.includes("בוקר"));
                               const hasAft=slots.some(s=>s.includes("צהריים"));
-                              const dayLabel=lang==="en"?["Su","Mo","Tu","We","Th","Fr"]["אבגדהו".indexOf(d)]||d:d;
+                              const hasEve=slots.some(s=>s.includes("ערב"));
+                              const dayLabel=lang==="en"?["Su","Mo","Tu","We","Th","Fr","Sa"]["אבגדהושׁ".split("").indexOf(d)]||d:d;
                               return(
-                                <div key={d} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
+                                <div key={d} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,flex:1}}>
                                   <span style={{fontSize:8,color:T.textFaint,fontWeight:600,lineHeight:1,letterSpacing:1}}>{dayLabel}</span>
-                                  <span title={lang==="en"?"Morning":"בוקר"} style={{
-                                    width:"100%",height:5,borderRadius:2,display:"block",
-                                    background:hasMorn?"#3B82F6":T.border,
-                                    opacity:hasMorn?1:0.2
-                                  }}/>
-                                  <span title={lang==="en"?"Afternoon":"צהריים"} style={{
-                                    width:"100%",height:5,borderRadius:2,display:"block",
-                                    background:hasAft?"#F97316":T.border,
-                                    opacity:hasAft?1:0.2
-                                  }}/>
+                                  <span title="בוקר" style={{width:"100%",height:4,borderRadius:1,display:"block",background:hasMorn?"#3B82F6":T.border,opacity:hasMorn?1:0.2}}/>
+                                  <span title="צהריים" style={{width:"100%",height:4,borderRadius:1,display:"block",background:hasAft?"#F97316":T.border,opacity:hasAft?1:0.2}}/>
+                                  <span title="ערב" style={{width:"100%",height:4,borderRadius:1,display:"block",background:hasEve?"#8B5CF6":T.border,opacity:hasEve?1:0.2}}/>
                                 </div>
                               );
                             })}
@@ -1918,8 +1914,17 @@ function App() {
                         <td style={{padding:0,width:1,background:T.border,border:"none",opacity:0.4,pointerEvents:"none"}}/>
 {/* Experiment Date */}
                         <td style={{padding:"2px 2px"}}>
-                          <input type="date" value={p.expDate||""} onChange={e=>updP(p.id,{expDate:e.target.value})}
-                            style={{padding:"2px 3px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:95,colorScheme:darkMode?"dark":"light"}}/>
+                          <input type="date" value={p.expDate||""} onChange={e=>{
+                            const v=e.target.value;
+                            const patch={expDate:v};
+                            if(v&&p.assigned){
+                              const jsDay=new Date(v+"T12:00").getDay(); // 0=Sun..6=Sat
+                              const dayMap=["א","ב","ג","ד","ה","ו","ש"];
+                              const heDay=dayMap[jsDay];
+                              if(heDay&&heDay!==p.assigned.day) patch.assigned={...p.assigned,day:heDay};
+                            }
+                            updP(p.id,patch);
+                          }} style={{padding:"2px 3px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:95,colorScheme:darkMode?"dark":"light"}}/>
                         </td>
 {/* Day */}
                         <td style={{padding:"2px 2px"}}>
@@ -1937,7 +1942,7 @@ function App() {
                         <td style={{padding:"2px 2px"}}>
                           <select value={p.assigned?.slot||""} disabled={!p.assigned} onChange={e=>updP(p.id,{assigned:{...p.assigned,slot:e.target.value}})}
                             style={{padding:"3px 4px",border:`1px solid ${p.assigned?T.border:T.disabledBorder||T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.disabledBg||T.tablehead,color:p.assigned?T.accent:T.disabledText||T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:90}}>
-                            {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):L("slotAfternoon")}</option>)}
+                            {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):s.includes("צהריים")?L("slotAfternoon"):L("slotEvening")}</option>)}
                           </select>
                         </td>
 {/* Time */}
@@ -3329,9 +3334,9 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose,al
   if(!L) L=(k)=>k;
   if(!lang) lang="he";
   const [p,setP]=useState(initP);
-  const SLOTS=["בוקר (08:00-12:00)","צהריים (12:00-18:00)"];
-  const DAYS=["א","ב","ג","ד","ה","ו"];
-  const DAY_NAMES={"א":L("dayA"),"ב":L("dayB"),"ג":L("dayC"),"ד":L("dayD"),"ה":L("dayE"),"ו":L("dayF")};
+  const SLOTS=["בוקר (08:00-12:00)","צהריים (12:00-18:00)","ערב (18:00-22:00)"];
+  const DAYS=["א","ב","ג","ד","ה","ו","ש"];
+  const DAY_NAMES={"א":L("dayA"),"ב":L("dayB"),"ג":L("dayC"),"ד":L("dayD"),"ה":L("dayE"),"ו":L("dayF"),"ש":L("dayG")};
   const toggleAvail=(day,slot)=>{
     setP(prev=>{
       const cur=prev.availability[day]||[];
@@ -3347,33 +3352,40 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose,al
           <h3 style={{margin:0,fontSize:15,color:T.text}}>{p.id?L("editParticipant"):L("addParticipant")}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:T.textMuted}}>×</button>
         </div>
-        {/* Survey data card */}
-        {(p.surveyDate||p.locPrefText||p.eligible||p.licenseQ||p.hebrewRead||p.visionNote)&&(
-          <div style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:9,padding:"10px 14px",marginBottom:14}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <span style={{fontSize:11,fontWeight:800,color:T.textMuted,textTransform:"uppercase",letterSpacing:1}}>📋 {lang==="en"?"Survey answers":"תשובות שאלון"}</span>
-              {p.surveyDate&&<span style={{fontSize:10,color:T.textFaint,marginRight:"auto"}}>({new Date(p.surveyDate).toLocaleDateString(lang==="en"?"en-GB":"he-IL")})</span>}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11}}>
-              {[
-                {q:"גיל 18+",  v:p.eligible  ||"—"},
-                {q:"רישיון נהיגה", v:p.licenseQ||"—"},
-                {q:"קריאה בעברית",  v:p.hebrewRead||"—"},
-                {q:"העדפת מיקום",  v:p.locPrefText||"—"},
-              ].map(row=>(
-                <div key={row.q} style={{background:T.surface,borderRadius:6,padding:"5px 8px"}}>
-                  <div style={{color:T.textFaint,fontSize:10,marginBottom:2}}>{row.q}</div>
-                  <div style={{color:T.text,fontWeight:600}}>{row.v}</div>
-                </div>
-              ))}
-            </div>
-            {p.visionNote&&(
-              <div style={{marginTop:8,padding:"6px 8px",background:darkMode?"#2d2a1a":"#FFFBEB",borderRadius:6,fontSize:11,color:darkMode?"#fde68a":"#92400E"}}>
-                <span style={{fontWeight:700}}>👁 הצהרת ראייה: </span>{p.visionNote}
+        {/* Survey data card — dynamic: show all non-empty survey fields */}
+        {(()=>{
+          // Collect all survey fields — fixed + any extra keys starting with "survey_"
+          const KNOWN_LABELS={"eligible":"גיל 18+","licenseQ":"רישיון נהיגה","hebrewRead":"קריאה בעברית","locPrefText":"העדפת מיקום"};
+          const rows=Object.entries(KNOWN_LABELS)
+            .filter(([k])=>p[k])
+            .map(([k,q])=>({q,v:p[k]}));
+          // Extra survey fields (any key "survey_*")
+          Object.keys(p).filter(k=>k.startsWith("survey_")&&p[k]).forEach(k=>{
+            rows.push({q:k.replace("survey_","").replace(/_/g," "),v:p[k]});
+          });
+          if(!p.surveyDate&&!p.visionNote&&rows.length===0) return null;
+          return(
+            <div style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:9,padding:"10px 14px",marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                <span style={{fontSize:11,fontWeight:800,color:T.textMuted,textTransform:"uppercase",letterSpacing:1}}>📋 {lang==="en"?"Survey answers":"תשובות שאלון"}</span>
+                {p.surveyDate&&<span style={{fontSize:10,color:T.textFaint,marginRight:"auto"}}>({new Date(p.surveyDate).toLocaleDateString(lang==="en"?"en-GB":"he-IL")})</span>}
               </div>
-            )}
-          </div>
-        )}
+              {rows.length>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11,marginBottom:p.visionNote?8:0}}>
+                {rows.map(row=>(
+                  <div key={row.q} style={{background:T.surface,borderRadius:6,padding:"5px 8px"}}>
+                    <div style={{color:T.textFaint,fontSize:10,marginBottom:2}}>{row.q}</div>
+                    <div style={{color:T.text,fontWeight:600,wordBreak:"break-word"}}>{row.v}</div>
+                  </div>
+                ))}
+              </div>}
+              {p.visionNote&&(
+                <div style={{padding:"6px 8px",background:darkMode?"#2d2a1a":"#FFFBEB",borderRadius:6,fontSize:11,color:darkMode?"#fde68a":"#92400E"}}>
+                  <span style={{fontWeight:700}}>👁 הצהרת ראייה: </span>{p.visionNote}
+                </div>
+              )}
+            </div>
+          );
+        })()}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
           {[{k:"name",l:L("fieldName")},{k:"email",l:L("fieldEmail")},{k:"phone",l:L("fieldPhone")},{k:"age",l:L("fieldAge")}].map(f=>(
             <div key={f.k}>
