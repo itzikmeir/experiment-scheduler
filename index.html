@@ -617,6 +617,62 @@ function App() {
   // eslint-disable-next-line
   },[]);
 
+  // ── Canonical dedup functions — single source of truth ─────────────────────
+  // Participants: dedup by email > name, keep richest record
+  function dedupeParticipants(arr) {
+    const STATUS_RANK = {pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
+    const norm = s => (s||"").toString().toLowerCase().replace(/\s+/g,"");
+    const seen = new Map(); // key → index in result
+    const result = [];
+    for (const p of arr) {
+      if (!p || (!p.name && !p.email)) continue;
+      const key = p.email ? norm(p.email) : norm(p.name);
+      if (seen.has(key)) {
+        const idx = seen.get(key);
+        const ex = result[idx];
+        // Merge: keep richest values
+        result[idx] = {
+          ...ex,
+          ...p,
+          id:           ex.id, // keep stable id
+          name:         ex.name || p.name,
+          email:        ex.email || p.email || "",
+          phone:        ex.phone || p.phone || "",
+          participantId:ex.participantId || p.participantId || "",
+          expDate:      ex.expDate || p.expDate || "",
+          startTime:    ex.startTime || p.startTime || "",
+          notes:        ex.notes || p.notes || "",
+          assigned:     ex.assigned ?? p.assigned ?? null,
+          locPref:      [...new Set([...(ex.locPref||[]),...(p.locPref||[])].map(Number).filter(n=>n>0))],
+          status: (()=>{
+            const ep=STATUS_RANK[ex.participantId?"completed":ex.status]??0;
+            const pp=STATUS_RANK[p.participantId?"completed":p.status]??0;
+            return ep>=pp ? (ex.participantId?"completed":ex.status) : (p.participantId?"completed":p.status);
+          })(),
+        };
+      } else {
+        seen.set(key, result.length);
+        result.push({
+          ...p,
+          status: p.participantId ? "completed" : p.status,
+        });
+      }
+    }
+    return result;
+  }
+
+  // Locations: dedup by name (case-insensitive), keep first
+  function dedupeLocations(arr) {
+    const seen = new Map();
+    return arr.filter(l => {
+      if (!l?.name) return false;
+      const k = l.name.trim().toLowerCase();
+      if (seen.has(k)) return false;
+      seen.set(k, true);
+      return true;
+    });
+  }
+
   // ── Robust merge: Sheets = source of truth ─────────────────────────────────
   // Rules:
   // 1. Every record in Sheets is included (no dropping)
@@ -688,15 +744,8 @@ function App() {
       }
     }
 
-    // Step 3: dedup by email then name (keep first occurrence)
-    const seen = new Map();
-    return result.filter(p => {
-      const key = norm(p.email) || norm(p.name);
-      if (!key) return true;
-      if (seen.has(key)) return false;
-      seen.set(key, true);
-      return true;
-    });
+    // Step 3: canonical dedup
+    return dedupeParticipants(result);
   }
 
   // ── Bidirectional reconcile helper (also called by "Sync" button) ────────
@@ -712,7 +761,7 @@ function App() {
       // ── Participants: robust merge ──
       let finalParticipants = participantsRef.current;
       if(remote.participants?.length) {
-        const merged = mergeSheets(remote.participants, participantsRef.current);
+        const merged = dedupeParticipants(mergeSheets(remote.participants, participantsRef.current));
         const prev = participantsRef.current;
         if(JSON.stringify(merged) !== JSON.stringify(prev)) {
           setParticipants(merged);
@@ -722,22 +771,21 @@ function App() {
         finalParticipants = merged; // use merged, not stale ref
       }
 
-      // ── Locations: merge remote + local-only (local-only = added but not yet in Sheets)
+      // ── Locations: Sheets is source of truth — dedupe + no local pollution ──
       let finalLocations = locationsRef.current;
       if(remote.locations?.length){
-        const byName=new Map();
-        remote.locations.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
-        // Keep local locations not in remote (newly added, not yet saved to Sheets)
-        locationsRef.current.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
-        const dedupedLocs=[...byName.values()];
-        setLocations(dedupedLocs);
-        finalLocations = dedupedLocs;
-        const validIds=new Set(dedupedLocs.map(l=>l.id));
-        finalParticipants = finalParticipants.map(p=>({
+        finalLocations = dedupeLocations(remote.locations);
+        setLocations(finalLocations);
+        const validIds=new Set(finalLocations.map(l=>l.id));
+        finalParticipants = dedupeParticipants(finalParticipants.map(p=>({
           ...p,
           locPref:(p.locPref||[]).map(Number).filter(id=>validIds.has(id)),
-        }));
+        })));
         setParticipants(finalParticipants);
+      } else {
+        // No remote locations yet — still dedup local
+        finalLocations = dedupeLocations(locationsRef.current);
+        setLocations(finalLocations);
       }
 
       // ── Push merged state back to Sheets ──
@@ -776,7 +824,7 @@ function App() {
       .then(data=>{
         if(data.error) throw new Error(data.error);
         if(data.participants?.length) {
-          const merged = mergeSheets(data.participants, participantsRef.current);
+          const merged = dedupeParticipants(mergeSheets(data.participants, participantsRef.current));
           setParticipants(merged);
           // Alert for missing email
           merged.forEach(p=>{
@@ -794,13 +842,7 @@ function App() {
           }
         }
         if(data.locations?.length){
-          const byName=new Map();
-          data.locations.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
-          // Keep local-only locations (added offline, not yet in Sheets)
-          participantsRef.current; // access ref to ensure fresh
-          const localLocs = locationsRef.current || [];
-          localLocs.forEach(l=>{if(!byName.has(l.name)) byName.set(l.name,l);});
-          setLocations([...byName.values()]);
+          setLocations(dedupeLocations(data.locations));
         }
         if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
         if(data.researchers?.length)  ; // could store if needed
