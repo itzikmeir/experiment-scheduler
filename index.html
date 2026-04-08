@@ -780,109 +780,94 @@ function App() {
   }
 
   // ── Bidirectional reconcile helper (also called by "Sync" button) ────────
-  const reconcileRef = React.useRef(null);
   const isSyncingRef = React.useRef(false);
-  const doSync = React.useCallback(()=>{
-    if(isSyncingRef.current) return Promise.resolve();
+
+  // ── IMPORT from Form Responses 1 → merge into local (read-only from Sheets)
+  function doImport() {
+    if(isSyncingRef.current) return;
     isSyncingRef.current = true;
     setSyncStatus("syncing");
-    return gsGetAll().then(remote=>{
+    // Call importFromForm action on Apps Script
+    fetch(GS_URL, {
+      method:"POST", mode:"cors", headers:{"Content-Type":"text/plain"},
+      body: JSON.stringify({action:"importFromForm", user:settings.currentUser})
+    })
+    .then(r=>r.json())
+    .then(result=>{
+      if(result.error) throw new Error(result.error);
+      // Now read the updated Participants sheet
+      return gsGetAll();
+    })
+    .then(remote=>{
       if(remote.error) throw new Error(remote.error);
-
-      // ── Participants: robust merge ──
-      let finalParticipants = participantsRef.current;
       if(remote.participants?.length) {
-        const merged = dedupeParticipants(mergeSheets(remote.participants, participantsRef.current));
-        const prev = participantsRef.current;
-        if(JSON.stringify(merged) !== JSON.stringify(prev)) {
-          setParticipants(merged);
-          const newCount = merged.length - prev.length;
-          if(newCount > 0) showToast(`📥 ${newCount} ${lang==="en"?"new participant(s)":"נבדקים חדשים"}`);
-        }
-        finalParticipants = merged; // use merged, not stale ref
+        const remotePs = dedupeParticipants(remote.participants);
+        const localPs  = participantsRef.current;
+        // Merge: for each remote record, preserve local scheduling overrides
+        const localByEmail = new Map(localPs.filter(p=>p.email).map(p=>[p.email.toLowerCase().trim(), p]));
+        const localByName  = new Map(localPs.map(p=>[p.name.toLowerCase().trim(), p]));
+        const merged = remotePs.map(rp=>{
+          const lp = (rp.email ? localByEmail.get(rp.email.toLowerCase().trim()) : null)
+                  || localByName.get(rp.name.toLowerCase().trim());
+          if(!lp) return {...rp, expDate: normDate(rp.expDate)};
+          return {
+            ...rp,
+            expDate:       normDate(lp.expDate || rp.expDate),
+            startTime:     lp.startTime || rp.startTime || "",
+            assigned:      lp.assigned  ?? rp.assigned  ?? null,
+            participantId: lp.participantId || rp.participantId || "",
+            status:        (lp.participantId||rp.participantId) ? "completed"
+              : [lp.status,rp.status].reduce((best,s)=>
+                  ({pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0}[s]??0) >
+                  ({pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0}[best]??0) ? s : best, "pending"),
+            notes:   lp.notes   || rp.notes   || "",
+            locPref: lp.locPref?.length ? lp.locPref : (rp.locPref||[]).map(Number).filter(n=>n>0),
+          };
+        });
+        setParticipants(dedupeParticipants(merged));
+        const added = merged.length - localPs.length;
+        showToast(`📥 ${lang==="en"?"Imported":"יובאו"} ${merged.length} ${lang==="en"?"participants":"נבדקים"}${added>0?` (+${added})`:""}`);
       }
-
-      // ── Locations: Sheets is source of truth — dedupe + no local pollution ──
-      let finalLocations = locationsRef.current;
-      if(remote.locations?.length){
-        finalLocations = dedupeLocations(remote.locations);
-        setLocations(finalLocations);
-        const validIds=new Set(finalLocations.map(l=>l.id));
-        finalParticipants = dedupeParticipants(finalParticipants.map(p=>({
-          ...p,
-          locPref:(p.locPref||[]).map(Number).filter(id=>validIds.has(id)),
-        })));
-        setParticipants(finalParticipants);
-      } else {
-        // No remote locations yet — still dedup local
-        finalLocations = dedupeLocations(locationsRef.current);
-        setLocations(finalLocations);
-      }
-
-      // ── Push merged state back to Sheets ──
-      return gsSaveAll({
-        participants: finalParticipants,
-        locations: finalLocations,
-        settings,
-        user: settings.currentUser,
-      });
-    }).then(()=>{
       isSyncingRef.current = false;
-      setSyncStatus("ok"); setLastSync(new Date()); lastSyncRef.current=Date.now();
-      showToast(lang==="en"?"✅ Synced":"✅ מסונכרן");
-    }).catch(e=>{
+      setSyncStatus("ok"); setLastSync(new Date());
+    })
+    .catch(e=>{
       isSyncingRef.current = false;
-      setSyncStatus("error"); console.warn("Sync error:",e);
+      setSyncStatus("error");
+      showToast((lang==="en"?"Import failed: ":"שגיאת ייבוא: ")+e.message,"error");
     });
-  // eslint-disable-next-line
-  },[settings]);
-  reconcileRef.current = doSync;
+  }
 
-  // Auto-run every 45 seconds
-  useEffect(()=>{
-    const iv = setInterval(()=>reconcileRef.current?.(), 45000);
-    return ()=>clearInterval(iv);
-  },[]);
+  // ── SYNC: push local state to PARTICIPANTS sheet (overwrites it completely)
+  function doSync() {
+    if(isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    setSyncStatus("syncing");
+    const ps = dedupeParticipants(participantsRef.current);
+    const ls = dedupeLocations(locationsRef.current);
+    gsSaveAll({participants:ps, locations:ls, settings, user:settings.currentUser})
+      .then(()=>{
+        isSyncingRef.current = false;
+        setSyncStatus("ok"); setLastSync(new Date());
+        showToast(lang==="en"?"✅ Saved to Sheets":"✅ נשמר ל-Sheets");
+      })
+      .catch(e=>{
+        isSyncingRef.current = false;
+        setSyncStatus("error");
+        showToast((lang==="en"?"Save failed: ":"שגיאת שמירה: ")+e.message,"error");
+      });
+  }
   useEffect(()=>{
     document.documentElement.setAttribute("dir", lang==="en"?"ltr":"rtl");
     document.documentElement.setAttribute("lang", lang);
   },[lang]);
 
-  // ── Load from Sheets on startup ───────────────────────────────────────────
+  // ── Startup: load from localStorage only (no network) ──────────────────────
   useEffect(()=>{
-    setSyncStatus("syncing");setSyncMsg("טוען מ-Google Sheets...");
-    gsGetAll()
-      .then(data=>{
-        if(data.error) throw new Error(data.error);
-        if(data.participants?.length) {
-          const merged = dedupeParticipants(mergeSheets(data.participants, participantsRef.current));
-          setParticipants(merged);
-          // Alert for missing email
-          merged.forEach(p=>{
-            if(!p.email) addNotif({
-              id:'no-email-'+p.id,
-              type:'warning',
-              msg: (lang==="en"?`${p.name}: missing email`:`${p.name}: חסר אימייל`),
-              p,
-              actions:['keep','delete','merge']
-            });
-          });
-          if(merged.length < data.participants.length) {
-            const dupsRemoved = data.participants.length - merged.length;
-            addNotif({id:'dedup-'+Date.now(),type:'info',msg:(lang==="en"?`${dupsRemoved} duplicates merged on load`:`${dupsRemoved} כפילויות מוזגו בטעינה`),actions:[]});
-          }
-        }
-        if(data.locations?.length){
-          setLocations(dedupeLocations(data.locations));
-        }
-        if(data.settings && Object.keys(data.settings).length) setSettings(s=>({...s,...data.settings}));
-        if(data.researchers?.length)  ; // could store if needed
-        setSyncStatus("ok");setSyncMsg("מסונכרן");setLastSync(new Date());
-      })
-      .catch(err=>{
-        setSyncStatus("error");setSyncMsg("לא מחובר לשיטס — עובד מקומית");
-        console.warn("Sheets load failed:",err);
-      });
+    // Dedup on load to clean any stale duplicates
+    setParticipants(prev=>dedupeParticipants(prev));
+    setLocations(prev=>dedupeLocations(prev));
+    setSyncStatus("idle");
   },[]);
 
   // ── NO auto-save: Sheets is the database, never overwrite automatically ─────
@@ -905,12 +890,7 @@ function App() {
     if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
     setParticipantsUndo(prev=>prev.map(p=>p.id===id?{...p,...patch}:p), logMsg);
     if(logMsg) addLog("עדכון",logMsg);
-    // Push only this single row to Sheets (safe — never touches other rows)
-    if(syncStatus!=="error") {
-      gsUpdateP(id, patch, settings.currentUser)
-        .then(()=>{setSyncStatus("ok");setSyncMsg("נשמר");setLastSync(new Date());})
-        .catch(()=>{setSyncStatus("error");setSyncMsg("שגיאת עדכון שורה");});
-    }
+    // No auto-push — user saves manually via "שמור" button
   },[addLog, settings.currentUser, syncStatus]);
 
   const assignP = (id,day,slot,locationId,room)=>{
@@ -1361,7 +1341,7 @@ function App() {
             <div>
               <div style={{display:"flex",alignItems:"baseline",gap:6}}>
                 <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"Arial,sans-serif"}}>{L("appName")}</h1>
-                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v1.9</span>
+                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v2.0</span>
               </div>
               <p style={{margin:0,opacity:0.55,fontSize:10,marginTop:2}}>{settings.experimentName}</p>
             </div>
@@ -1390,12 +1370,19 @@ function App() {
                   :<span style={{color:"#F87171",fontSize:10}}>✕</span>}
             </span>
 
-            {/* Single Sync button */}
-            <button title={lang==="en"?"Sync with Sheets":"סנכרן עם Sheets"} onClick={()=>doSync()} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:5,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
+            {/* Import button */}
+            <button title={lang==="en"?"Import from Form Responses":"ייבא מהשאלון"} onClick={doImport} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
               {syncStatus==="syncing"
                 ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
-                :<span style={{fontSize:13,lineHeight:1}}>⇄</span>}
-              {syncStatus==="syncing"?(lang==="en"?"Syncing…":"מסנכרן…"):lang==="en"?"Sync":"סנכרן"}
+                :"📥"}
+              {lang==="en"?"Import":"ייבא"}
+            </button>
+            {/* Save/Sync button */}
+            <button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={doSync} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
+              {syncStatus==="syncing"
+                ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
+                :"💾"}
+              {lang==="en"?"Save":"שמור"}
             </button>
 
             {/* Open Sheets link */}
