@@ -619,6 +619,14 @@ function App() {
 
   // ── Canonical dedup functions — single source of truth ─────────────────────
   // Participants: dedup by email > name, keep richest record
+  // Normalize a date value to YYYY-MM-DD or ""
+  function normDate(v) {
+    if(!v) return "";
+    if(/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return String(v);
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? "" : d.toISOString().slice(0,10);
+  }
+
   function dedupeParticipants(arr) {
     const STATUS_RANK = {pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
     const norm = s => (s||"").toString().toLowerCase().replace(/\s+/g,"");
@@ -642,7 +650,7 @@ function App() {
           status: (ex.participantId||p.participantId) ? "completed"
             : exRank>=pRank ? ex.status : p.status,
           notes: ex.notes || p.notes || "",
-          expDate: ex.expDate || p.expDate || "",
+          expDate: normDate(ex.expDate || p.expDate || ""),
           startTime: ex.startTime || p.startTime || "",
         };
         continue;
@@ -676,6 +684,7 @@ function App() {
         seenIds.set(idKey, newIdx);
         result.push({
           ...p,
+          expDate: normDate(p.expDate),
           status: p.participantId ? "completed" : p.status,
         });
       }
@@ -756,7 +765,7 @@ function App() {
           hebrewRead:    rp.hebrewRead  || lp.hebrewRead  || "",
           // Scheduling: prefer remote if set (another user may have updated), else local
           participantId: finalPid,
-          expDate:       rp.expDate   || lp.expDate   || "",
+          expDate:       (()=>{const v=rp.expDate||lp.expDate||"";if(!v)return"";if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v;const d=new Date(v);return isNaN(d)?"":d.toISOString().slice(0,10);})(),
           startTime:     rp.startTime || lp.startTime || "",
           notes:         rp.notes     || lp.notes     || "",
           locPref:       rp.locPref?.length ? rp.locPref.map(Number).filter(n=>n>0)
@@ -2003,7 +2012,15 @@ function App() {
                         <td style={{padding:0,width:1,background:T.border,border:"none",opacity:0.4,pointerEvents:"none"}}/>
 {/* Experiment Date */}
                         <td style={{padding:"2px 2px"}}>
-                          <input type="date" value={p.expDate||""} onChange={e=>{
+                          <input type="date" value={(()=>{
+                            const v=p.expDate||"";
+                            if(!v) return "";
+                            // Normalize: if already YYYY-MM-DD keep it, else parse
+                            if(/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+                            const d=new Date(v);
+                            if(isNaN(d)) return "";
+                            return d.toISOString().slice(0,10);
+                          })()} onChange={e=>{
                             const v=e.target.value;
                             const patch={expDate:v};
                             if(v&&p.assigned){
