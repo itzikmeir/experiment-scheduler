@@ -1352,7 +1352,7 @@ function App() {
             <div>
               <div style={{display:"flex",alignItems:"baseline",gap:6}}>
                 <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"Arial,sans-serif"}}>{L("appName")}</h1>
-                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v1.8</span>
+                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v1.9</span>
               </div>
               <p style={{margin:0,opacity:0.55,fontSize:10,marginTop:2}}>{settings.experimentName}</p>
             </div>
@@ -2395,7 +2395,34 @@ function App() {
                       </div>
                       <div style={{display:"flex",gap:5}}>
                         <button onClick={()=>setModal({type:"editLoc",loc:{...loc,rooms:[...loc.rooms]}})} style={{background:c.bg,color:c.text,border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>✏️</button>
-                        <button onClick={()=>{if(window.confirm(lang==="en"?"Delete?":"למחוק?")) setLocations(p=>p.filter(l=>l.id!==loc.id));}} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑</button>
+                        <button onClick={()=>{
+                          const affected=participants.filter(p=>
+                            (p.assigned?.locationId===loc.id) ||
+                            (p.locPref||[]).map(Number).includes(Number(loc.id))
+                          );
+                          const msg = affected.length>0
+                            ? (lang==="en"
+                              ? `Delete "${loc.name}"?\n\n${affected.length} participant(s) reference this location:\n${affected.map(p=>p.name).join(", ")}\n\nThey will be cleared from this location.`
+                              : `למחוק את "${loc.name}"?\n\n${affected.length} נבדקים מקושרים למיקום זה:\n${affected.map(p=>p.name).join(", ")}\n\nהמיקום יוסר מהרשומות שלהם.`)
+                            : (lang==="en"?`Delete "${loc.name}"?`:`למחוק את "${loc.name}"?`);
+                          if(!window.confirm(msg)) return;
+                          // Remove from locations
+                          const newLocs = locations.filter(l=>l.id!==loc.id);
+                          setLocations(newLocs);
+                          // Clear from all participants
+                          const newPs = participants.map(p=>({
+                            ...p,
+                            locPref: (p.locPref||[]).map(Number).filter(id=>id!==Number(loc.id)),
+                            assigned: p.assigned?.locationId===loc.id
+                              ? {...p.assigned, locationId:null, room:""}
+                              : p.assigned,
+                          }));
+                          setParticipantsUndo(newPs, `מחיקת מיקום: ${loc.name}`);
+                          // Immediately save to Sheets so sync doesn't bring it back
+                          gsSaveAll({participants:newPs, locations:newLocs, settings, user:settings.currentUser})
+                            .then(()=>{setSyncStatus("ok");setLastSync(new Date());showToast(`🗑 "${loc.name}" נמחק`);})
+                            .catch(()=>setSyncStatus("error"));
+                        }} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑</button>
                       </div>
                     </div>
                     <div style={{fontSize:11,color:T.textMuted,marginBottom:8}}>{n} {L("locAssigned")}</div>
