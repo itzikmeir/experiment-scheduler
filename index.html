@@ -1288,6 +1288,33 @@ function App() {
                       setMenuOpen(false);
                       setLangConfirm(next);
                     }},
+                    {icon:"🔍",label:lang==="en"?"Export Debug Log":"ייצוא לוג אבחון",action:()=>{
+                      setMenuOpen(false);
+                      const log={
+                        timestamp:new Date().toISOString(),
+                        version:"v1.8",
+                        participants:{
+                          total:participants.length,
+                          duplicateEmails:(()=>{const m=new Map();participants.forEach(p=>{if(p.email){const k=p.email.toLowerCase().trim();m.set(k,(m.get(k)||0)+1);}});return[...m.entries()].filter(([,c])=>c>1).map(([e,c])=>({email:e,count:c}));})(),
+                          duplicateNames:(()=>{const m=new Map();participants.forEach(p=>{const k=p.name.toLowerCase().trim();m.set(k,(m.get(k)||0)+1);});return[...m.entries()].filter(([,c])=>c>1).map(([n,c])=>({name:n,count:c}));})(),
+                          statuses:participants.reduce((a,p)=>{a[p.status]=(a[p.status]||0)+1;return a;},{}),
+                          withParticipantId:participants.filter(p=>p.participantId).map(p=>({name:p.name,id:p.id,pid:p.participantId,status:p.status})),
+                          list:participants.map(p=>({id:p.id,name:p.name,email:p.email,status:p.status,participantId:p.participantId,assigned:!!p.assigned,expDate:p.expDate,locPref:p.locPref})),
+                        },
+                        locations:{
+                          total:locations.length,
+                          duplicateNames:(()=>{const m=new Map();locations.forEach(l=>{const k=l.name.toLowerCase().trim();m.set(k,(m.get(k)||0)+1);});return[...m.entries()].filter(([,c])=>c>1).map(([n,c])=>({name:n,count:c}));})(),
+                          list:locations.map(l=>({id:l.id,name:l.name})),
+                        },
+                        syncStatus,
+                        lastSync:lastSync?.toISOString()||null,
+                      };
+                      const blob=new Blob([JSON.stringify(log,null,2)],{type:"application/json"});
+                      const url=URL.createObjectURL(blob);
+                      const a=document.createElement("a");
+                      a.href=url;a.download=`debug-${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.json`;
+                      document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+                    }},
                     {icon:"ℹ️",label:L("menuAbout"),action:()=>{setModal("about");setMenuOpen(false);}},
                   ].map(item=>(
                     <button key={item.label} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"start",padding:"11px 16px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
