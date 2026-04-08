@@ -679,72 +679,69 @@ function App() {
   // 2. For matching records: take the "richer" value field by field
   // 3. Dedup by email > phone > name (keep first)
   // 4. Local-only records (not in Sheets) are kept until next gsSaveAll writes them
+  // ── mergeSheets: remote = authoritative list, local provides scheduling overrides ──
+  // KEY RULE: remote defines WHO EXISTS. Local only enriches scheduling fields.
+  // This prevents accumulation of stale/duplicate records across syncs.
   function mergeSheets(remotePs, localPs) {
-    const STATUS_RANK = {pending:0, assigned:1, confirmed:2, completed:3, declined:1, irrelevant:0};
+    const STATUS_RANK = {pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
     const norm = s => (s||"").toString().toLowerCase().replace(/\s+/g,"");
 
-    // Build a lookup of local records — match by email first, then name
-    // Do NOT match by id alone (ids from different clients can collide)
-    const byEmail = new Map(localPs.filter(p=>p.email).map(p=>[norm(p.email), p]));
-    const byName  = new Map(localPs.map(p=>[norm(p.name), p]));
+    // Build local lookup for scheduling field overrides only
+    const localById    = new Map(localPs.map(p=>[String(p.id), p]));
+    const localByEmail = new Map(localPs.filter(p=>p.email).map(p=>[norm(p.email), p]));
+    const localByName  = new Map(localPs.map(p=>[norm(p.name), p]));
 
-    const result = [];
-    const usedLocalIds = new Set();
+    // Remote defines the list — iterate remote only (no Step 2 accumulation)
+    const result = remotePs
+      .filter(rp => rp.name || rp.email)
+      .map(rp => {
+        // Find local counterpart for scheduling overrides
+        const lp = localById.get(String(rp.id))
+               || (rp.email ? localByEmail.get(norm(rp.email)) : null)
+               || localByName.get(norm(rp.name));
 
-    // Step 1: process every remote record
-    for (const rp of remotePs) {
-      if (!rp.name && !rp.email) continue; // skip truly empty rows
-      // Find matching local record — email match is definitive, name is fallback
-      let lp = (rp.email ? byEmail.get(norm(rp.email)) : null)
-            || byName.get(norm(rp.name));
+        if (!lp) return rp; // pure remote record, no local overrides
 
-      if (lp) usedLocalIds.add(lp.id);
+        // Remote = form/sheet data, local = scheduling overrides
+        const remoteHasPid = rp.participantId && rp.participantId.trim();
+        const localHasPid  = lp.participantId && lp.participantId.trim();
+        const finalPid     = remoteHasPid || localHasPid || "";
 
-      const merged = lp ? {
-        // Identity: prefer local id (stable), take remote name/email/phone if richer
-        id:           lp.id,
-        name:         lp.name || rp.name,
-        email:        lp.email || rp.email || "",
-        phone:        lp.phone || rp.phone || "",
-        age:          lp.age   || rp.age   || "",
-        gender:       lp.gender|| rp.gender|| "",
-        // Form data: remote wins (it comes from the form directly)
-        availability:  rp.availability || lp.availability,
-        surveyDate:    rp.surveyDate   || lp.surveyDate   || null,
-        locPrefText:   rp.locPrefText  || lp.locPrefText  || "",
-        visionNote:    rp.visionNote   || lp.visionNote   || "",
-        eligible:      rp.eligible     || lp.eligible     || "",
-        licenseQ:      rp.licenseQ     || lp.licenseQ     || "",
-        hebrewRead:    rp.hebrewRead   || lp.hebrewRead   || "",
-        // Collaboration: local wins for user-entered scheduling fields
-        participantId: lp.participantId || rp.participantId || "",
-        expDate:       lp.expDate   || rp.expDate   || "",
-        startTime:     lp.startTime || rp.startTime || "",
-        notes:         lp.notes     || rp.notes     || "",
-        locPref:       lp.locPref?.length ? lp.locPref : [...new Set([...(rp.locPref||[])].map(Number).filter(n=>n>0))],
-        // Assignment: local wins (user set it here)
-        assigned:      lp.assigned  ?? rp.assigned ?? null,
-        // Status: if remote has participantId set → completed always wins
-        status: (rp.participantId && rp.participantId !== lp.participantId)
-          ? "completed"
-          : (STATUS_RANK[rp.status]??0) > (STATUS_RANK[lp.status]??0) ? rp.status : lp.status,
-        importedAt:    rp.importedAt || lp.importedAt || Date.now(),
-      } : {
-        // Brand new from Sheets — take as-is
-        ...rp,
-      };
+        // Status: participantId present anywhere → completed; else take higher rank
+        const remoteRank = STATUS_RANK[remoteHasPid?"completed":rp.status]??0;
+        const localRank  = STATUS_RANK[localHasPid?"completed":lp.status]??0;
+        const finalStatus= finalPid ? "completed"
+          : (remoteRank > localRank ? rp.status : lp.status);
 
-      result.push(merged);
-    }
+        return {
+          // Use remote id as canonical (it came from Sheets)
+          id:           rp.id,
+          name:         rp.name || lp.name,
+          email:        rp.email || lp.email || "",
+          phone:        rp.phone || lp.phone || "",
+          age:          rp.age   || lp.age   || "",
+          gender:       rp.gender|| lp.gender|| "",
+          // Form data: always from remote
+          availability:  rp.availability,
+          surveyDate:    rp.surveyDate || null,
+          locPrefText:   rp.locPrefText || lp.locPrefText || "",
+          visionNote:    rp.visionNote  || lp.visionNote  || "",
+          eligible:      rp.eligible    || lp.eligible    || "",
+          licenseQ:      rp.licenseQ    || lp.licenseQ    || "",
+          hebrewRead:    rp.hebrewRead  || lp.hebrewRead  || "",
+          // Scheduling: prefer remote if set (another user may have updated), else local
+          participantId: finalPid,
+          expDate:       rp.expDate   || lp.expDate   || "",
+          startTime:     rp.startTime || lp.startTime || "",
+          notes:         rp.notes     || lp.notes     || "",
+          locPref:       rp.locPref?.length ? rp.locPref.map(Number).filter(n=>n>0)
+                       : (lp.locPref||[]).map(Number).filter(n=>n>0),
+          assigned:      rp.assigned  ?? lp.assigned  ?? null,
+          status:        finalStatus,
+          importedAt:    rp.importedAt || lp.importedAt || Date.now(),
+        };
+      });
 
-    // Step 2: keep local-only records (edited offline, not yet in Sheets)
-    for (const lp of localPs) {
-      if (!usedLocalIds.has(lp.id)) {
-        result.push(lp); // will be pushed to Sheets on next gsSaveAll
-      }
-    }
-
-    // Step 3: canonical dedup
     return dedupeParticipants(result);
   }
 
