@@ -622,11 +622,31 @@ function App() {
   function dedupeParticipants(arr) {
     const STATUS_RANK = {pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
     const norm = s => (s||"").toString().toLowerCase().replace(/\s+/g,"");
-    const seen = new Map(); // key → index in result
+    const seen = new Map();    // email/name key → index in result
+    const seenIds = new Map(); // id → index in result
     const result = [];
     for (const p of arr) {
       if (!p || (!p.name && !p.email)) continue;
       const key = p.email ? norm(p.email) : norm(p.name);
+      // Also check: same numeric id = same Sheets row (merge them)
+      const idKey = String(p.id);
+      if (seenIds.has(idKey) && !seen.has(key)) {
+        // Same id, different email/name — merge into existing
+        const idx = seenIds.get(idKey);
+        const ex = result[idx];
+        const exRank = STATUS_RANK[ex.participantId?"completed":ex.status]??0;
+        const pRank  = STATUS_RANK[p.participantId?"completed":p.status]??0;
+        result[idx] = {
+          ...ex,
+          participantId: ex.participantId || p.participantId || "",
+          status: (ex.participantId||p.participantId) ? "completed"
+            : exRank>=pRank ? ex.status : p.status,
+          notes: ex.notes || p.notes || "",
+          expDate: ex.expDate || p.expDate || "",
+          startTime: ex.startTime || p.startTime || "",
+        };
+        continue;
+      }
       if (seen.has(key)) {
         const idx = seen.get(key);
         const ex = result[idx];
@@ -651,7 +671,9 @@ function App() {
           })(),
         };
       } else {
-        seen.set(key, result.length);
+        const newIdx = result.length;
+        seen.set(key, newIdx);
+        seenIds.set(idKey, newIdx);
         result.push({
           ...p,
           status: p.participantId ? "completed" : p.status,
@@ -661,14 +683,17 @@ function App() {
     return result;
   }
 
-  // Locations: dedup by name (case-insensitive), keep first
+  // Locations: dedup by name AND by id — keep first occurrence of each
   function dedupeLocations(arr) {
-    const seen = new Map();
+    const seenNames = new Map();
+    const seenIds   = new Set();
     return arr.filter(l => {
       if (!l?.name) return false;
       const k = l.name.trim().toLowerCase();
-      if (seen.has(k)) return false;
-      seen.set(k, true);
+      const id = String(l.id);
+      if (seenNames.has(k) || seenIds.has(id)) return false;
+      seenNames.set(k, true);
+      seenIds.add(id);
       return true;
     });
   }
