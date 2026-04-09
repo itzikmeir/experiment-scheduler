@@ -530,6 +530,38 @@ function App() {
 
   // ── Sync state ────────────────────────────────────────────────────────────
   const [syncStatus,setSyncStatus] = useState("idle"); // idle | syncing | ok | error
+  // ── Editor lock — only one editor at a time (stored in Sheets Settings) ──
+  const [editorLock,setEditorLock]   = useState(null); // {user, since} or null
+  const LOCK_KEY = "exp_editor_lock";
+
+  async function acquireLock() {
+    // Check Sheets for existing lock
+    try {
+      const res = await fetch(`${GS_URL}?action=getLock`);
+      const data = await res.json();
+      if (data.lock && data.lock.user && data.lock.user !== settings.currentUser) {
+        const mins = Math.round((Date.now() - (data.lock.since||0)) / 60000);
+        showToast(`🔒 ${data.lock.user} עורך כרגע (לפני ${mins} דק')`, "error");
+        return false;
+      }
+      // Set lock
+      await fetch(GS_URL, {method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},
+        body:JSON.stringify({action:"setLock",user:settings.currentUser,since:Date.now()})});
+      setEditorLock({user:settings.currentUser,since:Date.now()});
+      return true;
+    } catch(e) {
+      // If Sheets unreachable, allow editing locally
+      return true;
+    }
+  }
+
+  async function releaseLock() {
+    try {
+      await fetch(GS_URL, {method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},
+        body:JSON.stringify({action:"releaseLock",user:settings.currentUser})});
+    } catch(e) {}
+    setEditorLock(null);
+  }
   // ── Auth state ────────────────────────────────────────────────────────────
   const [userRole,setUserRole] = useState(()=>{
     try{return JSON.parse(localStorage.getItem("exp_role"))||"viewer";}catch{return "viewer";}
@@ -781,66 +813,163 @@ function App() {
 
   // ── Bidirectional reconcile helper (also called by "Sync" button) ────────
   const isSyncingRef = React.useRef(false);
+  const [editLock, setEditLock] = React.useState(null); // {user, since} or null
+  const editLockRef = React.useRef(null);
+  useEffect(()=>{editLockRef.current=editLock;},[editLock]);
 
-  // ── IMPORT from Form Responses 1 → merge into local (read-only from Sheets)
-  function doImport() {
+  // Acquire/release edit lock — stored in Sheets Settings so all clients see it
+  function acquireLock() {
+    const lock = {user: settings.currentUser, since: Date.now()};
+    setEditLock(lock);
+    editLockRef.current = lock;
+    // Persist to Sheets settings key "editLock"
+    fetch(GS_URL,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},
+      body:JSON.stringify({action:"setSetting",key:"editLock",value:JSON.stringify(lock),user:settings.currentUser})
+    }).catch(()=>{});
+  }
+  function releaseLock() {
+    setEditLock(null);
+    editLockRef.current = null;
+    fetch(GS_URL,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},
+      body:JSON.stringify({action:"setSetting",key:"editLock",value:"",user:settings.currentUser})
+    }).catch(()=>{});
+  }
+  // Check if lock is held by someone else (stale after 30 min)
+  function checkLock(remoteLockStr) {
+    if(!remoteLockStr) return null;
+    try {
+      const lock = JSON.parse(remoteLockStr);
+      if(!lock.user) return null;
+      if(Date.now() - lock.since > 30*60*1000) return null; // stale
+      if(lock.user === settings.currentUser) return null; // it's me
+      return lock;
+    } catch { return null; }
+  }
+
+  // ── SYNC: read Form Responses 1, smart-merge into local state ──────────────
+  // MANUAL FIELDS preserved: status, assigned, startTime, expDate, notes, locPref, participantId
+  function doSync() {
     if(isSyncingRef.current) return;
     isSyncingRef.current = true;
     setSyncStatus("syncing");
-    // Call importFromForm action on Apps Script
-    fetch(GS_URL, {
-      method:"POST", mode:"cors", headers:{"Content-Type":"text/plain"},
-      body: JSON.stringify({action:"importFromForm", user:settings.currentUser})
-    })
-    .then(r=>r.json())
-    .then(result=>{
-      if(result.error) throw new Error(result.error);
-      // Now read the updated Participants sheet
-      return gsGetAll();
-    })
-    .then(remote=>{
-      if(remote.error) throw new Error(remote.error);
-      if(remote.participants?.length) {
-        const remotePs = dedupeParticipants(remote.participants);
-        const localPs  = participantsRef.current;
-        // Merge: for each remote record, preserve local scheduling overrides
-        const localByEmail = new Map(localPs.filter(p=>p.email).map(p=>[p.email.toLowerCase().trim(), p]));
-        const localByName  = new Map(localPs.map(p=>[p.name.toLowerCase().trim(), p]));
+    // 1. Check edit lock first
+    fetch(`${GS_URL}?action=getSetting&key=editLock`, {mode:"cors"})
+      .then(r=>r.json())
+      .then(({value})=>{
+        const blocker = checkLock(value);
+        if(blocker) {
+          const mins = Math.round((Date.now()-blocker.since)/60000);
+          throw new Error(`${blocker.user} ${lang==="en"?"is currently editing":"עורך כרגע"} (${mins}${lang==="en"?"m ago":"ד׳ לפני"})`);
+        }
+        // 2. Call syncFromForm — reads Form Responses, merges with Participants in Sheets
+        return fetch(GS_URL,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},
+          body:JSON.stringify({action:"syncFromForm",user:settings.currentUser})
+        }).then(r=>r.json());
+      })
+      .then(result=>{
+        if(result.error) throw new Error(result.error);
+        // 3. Read updated Participants sheet
+        return fetch(`${GS_URL}?action=getAll`,{mode:"cors"}).then(r=>r.json());
+      })
+      .then(remote=>{
+        if(remote.error) throw new Error(remote.error);
+        const MANUAL = ["status","assigned","startTime","expDate","notes","locPref","participantId","assigned_day","assigned_slot","assigned_locId","assigned_room"];
+        const localPs = participantsRef.current;
+        const localByEmail = new Map(localPs.filter(p=>p.email).map(p=>[p.email.toLowerCase().trim(),p]));
+        const localByPhone = new Map(localPs.filter(p=>p.phone).map(p=>[p.phone.replace(/\D/g,""),p]));
+
+        const remotePs = remote.participants||[];
+        const ambiguous = [];
+
         const merged = remotePs.map(rp=>{
-          const lp = (rp.email ? localByEmail.get(rp.email.toLowerCase().trim()) : null)
-                  || localByName.get(rp.name.toLowerCase().trim());
-          if(!lp) return {...rp, expDate: normDate(rp.expDate)};
+          const normEmail = (rp.email||"").toLowerCase().trim();
+          const normPhone = (rp.phone||"").replace(/\D/g,"");
+          const lp = (normEmail && localByEmail.get(normEmail))
+                  || (normPhone && normPhone.length>=8 && localByPhone.get(normPhone));
+          if(!lp) return {...rp, expDate:normDate(rp.expDate)};
+          // Preserve all manual fields from local
           return {
             ...rp,
             expDate:       normDate(lp.expDate || rp.expDate),
-            startTime:     lp.startTime || rp.startTime || "",
-            assigned:      lp.assigned  ?? rp.assigned  ?? null,
+            startTime:     lp.startTime || "",
+            assigned:      lp.assigned  ?? null,
             participantId: lp.participantId || rp.participantId || "",
-            status:        (lp.participantId||rp.participantId) ? "completed"
-              : [lp.status,rp.status].reduce((best,s)=>
-                  ({pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0}[s]??0) >
-                  ({pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0}[best]??0) ? s : best, "pending"),
-            notes:   lp.notes   || rp.notes   || "",
-            locPref: lp.locPref?.length ? lp.locPref : (rp.locPref||[]).map(Number).filter(n=>n>0),
+            status:        lp.participantId ? "completed" : lp.status,
+            notes:         lp.notes || "",
+            locPref:       lp.locPref||[],
           };
         });
-        setParticipants(dedupeParticipants(merged));
-        const added = merged.length - localPs.length;
-        showToast(`📥 ${lang==="en"?"Imported":"יובאו"} ${merged.length} ${lang==="en"?"participants":"נבדקים"}${added>0?` (+${added})`:""}`);
-      }
-      isSyncingRef.current = false;
-      setSyncStatus("ok"); setLastSync(new Date());
-    })
-    .catch(e=>{
-      isSyncingRef.current = false;
-      setSyncStatus("error");
-      showToast((lang==="en"?"Import failed: ":"שגיאת ייבוא: ")+e.message,"error");
-    });
+
+        // Alert for ambiguous (name matches but no email/phone match)
+        const localNames = new Map(localPs.map(p=>[p.name.toLowerCase().trim(),p]));
+        remotePs.forEach(rp=>{
+          const normEmail = (rp.email||"").toLowerCase().trim();
+          const normPhone = (rp.phone||"").replace(/\D/g,"");
+          const byEmail = normEmail && localByEmail.get(normEmail);
+          const byPhone = normPhone && normPhone.length>=8 && localByPhone.get(normPhone);
+          const byName  = localNames.get((rp.name||"").toLowerCase().trim());
+          if(!byEmail && !byPhone && byName) {
+            ambiguous.push({remote:rp, local:byName});
+          }
+        });
+        if(ambiguous.length>0) {
+          ambiguous.forEach(({remote:rp,local:lp})=>{
+            addNotif({
+              id:"ambig-"+rp.id,
+              type:"warning",
+              msg:`⚠️ ${lang==="en"?"Possible duplicate:":"כפילות אפשרית:"} "${rp.name}" — ${lang==="en"?"no email/phone match but name matches":"אין התאמת אימייל/טלפון אבל השם זהה"}`,
+              p:lp,
+              actions:["keep","merge"]
+            });
+          });
+        }
+
+        // Validate locPref against known locations
+        const validLocIds = new Set((remote.locations||[]).map(l=>Number(l.id)));
+        const invalidLocWarnings = [];
+        const finalPs = dedupeParticipants(merged).map(p=>{
+          const badLoc = p.locPref?.filter(id=>!validLocIds.has(Number(id)))||[];
+          if(badLoc.length>0) invalidLocWarnings.push({name:p.name, ids:badLoc});
+          const badAssigned = p.assigned?.locationId && !validLocIds.has(Number(p.assigned.locationId));
+          return {
+            ...p,
+            locPref: (p.locPref||[]).filter(id=>validLocIds.has(Number(id))),
+            assigned: badAssigned ? {...p.assigned, locationId:null, room:""} : p.assigned,
+          };
+        });
+        if(invalidLocWarnings.length>0) {
+          addNotif({
+            id:"badloc-"+Date.now(),
+            type:"warning",
+            msg:`📍 ${invalidLocWarnings.length} ${lang==="en"?"participant(s) had unknown location IDs — cleared":"נבדקים עם מיקום לא מוכר — נוקה"}: ${invalidLocWarnings.map(w=>w.name).join(", ")}`,
+            actions:[]
+          });
+        }
+
+        setParticipants(finalPs);
+        if(remote.locations?.length) setLocations(dedupeLocations(remote.locations));
+
+        const newCount = finalPs.length - localPs.length;
+        showToast(`⇄ ${lang==="en"?"Synced":"סונכרן"} ${finalPs.length} ${lang==="en"?"participants":"נבדקים"}${newCount>0?` (+${newCount})`:""}`);
+        isSyncingRef.current = false;
+        setSyncStatus("ok"); setLastSync(new Date());
+      })
+      .catch(e=>{
+        isSyncingRef.current = false;
+        setSyncStatus("error");
+        showToast(`⚠️ ${e.message}`,"error");
+      });
   }
 
-  // ── SYNC: push local state to PARTICIPANTS sheet (overwrites it completely)
-  function doSync() {
+  // ── SAVE: force-overwrite PARTICIPANTS sheet with current local state ────────
+  function doSave() {
     if(isSyncingRef.current) return;
+    // Check edit lock
+    const lock = editLockRef.current;
+    if(lock && lock.user !== settings.currentUser) {
+      showToast(`⛔ ${lock.user} ${lang==="en"?"is editing":"עורך"}`,"error");
+      return;
+    }
     isSyncingRef.current = true;
     setSyncStatus("syncing");
     const ps = dedupeParticipants(participantsRef.current);
@@ -849,13 +978,25 @@ function App() {
       .then(()=>{
         isSyncingRef.current = false;
         setSyncStatus("ok"); setLastSync(new Date());
-        showToast(lang==="en"?"✅ Saved to Sheets":"✅ נשמר ל-Sheets");
+        releaseLock();
+        showToast(lang==="en"?"✅ Saved":"✅ נשמר");
       })
       .catch(e=>{
         isSyncingRef.current = false;
         setSyncStatus("error");
-        showToast((lang==="en"?"Save failed: ":"שגיאת שמירה: ")+e.message,"error");
+        showToast(`שגיאת שמירה: ${e.message}`,"error");
       });
+  }
+
+  // ── SAVE LOCATIONS: push only locations to Sheets ───────────────────────────
+  function doSaveLocations() {
+    const ls = dedupeLocations(locationsRef.current);
+    fetch(GS_URL,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},
+      body:JSON.stringify({action:"saveLocations",locations:ls,user:settings.currentUser})
+    })
+    .then(r=>r.json())
+    .then(()=>showToast(lang==="en"?"📍 Locations saved":"📍 מיקומים נשמרו"))
+    .catch(()=>showToast("שגיאת שמירת מיקומים","error"));
   }
   useEffect(()=>{
     document.documentElement.setAttribute("dir", lang==="en"?"ltr":"rtl");
@@ -888,6 +1029,8 @@ function App() {
   // ── Participant mutations ──────────────────────────────────────────────────
   const updP = useCallback((id,patch,logMsg)=>{
     if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
+    // Acquire edit lock if not already held
+    if(!editLockRef.current) acquireLock();
     setParticipantsUndo(prev=>prev.map(p=>p.id===id?{...p,...patch}:p), logMsg);
     if(logMsg) addLog("עדכון",logMsg);
     // No auto-push — user saves manually via "שמור" button
@@ -1341,7 +1484,7 @@ function App() {
             <div>
               <div style={{display:"flex",alignItems:"baseline",gap:6}}>
                 <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"Arial,sans-serif"}}>{L("appName")}</h1>
-                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v2.0</span>
+                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v2.1</span>
               </div>
               <p style={{margin:0,opacity:0.55,fontSize:10,marginTop:2}}>{settings.experimentName}</p>
             </div>
@@ -1370,20 +1513,24 @@ function App() {
                   :<span style={{color:"#F87171",fontSize:10}}>✕</span>}
             </span>
 
-            {/* Import button */}
-            <button title={lang==="en"?"Import from Form Responses":"ייבא מהשאלון"} onClick={doImport} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
+            {/* Sync button */}
+            <button title={lang==="en"?"Sync from Form Responses":"סנכרן מהשאלון"} onClick={doSync} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
               {syncStatus==="syncing"
                 ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
-                :"📥"}
-              {lang==="en"?"Import":"ייבא"}
+                :<span style={{fontSize:13}}>⇄</span>}
+              {lang==="en"?"Sync":"סנכרן"}
             </button>
-            {/* Save/Sync button */}
-            <button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={doSync} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
+            {/* Save button */}
+            <button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={doSave} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
               {syncStatus==="syncing"
                 ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
                 :"💾"}
               {lang==="en"?"Save":"שמור"}
             </button>
+            {/* Edit lock indicator */}
+            {editLock&&<span style={{fontSize:10,color:"rgba(255,255,255,0.7)",background:"rgba(251,191,36,0.2)",border:"1px solid rgba(251,191,36,0.4)",borderRadius:5,padding:"0 7px",height:26,display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
+              ✏️ {editLock.user}
+            </span>}
 
             {/* Open Sheets link */}
             <a href="https://docs.google.com/spreadsheets/d/1P5MUNE8ANNwS5UZh-dXT3jPhQzF6qpnWhsCPweClt9M/edit?gid=37937551#gid=37937551" target="_blank" rel="noreferrer" title={lang==="en"?"Open Google Sheets":"פתח Google Sheets"} style={{display:"flex",alignItems:"center",height:26,padding:"0 8px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:5,color:"rgba(255,255,255,0.85)",fontSize:13,textDecoration:"none",lineHeight:"26px"}}>
@@ -1517,63 +1664,7 @@ function App() {
                 </div>
               )}
             </div>
-            {/* Import buttons + status indicator */}
-            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-              <button onClick={()=>fileRef.current?.click()}
-                disabled={importStatus?.state==="loading"}
-                style={{background:T.accent,color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",opacity:importStatus?.state==="loading"?0.6:1}}>
-                {L("btnImportCSV")}
-              </button>
-              <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>{handleFile(e.target.files[0]);e.target.value="";}}/>
-              <button onClick={()=>{
-                setImportStatus({state:"loading", msg:"מייבא מ-Google Sheets..."});
-                fetch(`${GS_URL}?action=importFromForm`)
-                  .then(r=>r.json())
-                  .then(d=>{
-                    if(d.error) throw new Error(d.error);
-                    return fetch(`${GS_URL}?action=getAll`).then(r=>r.json()).then(data=>{
-                      if(data.participants?.length) setParticipants(data.participants);
-                      setSyncStatus("ok"); setLastSync(new Date());
-                      setImportStatus({state:"ok", msg:`✅ נוספו ${d.added}, עודכנו ${d.updated}`});
-                      setTimeout(()=>setImportStatus(null),4000);
-                    });
-                  })
-                  .catch(e=>{
-                    const msg = e.message.includes("Unknown action") 
-                      ? "עדכן את Apps Script ל-v3 ופרסם גרסה חדשה"
-                      : e.message;
-                    setImportStatus({state:"error", msg:`שגיאה: ${msg}`});
-                    setTimeout(()=>setImportStatus(null),7000);
-                  });
-              }}
-                disabled={importStatus?.state==="loading"}
-                style={{background:"#059669",color:"white",border:"none",padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",opacity:importStatus?.state==="loading"?0.6:1}}>
-                {L("btnImportSheets")}
-              </button>
-
-              {/* Import status indicator */}
-              {importStatus&&(
-                <div style={{
-                  display:"flex",alignItems:"center",gap:7,
-                  padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:600,
-                  background:importStatus.state==="loading"?"#EEF2FF":importStatus.state==="ok"?"#ECFDF5":"#FEF2F2",
-                  color:importStatus.state==="loading"?"#4338CA":importStatus.state==="ok"?"#059669":"#DC2626",
-                  border:`1px solid ${importStatus.state==="loading"?"#C7D4FF":importStatus.state==="ok"?"#A7F3D0":"#FECACA"}`,
-                  transition:"all .3s",
-                }}>
-                  {importStatus.state==="loading"&&(
-                    <span style={{
-                      display:"inline-block",width:13,height:13,border:"2px solid #C7D4FF",
-                      borderTopColor:"#4338CA",borderRadius:"50%",
-                      animation:"spin .7s linear infinite",flexShrink:0
-                    }}/>
-                  )}
-                  {importStatus.state==="ok"&&<span>✅</span>}
-                  {importStatus.state==="error"&&<span>⚠️</span>}
-                  <span>{importStatus.msg}</span>
-                </div>
-              )}
-            </div>          </div>
+            </div>
         </div>
       </div>
 
@@ -2385,7 +2476,10 @@ function App() {
         {/* ══ LOCATIONS ════════════════════════════════════════════════════════ */}
         {tab==="locations"&&(
           <div>
-            <button onClick={()=>setModal("addLoc")} style={{background:T.accent,color:"white",border:"none",padding:"8px 15px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",marginBottom:14}}>{L("addLocation")}</button>
+            <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
+              <button onClick={()=>setModal("addLoc")} style={{background:T.accent,color:"white",border:"none",padding:"8px 15px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{L("addLocation")}</button>
+              <button onClick={doSaveLocations} style={{background:"#059669",color:"white",border:"none",padding:"8px 15px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>💾 {lang==="en"?"Save Locations":"שמור מיקומים"}</button>
+            </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:12}}>
               {locations.map((loc,i)=>{
                 const c=LOC_COLORS[i%LOC_COLORS.length];
