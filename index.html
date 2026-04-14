@@ -854,7 +854,10 @@ function App() {
     if(isSyncingRef.current) return;
     isSyncingRef.current = true;
     setSyncStatus("syncing");
-    // 1. Check edit lock first
+    // 1. Check edit lock first, then read from Sheets
+    // NOTE: syncFromForm is intentionally skipped here — it rewrites Participants sheet
+    // and can overwrite scheduling fields (status, expDate, assigned) saved by the editor.
+    // getAll already does an in-memory form merge so new form responses are still visible.
     fetch(`${GS_URL}?action=getSetting&key=editLock`, {mode:"cors"})
       .then(r=>r.json())
       .then(({value})=>{
@@ -863,15 +866,7 @@ function App() {
           const mins = Math.round((Date.now()-blocker.since)/60000);
           throw new Error(`${blocker.user} ${lang==="en"?"is currently editing":"עורך כרגע"} (${mins}${lang==="en"?"m ago":"ד׳ לפני"})`);
         }
-        // 2. Call syncFromForm — reads Form Responses, merges with Participants in Sheets
-        // If syncFromForm fails, skip it and still load from Sheets
-        return fetch(GS_URL,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},
-          body:JSON.stringify({action:"syncFromForm",user:settings.currentUser})
-        }).then(r=>r.json()).catch(()=>({skipped:true}));
-      })
-      .then(result=>{
-        if(result.error) console.warn("syncFromForm:", result.error);
-        // 3. Read updated Participants sheet (always runs, even if syncFromForm failed)
+        // 2. Read Participants sheet (getAll does in-memory form merge internally)
         return fetch(`${GS_URL}?action=getAll`,{mode:"cors"}).then(r=>r.json());
       })
       .then(remote=>{
