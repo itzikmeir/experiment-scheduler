@@ -1006,12 +1006,14 @@ function App() {
     document.documentElement.setAttribute("lang", lang);
   },[lang]);
 
-  // ── Startup: load from localStorage only (no network) ──────────────────────
+  // ── Startup: load from localStorage, then immediately sync from Sheets ──────
   useEffect(()=>{
     // Dedup on load to clean any stale duplicates
     setParticipants(prev=>dedupeParticipants(prev));
     setLocations(prev=>dedupeLocations(prev));
     setSyncStatus("idle");
+    // Auto-sync on open so viewers always see fresh data (Sheets is source of truth)
+    setTimeout(()=>doSync(), 300);
   },[]);
 
   // ── NO auto-save: Sheets is the database, never overwrite automatically ─────
