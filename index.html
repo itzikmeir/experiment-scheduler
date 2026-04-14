@@ -607,8 +607,8 @@ function App() {
   const [modal,setModal]         = useState(null); // "help"|"about"|"changelog"|"settings"|"gmail"|"addEdit"
   const [editP,setEditP]         = useState(null); // participant being added/edited
   const [selected,setSelected]   = useState(new Set());
-  const [sortCol,setSortCol]     = useState("name");
-  const [sortDir,setSortDir]     = useState("asc");
+  const [sortCol,setSortCol]     = useState(()=>saved?.sortCol||"name");
+  const [sortDir,setSortDir]     = useState(()=>saved?.sortDir||"asc");
   const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[],surveyDateFrom:"",surveyDateTo:""});
   const [surveyDatePending,setSurveyDatePending] = useState({from:"",to:""});
   const [colMenu,setColMenu]       = useState(null); // {col, x, y}
@@ -631,7 +631,7 @@ function App() {
   const T = darkMode ? THEME.dark : THEME.light;
 
   // Persist locally
-  useEffect(()=>{saveState({participants,locations,settings,changelog,darkMode,lang});},[participants,locations,settings,changelog,darkMode,lang]);
+  useEffect(()=>{saveState({participants,locations,settings,changelog,darkMode,lang,sortCol,sortDir});},[participants,locations,settings,changelog,darkMode,lang,sortCol,sortDir]);
   
   // Auto-sync to Sheets every 60s if there are recent changes
   const lastSyncRef = React.useRef(null);
