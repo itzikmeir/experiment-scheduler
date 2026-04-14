@@ -862,13 +862,14 @@ function App() {
           throw new Error(`${blocker.user} ${lang==="en"?"is currently editing":"עורך כרגע"} (${mins}${lang==="en"?"m ago":"ד׳ לפני"})`);
         }
         // 2. Call syncFromForm — reads Form Responses, merges with Participants in Sheets
+        // If syncFromForm fails, skip it and still load from Sheets
         return fetch(GS_URL,{method:"POST",mode:"cors",headers:{"Content-Type":"text/plain"},
           body:JSON.stringify({action:"syncFromForm",user:settings.currentUser})
-        }).then(r=>r.json());
+        }).then(r=>r.json()).catch(()=>({skipped:true}));
       })
       .then(result=>{
-        if(result.error) throw new Error(result.error);
-        // 3. Read updated Participants sheet
+        if(result.error) console.warn("syncFromForm:", result.error);
+        // 3. Read updated Participants sheet (always runs, even if syncFromForm failed)
         return fetch(`${GS_URL}?action=getAll`,{mode:"cors"}).then(r=>r.json());
       })
       .then(remote=>{
