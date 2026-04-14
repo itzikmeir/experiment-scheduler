@@ -877,14 +877,14 @@ function App() {
         const MANUAL = ["status","assigned","startTime","expDate","notes","locPref","participantId","assigned_day","assigned_slot","assigned_locId","assigned_room"];
         const localPs = participantsRef.current;
         const localByEmail = new Map(localPs.filter(p=>p.email).map(p=>[p.email.toLowerCase().trim(),p]));
-        const localByPhone = new Map(localPs.filter(p=>p.phone).map(p=>[p.phone.replace(/\D/g,""),p]));
+        const localByPhone = new Map(localPs.filter(p=>p.phone).map(p=>[String(p.phone).replace(/\D/g,""),p]));
 
         const remotePs = remote.participants||[];
         const ambiguous = [];
 
         const merged = remotePs.map(rp=>{
           const normEmail = (rp.email||"").toLowerCase().trim();
-          const normPhone = (rp.phone||"").replace(/\D/g,"");
+          const normPhone = String(rp.phone||"").replace(/\D/g,"");
           const lp = (normEmail && localByEmail.get(normEmail))
                   || (normPhone && normPhone.length>=8 && localByPhone.get(normPhone));
           if(!lp) return {...rp, expDate:normDate(rp.expDate)};
@@ -905,7 +905,7 @@ function App() {
         const localNames = new Map(localPs.map(p=>[p.name.toLowerCase().trim(),p]));
         remotePs.forEach(rp=>{
           const normEmail = (rp.email||"").toLowerCase().trim();
-          const normPhone = (rp.phone||"").replace(/\D/g,"");
+          const normPhone = String(rp.phone||"").replace(/\D/g,"");
           const byEmail = normEmail && localByEmail.get(normEmail);
           const byPhone = normPhone && normPhone.length>=8 && localByPhone.get(normPhone);
           const byName  = localNames.get((rp.name||"").toLowerCase().trim());
