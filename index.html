@@ -12,6 +12,7 @@ select:disabled, input:disabled { opacity: 0.6; }
 [data-dark="true"] select option { background: #1E2238 !important; color: #F0F2FF !important; }
 [data-dark="true"] select:disabled { background: #161929 !important; color: #6B7299 !important; }
 [data-dark="true"] input[type="time"] { background: #1E2238; color: #F0F2FF; color-scheme: dark; }
+[data-dark="true"] input[type="date"] { background: #1E2238; color: #F0F2FF; color-scheme: dark; }
 [data-dark="true"] input { background: #1E2238; color: #F0F2FF; }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -609,6 +610,7 @@ function App() {
   const [sortCol,setSortCol]     = useState("name");
   const [sortDir,setSortDir]     = useState("asc");
   const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[],surveyDateFrom:"",surveyDateTo:""});
+  const [surveyDatePending,setSurveyDatePending] = useState({from:"",to:""});
   const [colMenu,setColMenu]       = useState(null); // {col, x, y}
   const [rowEmailMenu,setRowEmailMenu] = useState(null);
   const [rowMenu,setRowMenu] = useState(null); // {pid, x, y, p}
@@ -1984,6 +1986,7 @@ function App() {
                                 const r=e.currentTarget.getBoundingClientRect();
                                 const dropW=190;
                                 const bestLeft=Math.min(r.left, window.innerWidth-dropW-8);
+                                if(!isOpen && fkey==="surveyDate") setSurveyDatePending({from:filters.surveyDateFrom||"",to:filters.surveyDateTo||""});
                                 setColMenu(isOpen?null:{col,fkey,options,left:Math.max(4,bestLeft),y:r.bottom+4});
                               }} style={{
                                 background:selected_vals.length>0?"#4338CA":T.surface,
@@ -3005,20 +3008,26 @@ function App() {
                 <div style={{fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6}}>{lang==="en"?"Date range":"טווח תאריכים"}</div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   <label style={{fontSize:11,color:T.text}}>{lang==="en"?"From":"מ-"}
-                    <input type="date" value={filters.surveyDateFrom||""} onChange={e=>setFilters(f=>({...f,surveyDateFrom:e.target.value}))}
-                      style={{display:"block",marginTop:2,width:"100%",padding:"3px 6px",border:`1px solid ${T.border}`,borderRadius:4,fontSize:12,background:T.card,color:T.text}}/>
+                    <input type="date" value={surveyDatePending.from} onChange={e=>setSurveyDatePending(p=>({...p,from:e.target.value}))}
+                      style={{display:"block",marginTop:2,width:"100%",padding:"3px 6px",border:`1px solid ${T.border}`,borderRadius:4,fontSize:12,colorScheme:darkMode?"dark":"light"}}/>
                   </label>
                   <label style={{fontSize:11,color:T.text}}>{lang==="en"?"To":"עד"}
-                    <input type="date" value={filters.surveyDateTo||""} onChange={e=>setFilters(f=>({...f,surveyDateTo:e.target.value}))}
-                      style={{display:"block",marginTop:2,width:"100%",padding:"3px 6px",border:`1px solid ${T.border}`,borderRadius:4,fontSize:12,background:T.card,color:T.text}}/>
+                    <input type="date" value={surveyDatePending.to} onChange={e=>setSurveyDatePending(p=>({...p,to:e.target.value}))}
+                      style={{display:"block",marginTop:2,width:"100%",padding:"3px 6px",border:`1px solid ${T.border}`,borderRadius:4,fontSize:12,colorScheme:darkMode?"dark":"light"}}/>
                   </label>
                 </div>
-                {(filters.surveyDateFrom||filters.surveyDateTo)&&(
-                  <button onClick={()=>setFilters(f=>({...f,surveyDateFrom:"",surveyDateTo:""}))}
-                    style={{marginTop:8,width:"100%",background:"#FEF2F2",color:"#DC2626",border:"none",borderRadius:5,padding:"5px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
-                    {L("clearColFilter")}
+                <div style={{display:"flex",gap:6,marginTop:8}}>
+                  <button onClick={()=>{setFilters(f=>({...f,surveyDateFrom:surveyDatePending.from,surveyDateTo:surveyDatePending.to}));setColMenu(null);}}
+                    style={{flex:1,background:T.accent,color:"#fff",border:"none",borderRadius:5,padding:"5px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
+                    {lang==="en"?"Apply":"החל"}
                   </button>
-                )}
+                  {(filters.surveyDateFrom||filters.surveyDateTo)&&(
+                    <button onClick={()=>{setSurveyDatePending({from:"",to:""});setFilters(f=>({...f,surveyDateFrom:"",surveyDateTo:""}));}}
+                      style={{flex:1,background:"#FEF2F2",color:"#DC2626",border:"none",borderRadius:5,padding:"5px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
+                      {L("clearColFilter")}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {(()=>{
