@@ -608,7 +608,7 @@ function App() {
   const [selected,setSelected]   = useState(new Set());
   const [sortCol,setSortCol]     = useState("name");
   const [sortDir,setSortDir]     = useState("asc");
-  const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[]});
+  const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[],surveyDateFrom:"",surveyDateTo:""});
   const [colMenu,setColMenu]       = useState(null); // {col, x, y}
   const [rowEmailMenu,setRowEmailMenu] = useState(null);
   const [rowMenu,setRowMenu] = useState(null); // {pid, x, y, p}
@@ -1267,6 +1267,11 @@ function App() {
       )) return false;
       if(filters.locPref.length>0 && filters.locPref.every(lp=>(p.locPref||[]).map(String).includes(String(lp)))) return false;
       if(filters.age.length>0 && filters.age.includes(String(p.age||""))) return false;
+      if(filters.surveyDateFrom||filters.surveyDateTo){
+        if(!p.surveyDate) return false;
+        if(filters.surveyDateFrom && p.surveyDate < new Date(filters.surveyDateFrom).getTime()) return false;
+        if(filters.surveyDateTo   && p.surveyDate > new Date(filters.surveyDateTo).getTime()+86399999) return false;
+      }
       return true;
     });
     list.sort((a,b)=>{
@@ -1965,7 +1970,7 @@ function App() {
                     {(()=>{
                       // Excel-style column header: sort + filter dropdown
                       const ExcelTh = ({col, label, options, fkey}) => {
-                        const active = (filters[fkey]||[]).length > 0 || sortCol===col;
+                        const active = (fkey==="surveyDate" ? !!(filters.surveyDateFrom||filters.surveyDateTo) : (filters[fkey]||[]).length > 0) || sortCol===col;
                         const isOpen = colMenu?.col===col;
                         const selected_vals = filters[fkey]||[];
                         return (
@@ -2995,10 +3000,32 @@ function App() {
                 </button>
               </div>
             )}
+            {colMenu.fkey==="surveyDate"&&(
+              <div style={{padding:"10px 12px"}}>
+                <div style={{fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6}}>{lang==="en"?"Date range":"טווח תאריכים"}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <label style={{fontSize:11,color:T.text}}>{lang==="en"?"From":"מ-"}
+                    <input type="date" value={filters.surveyDateFrom||""} onChange={e=>setFilters(f=>({...f,surveyDateFrom:e.target.value}))}
+                      style={{display:"block",marginTop:2,width:"100%",padding:"3px 6px",border:`1px solid ${T.border}`,borderRadius:4,fontSize:12,background:T.card,color:T.text}}/>
+                  </label>
+                  <label style={{fontSize:11,color:T.text}}>{lang==="en"?"To":"עד"}
+                    <input type="date" value={filters.surveyDateTo||""} onChange={e=>setFilters(f=>({...f,surveyDateTo:e.target.value}))}
+                      style={{display:"block",marginTop:2,width:"100%",padding:"3px 6px",border:`1px solid ${T.border}`,borderRadius:4,fontSize:12,background:T.card,color:T.text}}/>
+                  </label>
+                </div>
+                {(filters.surveyDateFrom||filters.surveyDateTo)&&(
+                  <button onClick={()=>setFilters(f=>({...f,surveyDateFrom:"",surveyDateTo:""}))}
+                    style={{marginTop:8,width:"100%",background:"#FEF2F2",color:"#DC2626",border:"none",borderRadius:5,padding:"5px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
+                    {L("clearColFilter")}
+                  </button>
+                )}
+              </div>
+            )}
             {(()=>{
               // "checked" = item is SHOWN (not filtered out).
               // filters[fkey] = list of HIDDEN values (empty = show all).
               const fkey=colMenu.fkey;
+              if(fkey==="surveyDate") return null;
               const hidden=filters[fkey]||[];
               const allVals=colMenu.options.map(o=>o.v);
               const allShown=hidden.length===0;
