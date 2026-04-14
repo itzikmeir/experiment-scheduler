@@ -885,16 +885,18 @@ function App() {
           const lp = (normEmail && localByEmail.get(normEmail))
                   || (normPhone && normPhone.length>=8 && localByPhone.get(normPhone));
           if(!lp) return {...rp, expDate:normDate(rp.expDate)};
-          // Preserve all manual fields from local
+          // Remote (Sheets) is the source of truth — it wins for every field.
+          // Local is only a fallback when Sheets has nothing (empty/null).
+          const finalPid = rp.participantId || lp.participantId || "";
           return {
             ...rp,
-            expDate:       normDate(lp.expDate || rp.expDate),
-            startTime:     lp.startTime || "",
-            assigned:      lp.assigned  ?? null,
-            participantId: lp.participantId || rp.participantId || "",
-            status:        lp.participantId ? "completed" : lp.status,
-            notes:         lp.notes || "",
-            locPref:       lp.locPref||[],
+            expDate:       normDate(rp.expDate || lp.expDate),
+            startTime:     rp.startTime || lp.startTime || "",
+            assigned:      rp.assigned  ?? lp.assigned  ?? null,
+            participantId: finalPid,
+            status:        finalPid ? "completed" : (rp.status || lp.status || "pending"),
+            notes:         rp.notes || lp.notes || "",
+            locPref:       rp.locPref?.length ? rp.locPref : (lp.locPref||[]),
           };
         });
 
