@@ -1037,6 +1037,21 @@ function App() {
     setChangelog(prev=>[entry,...prev].slice(0,500));
   },[settings.currentUser]);
 
+  // Flatten a JS patch into Sheets column-level fields for gsUpdateP
+  function flattenPatch(patch) {
+    const flat = {...patch};
+    if("assigned" in patch) {
+      const a = patch.assigned;
+      flat.assigned_day   = a?.day        || "";
+      flat.assigned_slot  = a?.slot       || "";
+      flat.assigned_locId = a?.locationId || "";
+      flat.assigned_room  = a?.room       || "";
+      delete flat.assigned;
+    }
+    if("locPref" in patch) flat.locPref = (patch.locPref||[]).join("|");
+    return flat;
+  }
+
   // ── Participant mutations ──────────────────────────────────────────────────
   const updP = useCallback((id,patch,logMsg)=>{
     if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
@@ -1044,7 +1059,10 @@ function App() {
     if(!editLockRef.current) acquireLock();
     setParticipantsUndo(prev=>prev.map(p=>p.id===id?{...p,...patch}:p), logMsg);
     if(logMsg) addLog("עדכון",logMsg);
-    // No auto-push — user saves manually via "שמור" button
+    // Auto-push to Sheets so inline edits (time, date, slot, status) are persisted immediately
+    gsUpdateP(id, flattenPatch(patch), settings.currentUser)
+      .then(()=>setSyncStatus("ok"))
+      .catch(()=>setSyncStatus("error"));
   },[addLog, settings.currentUser, syncStatus]);
 
   const assignP = (id,day,slot,locationId,room)=>{
