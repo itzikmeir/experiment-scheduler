@@ -663,11 +663,47 @@ function App() {
 
   // Participants: dedup by email > name, keep richest record
   // Normalize a date value to YYYY-MM-DD or ""
+  // Handles: YYYY-MM-DD, ISO strings from Sheets, DD/MM/YYYY (Israeli locale), M/D/YYYY
   function normDate(v) {
     if(!v) return "";
-    if(/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return String(v);
-    const d = new Date(v);
+    const s = String(v).trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // DD/MM/YYYY — Israeli locale from Sheets getDisplayValue()
+    const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if(dmy) return `${dmy[3]}-${dmy[2].padStart(2,"0")}-${dmy[1].padStart(2,"0")}`;
+    const d = new Date(s);
     return isNaN(d.getTime()) ? "" : d.toISOString().slice(0,10);
+  }
+  // Normalize a time value to HH:MM or ""
+  // Handles: "HH:MM", "H:MM", "HH:MM:SS", "8:00 AM/PM", ISO date strings from Sheets
+  // Google Sheets stores time cells as Date objects → JSON: "1899-12-30T08:00:00.000Z"
+  function normTime(v) {
+    if(v === null || v === undefined || v === "") return "";
+    // Google Sheets stores time cells as a fraction of 24h (e.g. 0.3333... = 08:00)
+    const num = Number(v);
+    if(!isNaN(num) && num > 0 && num < 1) {
+      const totalMins = Math.round(num * 24 * 60);
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+    }
+    const s = String(v).trim();
+    if(!s) return "";
+    // Already HH:MM or H:MM
+    if(/^\d{1,2}:\d{2}$/.test(s)) return s.length===5 ? s : "0"+s;
+    // HH:MM:SS
+    if(/^\d{1,2}:\d{2}:\d{2}$/.test(s)) { const t=s.slice(0,5); return t.length===5?t:"0"+t; }
+    // "8:00 AM" / "08:00 PM" style
+    const ap = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
+    if(ap) {
+      let h=parseInt(ap[1]); const m=ap[2]; const ampm=(ap[3]||"").toUpperCase();
+      if(ampm==="PM"&&h<12) h+=12; if(ampm==="AM"&&h===12) h=0;
+      return `${String(h).padStart(2,"0")}:${m}`;
+    }
+    // ISO date string from Sheets (time stored as Date): "1899-12-30T08:00:00.000Z"
+    const iso = s.match(/T(\d{2}):(\d{2})/);
+    if(iso) return `${iso[1]}:${iso[2]}`;
+    return "";
   }
 
   function dedupeParticipants(arr) {
@@ -694,7 +730,7 @@ function App() {
             : exRank>=pRank ? ex.status : p.status,
           notes: ex.notes || p.notes || "",
           expDate: normDate(ex.expDate || p.expDate || ""),
-          startTime: ex.startTime || p.startTime || "",
+          startTime: normTime(ex.startTime) || normTime(p.startTime) || "",
         };
         continue;
       }
@@ -710,8 +746,8 @@ function App() {
           email:        ex.email || p.email || "",
           phone:        ex.phone || p.phone || "",
           participantId:ex.participantId || p.participantId || "",
-          expDate:      ex.expDate || p.expDate || "",
-          startTime:    ex.startTime || p.startTime || "",
+          expDate:      normDate(ex.expDate || p.expDate || ""),
+          startTime:    normTime(ex.startTime) || normTime(p.startTime) || "",
           notes:        ex.notes || p.notes || "",
           assigned:     ex.assigned ?? p.assigned ?? null,
           locPref:      [...new Set([...(ex.locPref||[]),...(p.locPref||[])].map(Number).filter(n=>n>0))],
@@ -728,6 +764,7 @@ function App() {
         result.push({
           ...p,
           expDate: normDate(p.expDate),
+          startTime: normTime(p.startTime),
           status: p.participantId ? "completed" : p.status,
         });
       }
@@ -808,8 +845,8 @@ function App() {
           hebrewRead:    rp.hebrewRead  || lp.hebrewRead  || "",
           // Scheduling: prefer remote if set (another user may have updated), else local
           participantId: finalPid,
-          expDate:       (()=>{const v=rp.expDate||lp.expDate||"";if(!v)return"";if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v;const d=new Date(v);return isNaN(d)?"":d.toISOString().slice(0,10);})(),
-          startTime:     rp.startTime || lp.startTime || "",
+          expDate:       normDate(rp.expDate||lp.expDate||""),
+          startTime:     normTime(rp.startTime) || normTime(lp.startTime) || "",
           notes:         rp.notes     || lp.notes     || "",
           locPref:       rp.locPref?.length ? rp.locPref.map(Number).filter(n=>n>0)
                        : (lp.locPref||[]).map(Number).filter(n=>n>0),
@@ -888,19 +925,23 @@ function App() {
         const remotePs = remote.participants||[];
         const ambiguous = [];
 
+        // DEBUG: log raw startTime/expDate from Sheets for first participant that has one
+        const debugP = remotePs.find(p=>p.startTime||p.expDate);
+        if(debugP) console.log("[sync] raw from Sheets — startTime:", JSON.stringify(debugP.startTime), "expDate:", JSON.stringify(debugP.expDate), "keys:", Object.keys(debugP).join(","));
+
         const merged = remotePs.map(rp=>{
           const normEmail = (rp.email||"").toLowerCase().trim();
           const normPhone = String(rp.phone||"").replace(/\D/g,"");
           const lp = (normEmail && localByEmail.get(normEmail))
                   || (normPhone && normPhone.length>=8 && localByPhone.get(normPhone));
-          if(!lp) return {...rp, expDate:normDate(rp.expDate)};
+          if(!lp) return {...rp, expDate:normDate(rp.expDate), startTime:normTime(rp.startTime||"")};
           // Remote (Sheets) is the source of truth — it wins for every field.
           // Local is only a fallback when Sheets has nothing (empty/null).
           const finalPid = rp.participantId || lp.participantId || "";
           return {
             ...rp,
             expDate:       normDate(rp.expDate || lp.expDate),
-            startTime:     rp.startTime || lp.startTime || "",
+            startTime:     normTime(rp.startTime) || normTime(lp.startTime) || "",
             assigned:      rp.assigned  ?? lp.assigned  ?? null,
             participantId: finalPid,
             status:        finalPid ? "completed" : (rp.status || lp.status || "pending"),
@@ -1059,8 +1100,41 @@ function App() {
     if(!editLockRef.current) acquireLock();
     setParticipantsUndo(prev=>prev.map(p=>p.id===id?{...p,...patch}:p), logMsg);
     if(logMsg) addLog("עדכון",logMsg);
-    // Auto-push to Sheets so inline edits (time, date, slot, status) are persisted immediately
-    gsUpdateP(id, flattenPatch(patch), settings.currentUser)
+    // Build full participant patch so Apps Script can write the complete row.
+    // Merging current participant data with the incoming patch ensures scheduling
+    // fields (startTime, expDate, etc.) are always persisted even if Apps Script
+    // doesn't support partial column writes.
+    const base = participantsRef.current.find(p=>p.id===id) || {};
+    const merged = {...base, ...patch};
+    const fullPatch = {
+      name:          merged.name || "",
+      email:         merged.email || "",
+      phone:         merged.phone || "",
+      age:           merged.age || "",
+      gender:        merged.gender || "",
+      "avail_א":     (merged.availability?.["א"]||[]).join("|"),
+      "avail_ב":     (merged.availability?.["ב"]||[]).join("|"),
+      "avail_ג":     (merged.availability?.["ג"]||[]).join("|"),
+      "avail_ד":     (merged.availability?.["ד"]||[]).join("|"),
+      "avail_ה":     (merged.availability?.["ה"]||[]).join("|"),
+      "avail_ו":     (merged.availability?.["ו"]||[]).join("|"),
+      assigned_day:  merged.assigned?.day || "",
+      assigned_slot: merged.assigned?.slot || "",
+      assigned_locId:merged.assigned?.locationId || "",
+      assigned_room: merged.assigned?.room || "",
+      startTime:     merged.startTime || "",
+      expDate:       merged.expDate || "",
+      participantId: merged.participantId || "",
+      status:        merged.status || "pending",
+      notes:         merged.notes || "",
+      locPref:       (merged.locPref||[]).join("|"),
+      locPrefText:   merged.locPrefText || "",
+      eligible:      merged.eligible || "",
+      licenseQ:      merged.licenseQ || "",
+      hebrewRead:    merged.hebrewRead || "",
+      visionNote:    merged.visionNote || "",
+    };
+    gsUpdateP(id, fullPatch, settings.currentUser)
       .then(()=>setSyncStatus("ok"))
       .catch(()=>setSyncStatus("error"));
   },[addLog, settings.currentUser, syncStatus]);
@@ -1302,11 +1376,26 @@ function App() {
       }
       return true;
     });
+    const STATUS_NUM={completed:0,confirmed:1,assigned:2,pending:3,declined:4,irrelevant:5};
     list.sort((a,b)=>{
-      let va=a[sortCol]||"", vb=b[sortCol]||"";
-      if(sortCol==="age") {va=parseInt(va)||0;vb=parseInt(vb)||0;return sortDir==="asc"?va-vb:vb-va;}
-      va=va.toString().toLowerCase();vb=vb.toString().toLowerCase();
-      return sortDir==="asc"?va.localeCompare(vb,"he"):vb.localeCompare(va,"he");
+      if(sortCol==="status"){
+        const ra=STATUS_NUM[a.status]??9, rb=STATUS_NUM[b.status]??9;
+        if(ra!==rb) return sortDir==="asc"?ra-rb:rb-ra;
+        // same status: sort by P-number ascending, then name
+        const pa=parseInt((a.participantId||"").replace(/\D/g,""))||0;
+        const pb=parseInt((b.participantId||"").replace(/\D/g,""))||0;
+        if(pa!==pb) return pa-pb;
+        return (a.name||"").localeCompare(b.name||"","he");
+      }
+      if(sortCol==="age"){
+        const na=parseInt(a.age)||0, nb=parseInt(b.age)||0;
+        return sortDir==="asc"?na-nb:nb-na;
+      }
+      const ka=(a[sortCol]||"").toString().toLowerCase();
+      const kb=(b[sortCol]||"").toString().toLowerCase();
+      if(ka<kb) return sortDir==="asc"?-1:1;
+      if(ka>kb) return sortDir==="asc"?1:-1;
+      return 0;
     });
     return list;
   },[participants,filters,sortCol,sortDir]);
