@@ -900,21 +900,21 @@ function App() {
     if(isSyncingRef.current) return;
     isSyncingRef.current = true;
     setSyncStatus("syncing");
-    // 1. Check edit lock first, then read from Sheets
-    // NOTE: syncFromForm is intentionally skipped here — it rewrites Participants sheet
-    // and can overwrite scheduling fields (status, expDate, assigned) saved by the editor.
-    // getAll already does an in-memory form merge so new form responses are still visible.
-    fetch(`${GS_URL}?action=getSetting&key=editLock`, {mode:"cors"})
-      .then(r=>r.json())
-      .then(({value})=>{
-        const blocker = checkLock(value);
-        if(blocker) {
-          const mins = Math.round((Date.now()-blocker.since)/60000);
-          throw new Error(`${blocker.user} ${lang==="en"?"is currently editing":"עורך כרגע"} (${mins}${lang==="en"?"m ago":"ד׳ לפני"})`);
-        }
-        // 2. Read Participants sheet (getAll does in-memory form merge internally)
-        return fetch(`${GS_URL}?action=getAll`,{mode:"cors"}).then(r=>r.json());
-      })
+    const fetchAll = ()=>fetch(`${GS_URL}?action=getAll`,{mode:"cors"}).then(r=>r.json());
+    // Viewers are read-only — skip the edit lock check so they always get fresh data
+    const fetchPromise = isViewer
+      ? fetchAll()
+      : fetch(`${GS_URL}?action=getSetting&key=editLock`,{mode:"cors"})
+          .then(r=>r.json())
+          .then(({value})=>{
+            const blocker = checkLock(value);
+            if(blocker) {
+              const mins = Math.round((Date.now()-blocker.since)/60000);
+              throw new Error(`${blocker.user} ${lang==="en"?"is currently editing":"עורך כרגע"} (${mins}${lang==="en"?"m ago":"ד׳ לפני"})`);
+            }
+            return fetchAll();
+          });
+    fetchPromise
       .then(remote=>{
         if(remote.error) throw new Error(remote.error);
         const MANUAL = ["status","assigned","startTime","expDate","notes","locPref","participantId","assigned_day","assigned_slot","assigned_locId","assigned_room"];
@@ -1376,14 +1376,15 @@ function App() {
       }
       return true;
     });
-    const STATUS_NUM={completed:0,confirmed:1,assigned:2,pending:3,declined:4,irrelevant:5};
+    // Ranks start at 1 so we can use || for fallback (0 is falsy, would break)
+    const STATUS_NUM={completed:1,confirmed:2,assigned:3,pending:4,declined:5,irrelevant:6};
     list.sort((a,b)=>{
       if(sortCol==="status"){
-        const ra=STATUS_NUM[a.status]??9, rb=STATUS_NUM[b.status]??9;
+        const ra=STATUS_NUM[a.status]||99, rb=STATUS_NUM[b.status]||99;
         if(ra!==rb) return sortDir==="asc"?ra-rb:rb-ra;
-        // same status: sort by P-number ascending, then name
-        const pa=parseInt((a.participantId||"").replace(/\D/g,""))||0;
-        const pb=parseInt((b.participantId||"").replace(/\D/g,""))||0;
+        // same status group → always sort by P-number ascending, then name
+        const pa=parseInt((a.participantId||"").replace(/[^0-9]/g,""))||0;
+        const pb=parseInt((b.participantId||"").replace(/[^0-9]/g,""))||0;
         if(pa!==pb) return pa-pb;
         return (a.name||"").localeCompare(b.name||"","he");
       }
@@ -1643,13 +1644,13 @@ function App() {
                 :<span style={{fontSize:13}}>⇄</span>}
               {lang==="en"?"Sync":"סנכרן"}
             </button>
-            {/* Save button */}
-            <button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={doSave} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
+            {/* Save button — hidden for viewers */}
+            {!isViewer&&<button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={doSave} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
               {syncStatus==="syncing"
                 ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
                 :"💾"}
               {lang==="en"?"Save":"שמור"}
-            </button>
+            </button>}
             {/* Edit lock indicator */}
             {editLock&&<span style={{fontSize:10,color:"rgba(255,255,255,0.7)",background:"rgba(251,191,36,0.2)",border:"1px solid rgba(251,191,36,0.4)",borderRadius:5,padding:"0 7px",height:26,display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
               ✏️ {editLock.user}
@@ -2217,38 +2218,37 @@ function App() {
                           <input type="date" value={(()=>{
                             const v=p.expDate||"";
                             if(!v) return "";
-                            // Normalize: if already YYYY-MM-DD keep it, else parse
                             if(/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
                             const d=new Date(v);
                             if(isNaN(d)) return "";
                             return d.toISOString().slice(0,10);
-                          })()} onChange={e=>{
+                          })()} disabled={isViewer} onChange={e=>{
                             const v=e.target.value;
                             const patch={expDate:v};
                             if(v&&p.assigned){
-                              const jsDay=new Date(v+"T12:00").getDay(); // 0=Sun..6=Sat
+                              const jsDay=new Date(v+"T12:00").getDay();
                               const dayMap=["א","ב","ג","ד","ה","ו","ש"];
                               const heDay=dayMap[jsDay];
                               if(heDay&&heDay!==p.assigned.day) patch.assigned={...p.assigned,day:heDay};
                             }
                             updP(p.id,patch);
-                          }} style={{padding:"2px 3px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer",width:95,colorScheme:darkMode?"dark":"light"}}/>
+                          }} style={{padding:"2px 3px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:isViewer?"default":"pointer",width:95,colorScheme:darkMode?"dark":"light"}}/>
                         </td>
 {/* Day */}
                         <td style={{padding:"2px 2px"}}>
-                          <select value={p.assigned?.day||""} onChange={e=>{
+                          <select value={p.assigned?.day||""} disabled={isViewer} onChange={e=>{
                             const day=e.target.value;
                             if(!day){clearA(p.id);return;}
                             const slot=p.availability[day]?.[0]||SLOTS[0];
                             assignP(p.id,day,slot,locations[0]?.id||null,locations[0]?.rooms[0]||"");
-                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.inputBg,color:p.assigned?T.accent:T.text,cursor:"pointer",width:90,minWidth:90}}>
+                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.inputBg,color:p.assigned?T.accent:T.text,cursor:isViewer?"default":"pointer",width:90,minWidth:90}}>
                             <option value="">— יום —</option>
                             {DAYS.map(d=><option key={d} value={d}>{p.availability[d]?.length>0?"✓ ":"  "}יום {dayNames[d]}</option>)}
                           </select>
                         </td>
 {/* Slot */}
                         <td style={{padding:"2px 2px"}}>
-                          <select value={p.assigned?.slot||""} disabled={!p.assigned} onChange={e=>updP(p.id,{assigned:{...p.assigned,slot:e.target.value}})}
+                          <select value={p.assigned?.slot||""} disabled={!p.assigned||isViewer} onChange={e=>updP(p.id,{assigned:{...p.assigned,slot:e.target.value}})}
                             style={{padding:"3px 4px",border:`1px solid ${p.assigned?T.border:T.disabledBorder||T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:p.assigned?T.rowSel:T.disabledBg||T.tablehead,color:p.assigned?T.accent:T.disabledText||T.textFaint,cursor:p.assigned?"pointer":"default",minWidth:90}}>
                             {SLOTS.map(s=><option key={s} value={s}>{s.includes("בוקר")?L("slotMorning"):s.includes("צהריים")?L("slotAfternoon"):L("slotEvening")}</option>)}
                           </select>
@@ -2259,21 +2259,21 @@ function App() {
                             const autoTime=p.assigned.slot?.includes("בוקר")?"08:00":"12:00";
                             return(
                               <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                                <input type="time" value={p.startTime||""} onChange={e=>updP(p.id,{startTime:e.target.value})}
+                                <input type="time" value={p.startTime||""} disabled={isViewer} onChange={e=>updP(p.id,{startTime:e.target.value})}
                                   style={{padding:"2px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,width:80}}/>
-                                <button title={lang==="en"?"Auto-fill from shift":"מלא לפי משמרת"} onClick={()=>{
+                                {!isViewer&&<button title={lang==="en"?"Auto-fill from shift":"מלא לפי משמרת"} onClick={()=>{
                                   updP(p.id,{startTime:autoTime});
-                                }} style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10,color:T.textMuted,fontFamily:"inherit"}}>⟳</button>
+                                }} style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10,color:T.textMuted,fontFamily:"inherit"}}>⟳</button>}
                               </div>
                             );
                           })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
                         </td>
 {/* Location */}
                         <td style={{padding:"2px 2px"}}>
-                          <select value={p.assigned?.locationId||""} disabled={!p.assigned} onChange={e=>{
+                          <select value={p.assigned?.locationId||""} disabled={!p.assigned||isViewer} onChange={e=>{
                             const locId=parseInt(e.target.value)||null;
                             updP(p.id,{assigned:{...p.assigned,locationId:locId,room:locById[locId]?.rooms[0]||""}});
-                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:p.assigned?"pointer":"default",minWidth:60,opacity:p.assigned?1:0.5}}>
+                          }} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:p.assigned&&!isViewer?"pointer":"default",minWidth:60,opacity:p.assigned?1:0.5}}>
                             <option value="">— מיקום —</option>
                             {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
                           </select>
@@ -2283,23 +2283,23 @@ function App() {
                           {p.assigned&&p.assigned.locationId?(()=>{
                             const rms=locById[p.assigned.locationId]?.rooms||[];
                             return rms.length>0
-                              ?<select value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:70}}>
+                              ?<select value={p.assigned.room||""} disabled={isViewer} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} style={{padding:"3px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:70}}>
                                 <option value="">— חדר —</option>
                                 {rms.map(r=><option key={r} value={r}>{r}</option>)}
                               </select>
-                              :<input value={p.assigned.room||""} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} placeholder="ידני" style={{padding:"3px 5px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:65,background:T.inputBg,color:T.text}}/>;
+                              :<input value={p.assigned.room||""} disabled={isViewer} onChange={e=>updP(p.id,{assigned:{...p.assigned,room:e.target.value}})} placeholder="ידני" style={{padding:"3px 5px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",width:65,background:T.inputBg,color:T.text}}/>;
                           })():<span style={{color:T.textFaint,fontSize:10}}>—</span>}
                         </td>
                         {/* Sep after Room */}
                         <td style={{padding:0,width:1,background:T.border,border:"none",opacity:0.4,pointerEvents:"none"}}/>
                         {/* Status */}
                         <td style={{padding:"2px 2px",minWidth:p.status==="completed"?115:85}}>
-                          {p.status==="completed"
+                          {(p.status==="completed"||isViewer)
                             ? <div style={{display:"flex",alignItems:"center",gap:3}}>
                                 <span style={{background:sm.bg,color:sm.text,border:`1px solid ${sm.border}`,borderRadius:5,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flex:1,textAlign:"center"}}>
                                   {p.participantId?`הושלם ${p.participantId}`:sm.label}
                                 </span>
-                                <button title="שנה" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10,color:T.textMuted,flexShrink:0}}>✏️</button>
+                                {!isViewer&&<button title="שנה" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10,color:T.textMuted,flexShrink:0}}>✏️</button>}
                               </div>
                             : <select value={p.status} onChange={e=>{
                                 const newSt=e.target.value;
