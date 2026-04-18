@@ -1637,20 +1637,21 @@ function App() {
                   :<span style={{color:"#F87171",fontSize:10}}>✕</span>}
             </span>
 
-            {/* Sync button */}
-            <button title={lang==="en"?"Sync from Form Responses":"סנכרן מהשאלון"} onClick={doSync} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
-              {syncStatus==="syncing"
-                ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
-                :<span style={{fontSize:13}}>⇄</span>}
-              {lang==="en"?"Sync":"סנכרן"}
-            </button>
-            {/* Save button — hidden for viewers */}
-            {!isViewer&&<button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={doSave} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
-              {syncStatus==="syncing"
-                ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
-                :"💾"}
-              {lang==="en"?"Save":"שמור"}
-            </button>}
+            {/* Sync + Save buttons — hidden for viewers; auto-sync on startup is sufficient */}
+            {!isViewer&&<>
+              <button title={lang==="en"?"Sync from Form Responses":"סנכרן מהשאלון"} onClick={doSync} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
+                {syncStatus==="syncing"
+                  ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
+                  :<span style={{fontSize:13}}>⇄</span>}
+                {lang==="en"?"Sync":"סנכרן"}
+              </button>
+              <button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={doSave} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
+                {syncStatus==="syncing"
+                  ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
+                  :"💾"}
+                {lang==="en"?"Save":"שמור"}
+              </button>
+            </>}
             {/* Edit lock indicator */}
             {editLock&&<span style={{fontSize:10,color:"rgba(255,255,255,0.7)",background:"rgba(251,191,36,0.2)",border:"1px solid rgba(251,191,36,0.4)",borderRadius:5,padding:"0 7px",height:26,display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
               ✏️ {editLock.user}
@@ -1820,20 +1821,24 @@ function App() {
             <div style={{marginBottom:8}}>
               {/* Row 1: always-visible actions */}
               <div style={{display:"flex",gap:7,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
-                {/* Undo / Redo */}
-                <button onClick={undo} disabled={!history.length} title={lang==="en"?"Undo":"בטל"} style={{background:T.tablehead,color:history.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:history.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:history.length?1:0.4}} title={undoLabel?`${L("undoBtn")}: ${undoLabel}`:L("undoNothing")}>
-                  ↩{undoLabel?<span style={{fontSize:9,marginRight:3,color:T.textMuted,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-block",verticalAlign:"middle"}}>{undoLabel}</span>:null}
-                </button>
-                <button onClick={redo} disabled={!future.length} title={lang==="en"?"Redo":"בצע שוב"} style={{background:T.tablehead,color:future.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:future.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:future.length?1:0.4}}>
-                  ↪
-                </button>
-                <div style={{width:1,height:22,background:T.border,margin:"0 2px"}}/>
-                <button onClick={()=>{setEditP(emptyP());setModal("addEdit");}} style={{background:"#059669",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
-                  {L("btnAddParticipant")}
-                </button>
-                <button onClick={()=>autoAssign(null)} style={{background:"linear-gradient(135deg,#4338CA,#7C3AED)",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>
-                  {L("btnAutoAssign")}
-                </button>
+                {/* Undo / Redo — editors only */}
+                {!isViewer&&<>
+                  <button onClick={undo} disabled={!history.length} title={undoLabel?`${L("undoBtn")}: ${undoLabel}`:L("undoNothing")} style={{background:T.tablehead,color:history.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:history.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:history.length?1:0.4}}>
+                    ↩{undoLabel?<span style={{fontSize:9,marginRight:3,color:T.textMuted,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-block",verticalAlign:"middle"}}>{undoLabel}</span>:null}
+                  </button>
+                  <button onClick={redo} disabled={!future.length} title={lang==="en"?"Redo":"בצע שוב"} style={{background:T.tablehead,color:future.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:future.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:future.length?1:0.4}}>
+                    ↪
+                  </button>
+                </>}
+                {!isViewer&&<>
+                  <div style={{width:1,height:22,background:T.border,margin:"0 2px"}}/>
+                  <button onClick={()=>{setEditP(emptyP());setModal("addEdit");}} style={{background:"#059669",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                    {L("btnAddParticipant")}
+                  </button>
+                  <button onClick={()=>autoAssign(null)} style={{background:"linear-gradient(135deg,#4338CA,#7C3AED)",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>
+                    {L("btnAutoAssign")}
+                  </button>
+                </>}
                 {/* Counter pill */}
                 <span style={{fontSize:12,color:T.textMuted,background:T.surface,border:`1px solid ${T.border}`,padding:"5px 11px",borderRadius:20,marginRight:"auto"}}>
                   {selected.size>0
@@ -2144,7 +2149,7 @@ function App() {
                 </thead>
                 <tbody>
                   {sortedFiltered.map((p,i)=>{
-                    const sm=statusMeta[p.status];
+                    const sm=statusMeta[p.status]||statusMeta["pending"];
                     const lc=p.assigned?locColor(p.assigned.locationId):null;
                     const isSel=selected.has(p.id);
                     return (
@@ -2446,7 +2451,7 @@ function App() {
                         <div key={dayNum} style={{background:isToday?T.rowSel:isSat?T.tablehead:T.surface,border:`1px solid ${isToday?T.accent:T.border}`,borderRadius:7,padding:"5px 7px",minHeight:70,opacity:isSat?0.35:1}}>
                           <div style={{fontSize:11,fontWeight:isToday?800:600,color:isToday?T.accent:T.text,marginBottom:3}}>{dayNum}</div>
                           {people.slice(0,3).map(p=>{
-                            const sm=statusMeta[p.status];
+                            const sm=statusMeta[p.status]||statusMeta["pending"];
                             return <div key={p.id} style={{background:sm.bg,borderRadius:3,padding:"1px 4px",fontSize:8,color:sm.text,fontWeight:600,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>;
                           })}
                           {people.length>3&&<div style={{fontSize:8,color:T.textFaint}}>+{people.length-3}</div>}
