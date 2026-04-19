@@ -997,12 +997,22 @@ function App() {
         }
 
         setParticipants(finalPs);
-        if(remote.locations?.length) setLocations(dedupeLocations(remote.locations));
+        const finalLocs = remote.locations?.length ? dedupeLocations(remote.locations) : locationsRef.current;
+        if(remote.locations?.length) setLocations(finalLocs);
 
         const newCount = finalPs.length - localPs.length;
         showToast(`⇄ ${lang==="en"?"Synced":"סונכרן"} ${finalPs.length} ${lang==="en"?"participants":"נבדקים"}${newCount>0?` (+${newCount})`:""}`);
-        isSyncingRef.current = false;
-        setSyncStatus("ok"); setLastSync(new Date());
+
+        // Editors write merged data back to Sheets so viewers always see current state.
+        // Viewers skip this — they are read-only.
+        if(!isViewer) {
+          gsSaveAll({participants:finalPs, locations:finalLocs, settings, user:settings.currentUser})
+            .then(()=>{isSyncingRef.current=false; setSyncStatus("ok"); setLastSync(new Date());})
+            .catch(e=>{isSyncingRef.current=false; setSyncStatus("error"); showToast(`⚠️ שגיאת שמירה: ${e.message}`,"error");});
+        } else {
+          isSyncingRef.current = false;
+          setSyncStatus("ok"); setLastSync(new Date());
+        }
       })
       .catch(e=>{
         isSyncingRef.current = false;
