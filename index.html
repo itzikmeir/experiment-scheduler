@@ -1003,9 +1003,12 @@ function App() {
         const newCount = finalPs.length - localPs.length;
         showToast(`⇄ ${lang==="en"?"Synced":"סונכרן"} ${finalPs.length} ${lang==="en"?"participants":"נבדקים"}${newCount>0?` (+${newCount})`:""}`);
 
-        // Editors write merged data back to Sheets so viewers always see current state.
-        // Viewers skip this — they are read-only.
-        if(!isViewer) {
+        // Write merged data back to Sheets ONLY if this session already had local
+        // scheduling data to contribute (localPs non-empty).
+        // A fresh/incognito session with no localStorage must NOT overwrite Sheets —
+        // it would wipe out the admin's scheduling data with raw form data.
+        const hasLocalData = !isViewer && localPs.length > 0;
+        if(hasLocalData) {
           gsSaveAll({participants:finalPs, locations:finalLocs, settings, user:settings.currentUser})
             .then(()=>{isSyncingRef.current=false; setSyncStatus("ok"); setLastSync(new Date());})
             .catch(e=>{isSyncingRef.current=false; setSyncStatus("error"); showToast(`⚠️ שגיאת שמירה: ${e.message}`,"error");});
