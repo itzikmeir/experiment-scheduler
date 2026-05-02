@@ -44,7 +44,7 @@ select:disabled, input:disabled { opacity: 0.6; }
 
 
 // ─── Version ──────────────────────────────────────────────────────────────────
-const APP_VERSION = "5.0.0";
+const APP_VERSION = "1.9";
 
 // ─── Auth / Roles ─────────────────────────────────────────────────────────────
 // Passwords stored as SHA-256 hex hashes (never plaintext)
@@ -705,6 +705,12 @@ function App() {
     if(iso) return `${iso[1]}:${iso[2]}`;
     return "";
   }
+  // Normalize locPref to number[]. Handles array (already correct) and
+  // pipe-separated string "1|2|3" returned by Apps Script / Sheets reads.
+  const parseLP = v =>
+    Array.isArray(v) ? v.map(Number).filter(n=>n>0)
+    : typeof v==="string" && v.trim() ? v.split("|").map(Number).filter(n=>n>0)
+    : [];
 
   function dedupeParticipants(arr) {
     const STATUS_RANK = {pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
@@ -750,7 +756,7 @@ function App() {
           startTime:    normTime(ex.startTime) || normTime(p.startTime) || "",
           notes:        ex.notes || p.notes || "",
           assigned:     ex.assigned ?? p.assigned ?? null,
-          locPref:      [...new Set([...(ex.locPref||[]),...(p.locPref||[])].map(Number).filter(n=>n>0))],
+          locPref:      [...new Set([...parseLP(ex.locPref),...parseLP(p.locPref)])],
           status: (()=>{
             const ep=STATUS_RANK[ex.participantId?"completed":ex.status]??0;
             const pp=STATUS_RANK[p.participantId?"completed":p.status]??0;
@@ -848,8 +854,7 @@ function App() {
           expDate:       normDate(rp.expDate||lp.expDate||""),
           startTime:     normTime(rp.startTime) || normTime(lp.startTime) || "",
           notes:         rp.notes     || lp.notes     || "",
-          locPref:       rp.locPref?.length ? rp.locPref.map(Number).filter(n=>n>0)
-                       : (lp.locPref||[]).map(Number).filter(n=>n>0),
+          locPref:       parseLP(rp.locPref).length ? parseLP(rp.locPref) : parseLP(lp.locPref),
           assigned:      rp.assigned  ?? lp.assigned  ?? null,
           status:        finalStatus,
           importedAt:    rp.importedAt || lp.importedAt || Date.now(),
@@ -934,7 +939,7 @@ function App() {
           const normPhone = String(rp.phone||"").replace(/\D/g,"");
           const lp = (normEmail && localByEmail.get(normEmail))
                   || (normPhone && normPhone.length>=8 && localByPhone.get(normPhone));
-          if(!lp) return {...rp, expDate:normDate(rp.expDate), startTime:normTime(rp.startTime||"")};
+          if(!lp) return {...rp, expDate:normDate(rp.expDate), startTime:normTime(rp.startTime||""), locPref:parseLP(rp.locPref)};
           // Remote (Sheets) is the source of truth — it wins for every field.
           // Local is only a fallback when Sheets has nothing (empty/null).
           const finalPid = rp.participantId || lp.participantId || "";
@@ -946,7 +951,7 @@ function App() {
             participantId: finalPid,
             status:        finalPid ? "completed" : (rp.status || lp.status || "pending"),
             notes:         rp.notes || lp.notes || "",
-            locPref:       rp.locPref?.length ? rp.locPref : (lp.locPref||[]),
+            locPref:       parseLP(rp.locPref).length ? parseLP(rp.locPref) : parseLP(lp.locPref),
           };
         });
 
@@ -1003,12 +1008,40 @@ function App() {
         const newCount = finalPs.length - localPs.length;
         showToast(`⇄ ${lang==="en"?"Synced":"סונכרן"} ${finalPs.length} ${lang==="en"?"participants":"נבדקים"}${newCount>0?` (+${newCount})`:""}`);
 
-        // Write merged data back to Sheets ONLY if this session already had local
-        // scheduling data to contribute (localPs non-empty).
-        // A fresh/incognito session with no localStorage must NOT overwrite Sheets —
-        // it would wipe out the admin's scheduling data with raw form data.
-        const hasLocalData = !isViewer && localPs.length > 0;
-        if(hasLocalData) {
+        // Write merged data back to Sheets after every non-viewer sync.
+        if(!isViewer) {
+          // Step 1: row-by-row push for any participant where local has scheduling
+          // data that Sheets doesn't have (participantId, status, assigned).
+          // Uses gsUpdateP (the same proven path as inline edits) as the primary write.
+          const schedulingPushes=[];
+          remotePs.forEach(rp=>{
+            const ne=(rp.email||"").toLowerCase().trim();
+            const np=String(rp.phone||"").replace(/\D/g,"");
+            const lp=(ne&&localByEmail.get(ne))||(np&&np.length>=8&&localByPhone.get(np));
+            if(!lp) return;
+            const needsPush=(lp.participantId&&!rp.participantId)
+              ||(lp.status&&lp.status!=="pending"&&(!rp.status||rp.status==="pending"))
+              ||(lp.assigned?.day&&!rp.assigned?.day);
+            if(needsPush) schedulingPushes.push({id:rp.id,lp});
+          });
+          if(schedulingPushes.length>0){
+            console.log(`[doSync] pushing scheduling data for ${schedulingPushes.length} participants via gsUpdateP`);
+            schedulingPushes.forEach(({id,lp})=>{
+              gsUpdateP(id,{
+                participantId:lp.participantId||"",
+                status:lp.status||"pending",
+                assigned_day:lp.assigned?.day||"",
+                assigned_slot:lp.assigned?.slot||"",
+                assigned_locId:lp.assigned?.locationId||"",
+                assigned_room:lp.assigned?.room||"",
+                startTime:lp.startTime||"",
+                expDate:lp.expDate||"",
+                notes:lp.notes||"",
+              },settings.currentUser).catch(e=>console.error("[doSync] gsUpdateP failed",id,e));
+            });
+            showToast(`📤 מעדכן ${schedulingPushes.length} נבדקים ב-Sheets...`);
+          }
+          // Step 2: full gsSaveAll for locations, settings, and any other field changes
           gsSaveAll({participants:finalPs, locations:finalLocs, settings, user:settings.currentUser})
             .then(()=>{isSyncingRef.current=false; setSyncStatus("ok"); setLastSync(new Date());})
             .catch(e=>{isSyncingRef.current=false; setSyncStatus("error"); showToast(`⚠️ שגיאת שמירה: ${e.message}`,"error");});
@@ -1075,6 +1108,13 @@ function App() {
     // Auto-sync on open so viewers always see fresh data (Sheets is source of truth)
     setTimeout(()=>doSync(), 300);
   },[]);
+
+  // Periodic auto-sync for viewers every 45s (they can't manually save, so must pull live)
+  useEffect(()=>{
+    if(!isViewer) return;
+    const id=setInterval(()=>doSync(),45000);
+    return ()=>clearInterval(id);
+  },[isViewer]);
 
   // ── NO auto-save: Sheets is the database, never overwrite automatically ─────
   // Changes are pushed row-by-row via gsUpdateP (single participant updates only)
@@ -1586,7 +1626,7 @@ function App() {
                       setMenuOpen(false);
                       const log={
                         timestamp:new Date().toISOString(),
-                        version:"v1.8",
+                        version:"v1.9",
                         participants:{
                           total:participants.length,
                           duplicateEmails:(()=>{const m=new Map();participants.forEach(p=>{if(p.email){const k=p.email.toLowerCase().trim();m.set(k,(m.get(k)||0)+1);}});return[...m.entries()].filter(([,c])=>c>1).map(([e,c])=>({email:e,count:c}));})(),
@@ -1621,7 +1661,7 @@ function App() {
             <div>
               <div style={{display:"flex",alignItems:"baseline",gap:6}}>
                 <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"Arial,sans-serif"}}>{L("appName")}</h1>
-                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v2.1</span>
+                <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v{APP_VERSION}</span>
               </div>
               <p style={{margin:0,opacity:0.55,fontSize:10,marginTop:2}}>{settings.experimentName}</p>
             </div>
@@ -1861,8 +1901,8 @@ function App() {
                 </span>
               </div>
 
-              {/* Row 2: bulk operations — shown only when rows are selected */}
-              {selected.size>0&&(
+              {/* Row 2: bulk operations — shown only when rows are selected (editors/admin only) */}
+              {!isViewer&&selected.size>0&&(
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",background:T.rowSel,border:`1px solid ${T.accent}44`,borderRadius:9,padding:"8px 12px"}}>
                   <span style={{fontSize:11,fontWeight:700,color:T.accent,minWidth:80}}>📌 {selected.size} {L("selectedCount")}:</span>
 
@@ -2064,6 +2104,26 @@ function App() {
                       </div>
                     )}
 
+                  {/* Bulk delete */}
+                  <button onClick={()=>{
+                    const ids=[...selected];
+                    const names=participants.filter(p=>ids.includes(p.id)).map(p=>p.name);
+                    if(isAdmin){
+                      if(!window.confirm(`${lang==="en"?`Delete ${ids.length} participants?`:`למחוק ${ids.length} נבדקים?`}\n${names.join(", ")}`)) return;
+                      setParticipantsUndo(prev=>prev.filter(p=>!ids.includes(p.id)),`מחק ${ids.length} נבדקים`);
+                      addLog("מחיקה מרובה",`נמחקו ${ids.length} נבדקים ע"י ${settings.currentUser}`);
+                      showToast(`🗑 נמחקו ${ids.length} נבדקים`);
+                    } else {
+                      const reqs=participants.filter(p=>ids.includes(p.id)).map(p=>({id:p.id,name:p.name,requestedBy:userName||"editor",requestedAt:Date.now()}));
+                      setPendingDeletes(prev=>[...prev.filter(x=>!ids.includes(x.id)),...reqs]);
+                      reqs.forEach(r=>addNotif({id:"del-req-"+r.id,type:"warning",msg:`🗑 בקשת מחיקה: ${r.name}`,p:participants.find(x=>x.id===r.id),actions:["approve-delete","reject-delete"]}));
+                      showToast(lang==="en"?`Delete request sent for ${ids.length} participants`:`בקשת מחיקה נשלחה עבור ${ids.length} נבדקים`);
+                    }
+                    setSelected(new Set());
+                  }} style={{background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
+                    🗑 {isAdmin?(lang==="en"?"Delete selected":"מחק נבחרים"):(lang==="en"?"Request delete":"בקש מחיקה")}
+                  </button>
+
                   <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:18,padding:"0 4px",marginRight:"auto"}}>×</button>
                 </div>
               )}
@@ -2243,11 +2303,18 @@ function App() {
                           })()} disabled={isViewer} onChange={e=>{
                             const v=e.target.value;
                             const patch={expDate:v};
-                            if(v&&p.assigned){
+                            if(v){
                               const jsDay=new Date(v+"T12:00").getDay();
                               const dayMap=["א","ב","ג","ד","ה","ו","ש"];
                               const heDay=dayMap[jsDay];
-                              if(heDay&&heDay!==p.assigned.day) patch.assigned={...p.assigned,day:heDay};
+                              if(heDay){
+                                if(p.assigned){
+                                  if(heDay!==p.assigned.day) patch.assigned={...p.assigned,day:heDay};
+                                } else {
+                                  const slot=(p.availability&&p.availability[heDay]&&p.availability[heDay][0])||SLOTS[0];
+                                  patch.assigned={day:heDay,slot,locationId:locations[0]?.id||null,room:locations[0]?.rooms?.[0]||""};
+                                }
+                              }
                             }
                             updP(p.id,patch);
                           }} style={{padding:"2px 3px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:10,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:isViewer?"default":"pointer",width:95,colorScheme:darkMode?"dark":"light"}}/>
