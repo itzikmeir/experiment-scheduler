@@ -712,6 +712,51 @@ function App() {
     : typeof v==="string" && v.trim() ? v.split("|").map(Number).filter(n=>n>0)
     : [];
 
+  // Reconstruct nested assigned object from whatever the Apps Script returns.
+  // Apps Script may return flat fields (assigned_day, assigned_slot, …) or a
+  // nested object or both. An empty/null assigned always returns null.
+  function normAssigned(p) {
+    if(p.assigned?.day) return p.assigned;
+    if(p.assigned_day)  return {day:p.assigned_day, slot:p.assigned_slot||"", locationId:Number(p.assigned_locId)||null, room:p.assigned_room||""};
+    return null;
+  }
+
+  // Flatten a participant to the column-level format Apps Script expects.
+  // Mirrors the fullPatch shape in updP so writeParticipants always gets flat data.
+  function flatP(p) {
+    return {
+      id:            p.id,
+      name:          p.name || "",
+      email:         p.email || "",
+      phone:         p.phone || "",
+      age:           p.age || "",
+      gender:        p.gender || "",
+      "avail_א":     (p.availability?.["א"]||[]).join("|"),
+      "avail_ב":     (p.availability?.["ב"]||[]).join("|"),
+      "avail_ג":     (p.availability?.["ג"]||[]).join("|"),
+      "avail_ד":     (p.availability?.["ד"]||[]).join("|"),
+      "avail_ה":     (p.availability?.["ה"]||[]).join("|"),
+      "avail_ו":     (p.availability?.["ו"]||[]).join("|"),
+      assigned_day:  p.assigned?.day        || "",
+      assigned_slot: p.assigned?.slot       || "",
+      assigned_locId:p.assigned?.locationId || "",
+      assigned_room: p.assigned?.room       || "",
+      startTime:     p.startTime     || "",
+      expDate:       p.expDate       || "",
+      participantId: p.participantId || "",
+      status:        p.status        || "pending",
+      notes:         p.notes         || "",
+      locPref:       (p.locPref||[]).join("|"),
+      locPrefText:   p.locPrefText   || "",
+      eligible:      p.eligible      || "",
+      licenseQ:      p.licenseQ      || "",
+      hebrewRead:    p.hebrewRead    || "",
+      visionNote:    p.visionNote    || "",
+      surveyDate:    p.surveyDate    || "",
+      importedAt:    p.importedAt    || "",
+    };
+  }
+
   function dedupeParticipants(arr) {
     const STATUS_RANK = {pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
     const norm = s => (s||"").toString().toLowerCase().replace(/\s+/g,"");
@@ -939,15 +984,15 @@ function App() {
           const normPhone = String(rp.phone||"").replace(/\D/g,"");
           const lp = (normEmail && localByEmail.get(normEmail))
                   || (normPhone && normPhone.length>=8 && localByPhone.get(normPhone));
-          if(!lp) return {...rp, expDate:normDate(rp.expDate), startTime:normTime(rp.startTime||""), locPref:parseLP(rp.locPref)};
-          // Remote (Sheets) is the source of truth — it wins for every field.
-          // Local is only a fallback when Sheets has nothing (empty/null).
+          if(!lp) return {...rp, assigned:normAssigned(rp), expDate:normDate(rp.expDate), startTime:normTime(rp.startTime||""), locPref:parseLP(rp.locPref)};
+          // Remote (Sheets) wins; local fills in scheduling fields Sheets doesn't have yet.
+          const remoteAssigned = normAssigned(rp);
           const finalPid = rp.participantId || lp.participantId || "";
           return {
             ...rp,
+            assigned:      remoteAssigned || lp.assigned || null,
             expDate:       normDate(rp.expDate || lp.expDate),
             startTime:     normTime(rp.startTime) || normTime(lp.startTime) || "",
-            assigned:      rp.assigned  ?? lp.assigned  ?? null,
             participantId: finalPid,
             status:        finalPid ? "completed" : (rp.status || lp.status || "pending"),
             notes:         rp.notes || lp.notes || "",
@@ -1042,7 +1087,7 @@ function App() {
             showToast(`📤 מעדכן ${schedulingPushes.length} נבדקים ב-Sheets...`);
           }
           // Step 2: full gsSaveAll for locations, settings, and any other field changes
-          gsSaveAll({participants:finalPs, locations:finalLocs, settings, user:settings.currentUser})
+          gsSaveAll({participants:finalPs.map(flatP), locations:finalLocs, settings, user:settings.currentUser})
             .then(()=>{isSyncingRef.current=false; setSyncStatus("ok"); setLastSync(new Date());})
             .catch(e=>{isSyncingRef.current=false; setSyncStatus("error"); showToast(`⚠️ שגיאת שמירה: ${e.message}`,"error");});
         } else {
@@ -1070,7 +1115,7 @@ function App() {
     setSyncStatus("syncing");
     const ps = dedupeParticipants(participantsRef.current);
     const ls = dedupeLocations(locationsRef.current);
-    gsSaveAll({participants:ps, locations:ls, settings, user:settings.currentUser})
+    gsSaveAll({participants:ps.map(flatP), locations:ls, settings, user:settings.currentUser})
       .then(()=>{
         isSyncingRef.current = false;
         setSyncStatus("ok"); setLastSync(new Date());
@@ -2726,7 +2771,7 @@ function App() {
                           }));
                           setParticipantsUndo(newPs, `מחיקת מיקום: ${loc.name}`);
                           // Immediately save to Sheets so sync doesn't bring it back
-                          gsSaveAll({participants:newPs, locations:newLocs, settings, user:settings.currentUser})
+                          gsSaveAll({participants:newPs.map(flatP), locations:newLocs, settings, user:settings.currentUser})
                             .then(()=>{setSyncStatus("ok");setLastSync(new Date());showToast(`🗑 "${loc.name}" נמחק`);})
                             .catch(()=>setSyncStatus("error"));
                         }} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑</button>
