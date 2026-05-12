@@ -746,7 +746,7 @@ function App() {
       participantId: p.participantId || "",
       status:        p.status        || "pending",
       notes:         p.notes         || "",
-      locPref:       (p.locPref||[]).join("|"),
+      locPref:       parseLP(p.locPref).join("|"),
       locPrefText:   p.locPrefText   || "",
       eligible:      p.eligible      || "",
       licenseQ:      p.licenseQ      || "",
@@ -1187,7 +1187,7 @@ function App() {
       flat.assigned_room  = a?.room       || "";
       delete flat.assigned;
     }
-    if("locPref" in patch) flat.locPref = (patch.locPref||[]).join("|");
+    if("locPref" in patch) flat.locPref = parseLP(patch.locPref).join("|");
     return flat;
   }
 
@@ -1225,7 +1225,7 @@ function App() {
       participantId: merged.participantId || "",
       status:        merged.status || "pending",
       notes:         merged.notes || "",
-      locPref:       (merged.locPref||[]).join("|"),
+      locPref:       parseLP(merged.locPref).join("|"),
       locPrefText:   merged.locPrefText || "",
       eligible:      merged.eligible || "",
       licenseQ:      merged.licenseQ || "",
@@ -1335,7 +1335,7 @@ function App() {
         participantId: p.participantId || "",
         status:        p.status || "pending",
         notes:         p.notes || "",
-        locPref:       (p.locPref||[]).join("|"),
+        locPref:       parseLP(p.locPref).join("|"),
         locPrefText:   p.locPrefText || "",
         eligible:      p.eligible || "",
         licenseQ:      p.licenseQ || "",
