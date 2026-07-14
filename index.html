@@ -1192,19 +1192,11 @@ function App() {
   }
 
   // ── Participant mutations ──────────────────────────────────────────────────
-  const updP = useCallback((id,patch,logMsg)=>{
-    if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
-    // Acquire edit lock if not already held
-    if(!editLockRef.current) acquireLock();
-    setParticipantsUndo(prev=>prev.map(p=>p.id===id?{...p,...patch}:p), logMsg);
-    if(logMsg) addLog("עדכון",logMsg);
-    // Build full participant patch so Apps Script can write the complete row.
-    // Merging current participant data with the incoming patch ensures scheduling
-    // fields (startTime, expDate, etc.) are always persisted even if Apps Script
-    // doesn't support partial column writes.
-    const base = participantsRef.current.find(p=>p.id===id) || {};
-    const merged = {...base, ...patch};
-    const fullPatch = {
+  // Build the full column-level patch Apps Script expects for one participant.
+  // Shared by every write path (single edits, bulk toolbar actions, auto-assign)
+  // so every mutation persists to Sheets the same, already-proven way.
+  function toFullPatch(merged) {
+    return {
       name:          merged.name || "",
       email:         merged.email || "",
       phone:         merged.phone || "",
@@ -1232,7 +1224,29 @@ function App() {
       hebrewRead:    merged.hebrewRead || "",
       visionNote:    merged.visionNote || "",
     };
-    gsUpdateP(id, fullPatch, settings.currentUser)
+  }
+  // Push a batch of already-updated participants to Sheets immediately, one row
+  // each — used by bulk toolbar actions / auto-assign / clear so a page refresh
+  // right after a bulk change reflects the same data (no waiting for a full save).
+  const pushRows = useCallback((ids, updatedList)=>{
+    const idSet = ids instanceof Set ? ids : new Set(ids);
+    updatedList.filter(p=>idSet.has(p.id)).forEach(p=>{
+      gsUpdateP(p.id, toFullPatch(p), settings.currentUser).catch(()=>setSyncStatus("error"));
+    });
+  },[settings.currentUser]);
+  const updP = useCallback((id,patch,logMsg)=>{
+    if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
+    // Acquire edit lock if not already held
+    if(!editLockRef.current) acquireLock();
+    setParticipantsUndo(prev=>prev.map(p=>p.id===id?{...p,...patch}:p), logMsg);
+    if(logMsg) addLog("עדכון",logMsg);
+    // Build full participant patch so Apps Script can write the complete row.
+    // Merging current participant data with the incoming patch ensures scheduling
+    // fields (startTime, expDate, etc.) are always persisted even if Apps Script
+    // doesn't support partial column writes.
+    const base = participantsRef.current.find(p=>p.id===id) || {};
+    const merged = {...base, ...patch};
+    gsUpdateP(id, toFullPatch(merged), settings.currentUser)
       .then(()=>setSyncStatus("ok"))
       .catch(()=>setSyncStatus("error"));
   },[addLog, settings.currentUser, syncStatus]);
@@ -1257,6 +1271,7 @@ function App() {
     const queue=updated.filter(p=>(ids?ids.has(p.id):!p.assigned)&&Object.values(p.availability).some(s=>s.length>0))
       .sort((a,b)=>Object.values(a.availability).flat().length-Object.values(b.availability).flat().length);
     let n=0;
+    const touchedIds=new Set();
     queue.forEach(p=>{
       // Try preferred locations first, then all others
       const prefs=p.locPref&&p.locPref.length>0?p.locPref:[];
@@ -1272,13 +1287,14 @@ function App() {
             if((cnt[k]||0)<settings.perSlot){
               const idx=updated.findIndex(u=>u.id===p.id);
               updated[idx].assigned={day,slot,locationId:loc.id,room:loc.rooms[0]||""};
-              updated[idx].status="assigned";cnt[k]=(cnt[k]||0)+1;n++;break outer;
+              updated[idx].status="assigned";cnt[k]=(cnt[k]||0)+1;n++;touchedIds.add(p.id);break outer;
             }
           }
         }
       }
     });
     setParticipantsUndo(()=>updated, lang==="en"?"Auto-assign":"שיבוץ אוטומטי");
+    pushRows(touchedIds, updated);
     addLog("שיבוץ אוטומטי",`שובצו ${n} משתתפים`);
     showToast(`⚡ שובצו ${n} משתתפים`);
   }
@@ -1288,7 +1304,10 @@ function App() {
     if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
     const count = ids ? ids.size : participants.filter(p=>p.assigned).length;
     if(!window.confirm(`לנקות ${count} שיבוצים?`)) return;
-    setParticipants(prev=>prev.map(p=>(ids?ids.has(p.id):true)&&p.assigned?{...p,assigned:null,status:"pending"}:p));
+    const touchedIds=new Set(participants.filter(p=>(ids?ids.has(p.id):true)&&p.assigned).map(p=>p.id));
+    const updated=participants.map(p=>touchedIds.has(p.id)?{...p,assigned:null,status:"pending"}:p);
+    setParticipants(updated);
+    pushRows(touchedIds, updated);
     addLog("ניקוי שיבוצים",`נוקו ${count} שיבוצים ע"י ${settings.currentUser}`);
     showToast(`🗑 נוקו ${count} שיבוצים`);
   }
@@ -1313,40 +1332,11 @@ function App() {
       addLog("הוספה ידנית",`נוסף: ${np.name}`);
       showToast(`✅ ${np.name} נוסף`);
     } else {
-      // Flatten participant to column-level patch matching P_HEADERS
-      const patch = {
-        name:          p.name || "",
-        email:         p.email || "",
-        phone:         p.phone || "",
-        age:           p.age || "",
-        gender:        p.gender || "",
-        "avail_א":     (p.availability?.["א"]||[]).join("|"),
-        "avail_ב":     (p.availability?.["ב"]||[]).join("|"),
-        "avail_ג":     (p.availability?.["ג"]||[]).join("|"),
-        "avail_ד":     (p.availability?.["ד"]||[]).join("|"),
-        "avail_ה":     (p.availability?.["ה"]||[]).join("|"),
-        "avail_ו":     (p.availability?.["ו"]||[]).join("|"),
-        assigned_day:  p.assigned?.day || "",
-        assigned_slot: p.assigned?.slot || "",
-        assigned_locId:p.assigned?.locationId || "",
-        assigned_room: p.assigned?.room || "",
-        startTime:     p.startTime || "",
-        expDate:       p.expDate || "",
-        participantId: p.participantId || "",
-        status:        p.status || "pending",
-        notes:         p.notes || "",
-        locPref:       parseLP(p.locPref).join("|"),
-        locPrefText:   p.locPrefText || "",
-        eligible:      p.eligible || "",
-        licenseQ:      p.licenseQ || "",
-        hebrewRead:    p.hebrewRead || "",
-        visionNote:    p.visionNote || "",
-      };
       // Update local state
       setParticipantsUndo(prev=>prev.map(q=>q.id===p.id?{...q,...p}:q), `עריכה: ${p.name}`);
       addLog("עדכון", `עריכה: ${p.name}`);
       // Push to Sheets
-      gsUpdateP(p.id, patch, settings.currentUser)
+      gsUpdateP(p.id, toFullPatch(p), settings.currentUser)
         .then(()=>{setSyncStatus("ok");setLastSync(new Date());})
         .catch(()=>setSyncStatus("error"));
       showToast(`✅ ${p.name} עודכן`);
@@ -1459,8 +1449,10 @@ function App() {
       if(filters.assigned==="no" && p.assigned) return false;
       if(filters.status.length>0 && filters.status.includes(p.status)) return false;
       if(filters.gender.length>0 && filters.gender.includes(p.gender||"")) return false;
-      if(filters.location.length>0 && !filters.location.includes(String(p.assigned?.locationId||""))) return false;
+      if(filters.location.length>0 && filters.location.includes(String(p.assigned?.locationId||""))) return false;
       if(filters.day.length>0 && filters.day.includes(p.assigned?.day||"")) return false;
+      // avail filter holds the days the user MARKED (checked) — keep participants
+      // available on at least one of them (OR); empty selection = no filter.
       if(filters.avail&&filters.avail.length>0 && !filters.avail.some(d=>(p.availability||{})[d]?.length>0)) return false;
       if(filters.slot.length>0 && !filters.slot.some(s=>
         (p.assigned?.slot||"").includes(s)||Object.values(p.availability||{}).flat().some(a=>a.includes(s))
@@ -1488,6 +1480,13 @@ function App() {
       }
       if(sortCol==="age"){
         const na=parseInt(a.age)||0, nb=parseInt(b.age)||0;
+        return sortDir==="asc"?na-nb:nb-na;
+      }
+      if(sortCol==="avail"){
+        // "avail" isn't a real field (it's `availability`) — sort by total number
+        // of open slots across the week so the column header sort actually does something.
+        const na=Object.values(a.availability||{}).flat().length;
+        const nb=Object.values(b.availability||{}).flat().length;
         return sortDir==="asc"?na-nb:nb-na;
       }
       const ka=(a[sortCol]||"").toString().toLowerCase();
@@ -1964,7 +1963,9 @@ function App() {
                       const ids=selected;
                       const count=[...ids].filter(id=>participants.find(p=>p.id===id)?.assigned).length;
                       if(!window.confirm(`לנקות שיבוץ של ${count} נבדקים?`)) return;
-                      setParticipants(prev=>prev.map(p=>ids.has(p.id)&&p.assigned?{...p,assigned:null,status:"pending"}:p));
+                      const updated=participants.map(p=>ids.has(p.id)&&p.assigned?{...p,assigned:null,status:"pending"}:p);
+                      setParticipants(updated);
+                      pushRows(ids, updated);
                       addLog("ניקוי שיבוצים",`נוקו ${count} שיבוצים ע"י ${settings.currentUser}`);
                       showToast(`🗑 נוקו ${count} שיבוצים`);
                       setSelected(new Set());
@@ -1977,7 +1978,9 @@ function App() {
                   <select defaultValue="" onChange={e=>{
                     if(!e.target.value) return;
                     const status=e.target.value;
-                    setParticipants(prev=>prev.map(p=>selected.has(p.id)?{...p,status}:p));
+                    const updated=participants.map(p=>selected.has(p.id)?{...p,status}:p);
+                    setParticipants(updated);
+                    pushRows(selected, updated);
                     addLog("עדכון סטטוס",`סטטוס "${statusMeta[status].label}" ל-${selected.size} נבדקים`);
                     showToast(`✅ סטטוס עודכן ל-${selected.size} נבדקים`);
                     e.target.value="";
@@ -1990,11 +1993,13 @@ function App() {
                   <select defaultValue="" onChange={e=>{
                     if(!e.target.value) return;
                     const day=e.target.value;
-                    setParticipants(prev=>prev.map(p=>{
+                    const updated=participants.map(p=>{
                       if(!selected.has(p.id)||!p.assigned) return p;
                       const slot=p.availability[day]?.[0]||p.assigned.slot||SLOTS[0];
                       return {...p,assigned:{...p.assigned,day,slot}};
-                    }));
+                    });
+                    setParticipants(updated);
+                    pushRows(selected, updated);
                     addLog("עדכון יום",`יום ${dayNames[day]} ל-${selected.size} נבדקים`);
                     showToast(`📅 יום עודכן`);
                     e.target.value="";
@@ -2007,7 +2012,9 @@ function App() {
                   <select defaultValue="" onChange={e=>{
                     if(!e.target.value) return;
                     const slot=e.target.value;
-                    setParticipants(prev=>prev.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,slot}}:p));
+                    const updated=participants.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,slot}}:p);
+                    setParticipants(updated);
+                    pushRows(selected, updated);
                     addLog("עדכון משמרת",`משמרת ל-${selected.size} נבדקים`);
                     showToast(`⏰ משמרת עודכנה`);
                     e.target.value="";
@@ -2021,7 +2028,9 @@ function App() {
                     if(!e.target.value) return;
                     const locId=parseInt(e.target.value);
                     const room=locById[locId]?.rooms[0]||"";
-                    setParticipants(prev=>prev.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,locationId:locId,room}}:p));
+                    const updated=participants.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,locationId:locId,room}}:p);
+                    setParticipants(updated);
+                    pushRows(selected, updated);
                     addLog("עדכון מיקום",`מיקום "${locById[locId]?.name}" ל-${selected.size} נבדקים`);
                     showToast(`📍 מיקום עודכן`);
                     e.target.value="";
@@ -2035,7 +2044,9 @@ function App() {
                     <select defaultValue="" onChange={e=>{
                       if(!e.target.value) return;
                       const room=e.target.value;
-                      setParticipants(prev=>prev.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,room}}:p));
+                      const updated=participants.map(p=>selected.has(p.id)&&p.assigned?{...p,assigned:{...p.assigned,room}}:p);
+                      setParticipants(updated);
+                      pushRows(selected, updated);
                       showToast(`🏫 כיתה עודכנה`);
                       e.target.value="";
                     }} style={{padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,cursor:"pointer"}}>
@@ -2059,10 +2070,13 @@ function App() {
                       if(conflicts.length>0){
                         if(!window.confirm(`⚠️ ${lang==="en"?"Conflict:":"קונפליקט:"} ${conflicts.join(", ")} ${lang==="en"?"exceed slot limit. Continue?":"חורגים ממגבלת משמרת. להמשיך?"}`)) return;
                       }
-                      setParticipants(prev=>prev.map(p=>{
+                      const updated=participants.map(p=>{
                         if(!selected.has(p.id)||!p.assigned) return p;
-                        return {...p,startTime:p.assigned.slot?.includes("בוקר")?"08:00":"12:00"};
-                      }));
+                        // Setting a time promotes a still-pending participant to "assigned"
+                        return {...p,startTime:p.assigned.slot?.includes("בוקר")?"08:00":"12:00",status:p.status==="pending"?"assigned":p.status};
+                      });
+                      setParticipants(updated);
+                      pushRows(selected, updated);
                       showToast(`⏰ ${lang==="en"?"Times set":"שעות מולאו"}`);
                     }} style={{background:"#FFF7ED",color:"#D97706",border:"1px solid #FDE68A",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
                       ⏰ {lang==="en"?"Auto-fill time":"מלא שעות אוטומטית"}
@@ -2079,12 +2093,14 @@ function App() {
                       return(
                         <button key={loc.id} onClick={()=>{
                           // If all selected have it → remove from all; otherwise add to all
-                          setParticipants(prev=>prev.map(p=>{
+                          const updated=participants.map(p=>{
                             if(!selected.has(p.id)) return p;
                             const cur=p.locPref||[];
                             const next=allOn?cur.filter(x=>x!==loc.id):cur.includes(loc.id)?cur:[...cur,loc.id];
                             return {...p,locPref:next};
-                          }));
+                          });
+                          setParticipants(updated);
+                          pushRows(selected, updated);
                           addLog("עדכון העדפת מיקום",`"${loc.name}" ${allOn?"הוסר מ":"נוסף ל"}-${selected.size} נבדקים`);
                           showToast(`📍 ${loc.name} ${allOn?"הוסר":"נוסף"} ל-${selected.size} נבדקים`);
                         }} style={{
@@ -2389,10 +2405,10 @@ function App() {
                             const autoTime=p.assigned.slot?.includes("בוקר")?"08:00":"12:00";
                             return(
                               <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                                <input type="time" value={p.startTime||""} disabled={isViewer} onChange={e=>updP(p.id,{startTime:e.target.value})}
+                                <input type="time" value={p.startTime||""} disabled={isViewer} onChange={e=>updP(p.id,{startTime:e.target.value,status:p.status==="pending"?"assigned":p.status})}
                                   style={{padding:"2px 4px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,width:80}}/>
                                 {!isViewer&&<button title={lang==="en"?"Auto-fill from shift":"מלא לפי משמרת"} onClick={()=>{
-                                  updP(p.id,{startTime:autoTime});
+                                  updP(p.id,{startTime:autoTime,status:p.status==="pending"?"assigned":p.status});
                                 }} style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10,color:T.textMuted,fontFamily:"inherit"}}>⟳</button>}
                               </div>
                             );
@@ -3242,16 +3258,14 @@ function App() {
         <>
           <div style={{position:"fixed",inset:0,zIndex:1400}} onClick={()=>setColMenu(null)}/>
           <div style={{position:"fixed",left:colMenu.left,top:colMenu.y,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:1500,minWidth:190,maxHeight:340,overflowY:"auto",padding:"6px 0"}} onClick={e=>e.stopPropagation()}>
-            {colMenu.col!=="avail"&&(
-              <div style={{padding:"6px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:6}}>
-                <button onClick={()=>toggleSort(colMenu.col)} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="asc"?800:400}}>
-                  {L("sortAsc")}
-                </button>
-                <button onClick={()=>{if(sortCol===colMenu.col)setSortDir("desc");else{setSortCol(colMenu.col);setSortDir("desc");}}} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="desc"?800:400}}>
-                  {L("sortDesc")}
-                </button>
-              </div>
-            )}
+            <div style={{padding:"6px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:6}}>
+              <button onClick={()=>toggleSort(colMenu.col)} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="asc"?800:400}}>
+                {L("sortAsc")}
+              </button>
+              <button onClick={()=>{if(sortCol===colMenu.col)setSortDir("desc");else{setSortCol(colMenu.col);setSortDir("desc");}}} style={{flex:1,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:5,padding:"4px 0",cursor:"pointer",fontSize:11,fontFamily:"inherit",color:T.text,fontWeight:sortCol===colMenu.col&&sortDir==="desc"?800:400}}>
+                {L("sortDesc")}
+              </button>
+            </div>
             {colMenu.fkey==="surveyDate"&&(
               <div style={{padding:"10px 12px"}}>
                 <div style={{fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6}}>{lang==="en"?"Date range":"טווח תאריכים"}</div>
@@ -3282,32 +3296,39 @@ function App() {
             {(()=>{
               // "checked" = item is SHOWN (not filtered out).
               // filters[fkey] = list of HIDDEN values (empty = show all).
+              // Exception: "avail" is a positive pick-list — filters.avail holds the
+              // days the user MARKED, and checking a box ADDS it (empty = no filter).
               const fkey=colMenu.fkey;
               if(fkey==="surveyDate") return null;
-              const hidden=filters[fkey]||[];
+              const isPick=fkey==="avail";
+              const cur=filters[fkey]||[];
               const allVals=colMenu.options.map(o=>o.v);
-              const allShown=hidden.length===0;
-              const someHidden=hidden.length>0&&hidden.length<allVals.length;
+              const allShown=isPick ? cur.length===allVals.length : cur.length===0;
+              const someHidden=cur.length>0&&cur.length<allVals.length;
               return(<>
             <div style={{padding:"5px 12px",borderBottom:`1px solid ${T.border}`}}>
               <label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12,color:T.text}}>
                 <input type="checkbox"
                   ref={el=>{if(el) el.indeterminate=someHidden;}}
                   checked={allShown}
-                  onChange={()=>setFilters(f=>({...f,[fkey]:allShown?allVals:[]}))}
+                  onChange={()=>setFilters(f=>({...f,[fkey]: isPick ? (allShown?[]:allVals) : (allShown?allVals:[])}))}
                   style={{cursor:"pointer",accentColor:T.accent}}/>
                 <strong>{L("filterAll")}</strong>
               </label>
             </div>
             {colMenu.options.map(opt=>{
-              const isHidden=(filters[colMenu.fkey]||[]).includes(opt.v);
-              const shown=!isHidden;
+              const included=(filters[colMenu.fkey]||[]).includes(opt.v);
+              const shown=isPick?included:!included;
               return(
                 <div key={opt.v} style={{padding:"4px 12px"}}>
                   <label style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:12,color:T.text}}>
                     <input type="checkbox" checked={shown} onChange={()=>{
                       setFilters(f=>{
                         const cur=f[colMenu.fkey]||[];
+                        if(isPick){
+                          // toggle: mark (add) or unmark (remove) this day as a filter criterion
+                          return {...f,[colMenu.fkey]:shown?cur.filter(x=>x!==opt.v):[...cur,opt.v]};
+                        }
                         // toggle: if shown→hide it, if hidden→show it
                         return {...f,[colMenu.fkey]:shown?[...cur,opt.v]:cur.filter(x=>x!==opt.v)};
                       });
