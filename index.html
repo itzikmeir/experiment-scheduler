@@ -985,16 +985,26 @@ function App() {
           const lp = (normEmail && localByEmail.get(normEmail))
                   || (normPhone && normPhone.length>=8 && localByPhone.get(normPhone));
           if(!lp) return {...rp, assigned:normAssigned(rp), expDate:normDate(rp.expDate), startTime:normTime(rp.startTime||""), locPref:parseLP(rp.locPref)};
-          // Remote (Sheets) wins; local fills in scheduling fields Sheets doesn't have yet.
+          // Remote (Sheets) wins for everything EXCEPT status: take whichever of
+          // remote/local ranks higher. A remote fetch can catch Sheets mid-write
+          // (Apps Script has no write locking), so blindly trusting "remote" here
+          // can re-entrench a stale/lower status a moment after it was corrected
+          // locally. Ranking — same rule as mergeSheets/dedupeParticipants — guards
+          // against that regardless of timing.
+          const STATUS_RANK = {pending:0,assigned:1,confirmed:2,completed:3,declined:1,irrelevant:0};
           const remoteAssigned = normAssigned(rp);
-          const finalPid = rp.participantId || lp.participantId || "";
+          const remoteHasPid = rp.participantId && rp.participantId.trim();
+          const localHasPid  = lp.participantId && lp.participantId.trim();
+          const finalPid = remoteHasPid || localHasPid || "";
+          const remoteRank = STATUS_RANK[remoteHasPid?"completed":rp.status]??0;
+          const localRank  = STATUS_RANK[localHasPid?"completed":lp.status]??0;
           return {
             ...rp,
             assigned:      remoteAssigned || lp.assigned || null,
             expDate:       normDate(rp.expDate || lp.expDate),
             startTime:     normTime(rp.startTime) || normTime(lp.startTime) || "",
             participantId: finalPid,
-            status:        finalPid ? "completed" : (rp.status || lp.status || "pending"),
+            status:        finalPid ? "completed" : (remoteRank > localRank ? rp.status : lp.status),
             notes:         rp.notes || lp.notes || "",
             locPref:       parseLP(rp.locPref).length ? parseLP(rp.locPref) : parseLP(lp.locPref),
           };
@@ -1228,11 +1238,16 @@ function App() {
   // Push a batch of already-updated participants to Sheets immediately, one row
   // each — used by bulk toolbar actions / auto-assign / clear so a page refresh
   // right after a bulk change reflects the same data (no waiting for a full save).
-  const pushRows = useCallback((ids, updatedList)=>{
+  // Sent ONE AT A TIME (not all at once): Apps Script has no request locking, so
+  // firing many concurrent writes risks them landing out of order, or a sync that
+  // fires mid-batch reading a half-written sheet. Sequencing them closes most of
+  // that window; it doesn't need to block the caller, so this isn't awaited.
+  const pushRows = useCallback(async (ids, updatedList)=>{
     const idSet = ids instanceof Set ? ids : new Set(ids);
-    updatedList.filter(p=>idSet.has(p.id)).forEach(p=>{
-      gsUpdateP(p.id, toFullPatch(p), settings.currentUser).catch(()=>setSyncStatus("error"));
-    });
+    for (const p of updatedList.filter(p=>idSet.has(p.id))) {
+      try { await gsUpdateP(p.id, toFullPatch(p), settings.currentUser); }
+      catch { setSyncStatus("error"); }
+    }
   },[settings.currentUser]);
   const updP = useCallback((id,patch,logMsg)=>{
     if(isViewer){showToast(lang==="en"?"View-only mode":"מצב צפייה בלבד","error");return;}
