@@ -590,12 +590,24 @@ function App() {
   const [pendingDeletes,setPendingDeletes] = useState([]);
   const [notifications,setNotifications] = useState([]); // [{id,type,msg,p,action}]
   const [notifOpen,setNotifOpen] = useState(false);
-  const addNotif = (notif) => setNotifications(prev=>{
-    const exists = prev.some(n=>n.id===notif.id);
-    if(exists) return prev;
-    return [notif,...prev].slice(0,50);
-  });
-  const removeNotif = (id) => setNotifications(prev=>prev.filter(n=>n.id!==id));
+  // Notifications the user already dismissed/actioned — persisted so they don't
+  // reappear on the next page load (the checks that raise them re-run on every
+  // sync/mount and would otherwise re-add the exact same warning every time).
+  const [dismissedNotifIds,setDismissedNotifIds] = useState(()=>new Set(saved?.dismissedNotifIds||[]));
+  const dismissedNotifIdsRef = useRef(dismissedNotifIds);
+  useEffect(()=>{dismissedNotifIdsRef.current=dismissedNotifIds;},[dismissedNotifIds]);
+  const addNotif = (notif) => {
+    if(dismissedNotifIdsRef.current.has(notif.id)) return;
+    setNotifications(prev=>{
+      const exists = prev.some(n=>n.id===notif.id);
+      if(exists) return prev;
+      return [notif,...prev].slice(0,50);
+    });
+  };
+  const removeNotif = (id) => {
+    setNotifications(prev=>prev.filter(n=>n.id!==id));
+    setDismissedNotifIds(prev=>new Set(prev).add(id));
+  };
   const [importStatus,setImportStatus] = useState(null); // null | {state:"loading"|"ok"|"error", msg:string}
   const [syncMsg,setSyncMsg]       = useState("");
   const [lastSync,setLastSync]     = useState(null);
@@ -611,6 +623,8 @@ function App() {
   const [sortDir,setSortDir]     = useState(()=>saved?.sortDir||"asc");
   const [filters,setFilters]     = useState({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[],surveyDateFrom:"",surveyDateTo:""});
   const [surveyDatePending,setSurveyDatePending] = useState({from:"",to:""});
+  // Saved filter presets ("tags") — combine every active filter field under one name
+  const [savedFilters,setSavedFilters] = useState(()=>saved?.savedFilters||[]);
   const [colMenu,setColMenu]       = useState(null); // {col, x, y}
   const [rowEmailMenu,setRowEmailMenu] = useState(null);
   const [rowMenu,setRowMenu] = useState(null); // {pid, x, y, p}
@@ -631,7 +645,7 @@ function App() {
   const T = darkMode ? THEME.dark : THEME.light;
 
   // Persist locally
-  useEffect(()=>{saveState({participants,locations,settings,changelog,darkMode,lang,sortCol,sortDir});},[participants,locations,settings,changelog,darkMode,lang,sortCol,sortDir]);
+  useEffect(()=>{saveState({participants,locations,settings,changelog,darkMode,lang,sortCol,sortDir,savedFilters,dismissedNotifIds:[...dismissedNotifIds]});},[participants,locations,settings,changelog,darkMode,lang,sortCol,sortDir,savedFilters,dismissedNotifIds]);
   
   // Auto-sync to Sheets every 60s if there are recent changes
   const lastSyncRef = React.useRef(null);
@@ -1049,7 +1063,7 @@ function App() {
         });
         if(invalidLocWarnings.length>0) {
           addNotif({
-            id:"badloc-"+Date.now(),
+            id:"badloc-"+invalidLocWarnings.map(w=>w.name).sort().join(","),
             type:"warning",
             msg:`📍 ${invalidLocWarnings.length} ${lang==="en"?"participant(s) had unknown location IDs — cleared":"נבדקים עם מיקום לא מוכר — נוקה"}: ${invalidLocWarnings.map(w=>w.name).join(", ")}`,
             actions:[]
@@ -1516,6 +1530,17 @@ function App() {
   const toggleSort = col=>{if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortCol(col);setSortDir("asc");}};
   const SortIcon = ({col})=>sortCol===col?<span style={{fontSize:10,marginRight:2}}>{sortDir==="asc"?"↑":"↓"}</span>:<span style={{fontSize:10,marginRight:2,opacity:0.3}}>↕</span>;
 
+  // ── Saved filter presets ("tags") — bundle every active filter field under one name ──
+  const hasActiveFilter = !!(filters.name||filters.assigned||filters.status.length>0||filters.gender.length>0||filters.location.length>0||filters.day.length>0||filters.slot.length>0||filters.locPref.length>0||filters.age.length>0||filters.avail.length>0||filters.surveyDateFrom||filters.surveyDateTo);
+  const saveCurrentFilter = () => {
+    const name = window.prompt(lang==="en"?"Name this filter:":"תן שם לסינון:");
+    if(!name || !name.trim()) return;
+    setSavedFilters(prev=>[...prev,{id:Date.now(), name:name.trim(), filters:{...filters}}]);
+    showToast(lang==="en"?`💾 Filter "${name.trim()}" saved`:`💾 הסינון "${name.trim()}" נשמר`);
+  };
+  const applySavedFilter = sf => setFilters(f=>({...f,...sf.filters}));
+  const deleteSavedFilter = id => setSavedFilters(prev=>prev.filter(sf=>sf.id!==id));
+
   // ── Selection ──────────────────────────────────────────────────────────────
   const toggleSel = id=>{setSelected(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});};
   const selList = participants.filter(p=>selected.has(p.id));
@@ -1787,7 +1812,10 @@ function App() {
                 <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"115%",left:lang==="en"?"auto":0,right:lang==="en"?0:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 12px 40px rgba(0,0,0,0.5)",zIndex:500,width:340,maxHeight:480,overflowY:"auto"}}>
                   <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{color:T.text,fontWeight:800,fontSize:13}}>🔔 {lang==="en"?"Alerts":"התראות"} ({notifications.length})</span>
-                    {notifications.length>0&&<button onClick={()=>setNotifications([])} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ {lang==="en"?"Clear all":"נקה הכל"}</button>}
+                    {notifications.length>0&&<button onClick={()=>{
+                      setDismissedNotifIds(prev=>{const n=new Set(prev); notifications.forEach(x=>n.add(x.id)); return n;});
+                      setNotifications([]);
+                    }} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕ {lang==="en"?"Clear all":"נקה הכל"}</button>}
                   </div>
                   {notifications.length===0&&<div style={{padding:"24px",textAlign:"center",color:T.textFaint,fontSize:13}}>{lang==="en"?"No alerts":"אין התראות"} ✓</div>}
                   {notifications.map(notif=>(
@@ -2212,8 +2240,21 @@ function App() {
               <select value={filters.assigned} onChange={e=>setFilters(f=>({...f,assigned:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
                 <option value="">{L("filterAssigned")}</option><option value="yes">{L("filterYes")}</option><option value="no">{L("filterNo")}</option>
               </select>
-              {(filters.name||filters.assigned||filters.status.length>0||filters.gender.length>0||filters.location.length>0||filters.day.length>0||filters.slot.length>0||filters.locPref.length>0||filters.age.length>0||filters.avail.length>0)&&(
-                <button onClick={()=>setFilters({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[]})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{L("clearAll")}</button>
+              {hasActiveFilter&&(
+                <button onClick={()=>setFilters({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[],surveyDateFrom:"",surveyDateTo:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{L("clearAll")}</button>
+              )}
+              {hasActiveFilter&&(
+                <button onClick={saveCurrentFilter} title={lang==="en"?"Save this filter combination under a name":"שמור את שילוב הסינון הנוכחי תחת שם"} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>💾 {lang==="en"?"Save filter":"שמור סינון"}</button>
+              )}
+              {savedFilters.length>0&&(
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center",borderInlineStart:`1px solid ${T.border}`,paddingInlineStart:8,marginInlineStart:2}}>
+                  {savedFilters.map(sf=>(
+                    <span key={sf.id} onClick={()=>applySavedFilter(sf)} title={lang==="en"?"Apply this saved filter":"החל סינון שמור זה"} style={{display:"inline-flex",alignItems:"center",gap:5,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:12,padding:"3px 5px 3px 9px",fontSize:11,fontWeight:600,color:T.text,cursor:"pointer",whiteSpace:"nowrap"}}>
+                      🏷 {sf.name}
+                      <button onClick={e=>{e.stopPropagation();deleteSavedFilter(sf.id);}} title={lang==="en"?"Delete":"מחק"} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:13,lineHeight:1,padding:0}}>×</button>
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
 
