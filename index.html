@@ -1024,6 +1024,24 @@ function App() {
           };
         });
 
+        // Local-only participants (added on this client but not yet written to
+        // Sheets) must survive a sync — otherwise they silently drop out of
+        // `merged` here (which only iterates remotePs) and the gsSaveAll call
+        // below then overwrites Sheets with the list that's missing them,
+        // deleting them from both local state AND Sheets.
+        const remoteEmails = new Set(remotePs.filter(p=>p.email).map(p=>p.email.toLowerCase().trim()));
+        const remotePhones = new Set(remotePs.filter(p=>p.phone).map(p=>String(p.phone).replace(/\D/g,"")));
+        const remoteIds    = new Set(remotePs.map(p=>String(p.id)));
+        const localOnly = localPs.filter(lp=>{
+          const ne=(lp.email||"").toLowerCase().trim();
+          const lpPhone=String(lp.phone||"").replace(/\D/g,"");
+          if(remoteIds.has(String(lp.id))) return false;
+          if(ne && remoteEmails.has(ne)) return false;
+          if(lpPhone && lpPhone.length>=8 && remotePhones.has(lpPhone)) return false;
+          return true;
+        });
+        if(localOnly.length>0) merged.push(...localOnly);
+
         // Alert for ambiguous (name matches but no email/phone match)
         const localNames = new Map(localPs.map(p=>[p.name.toLowerCase().trim(),p]));
         remotePs.forEach(rp=>{
@@ -1350,9 +1368,18 @@ function App() {
       if(dups.length>0) {
         setModal(null);setEditP(null);
         setDupModal({conflicts:[{incoming:np,existing:dups,reason:dupReason(np,dups[0])}],index:0,newOnes:[],resolved:[],onDone:(action)=>{
-          if(action==="add"){setParticipants(prev=>[...prev,np]);addLog("הוספה ידנית",`נוסף: ${np.name}`);}
-          else if(action==="replace"){setParticipants(prev=>prev.map(q=>q.id===dups[0].id?{...np,id:q.id}:q));addLog("החלפה ידנית",`הוחלף: ${np.name}`);}
-          else if(action==="merge"){setParticipants(prev=>prev.map(q=>q.id===dups[0].id?{...q,...np,id:q.id,assigned:q.assigned,status:q.status}:q));addLog("מיזוג ידני",`מוזג: ${np.name}`);}
+          let updated=null;
+          if(action==="add"){updated=[...participantsRef.current,np];addLog("הוספה ידנית",`נוסף: ${np.name}`);}
+          else if(action==="replace"){updated=participantsRef.current.map(q=>q.id===dups[0].id?{...np,id:q.id}:q);addLog("החלפה ידנית",`הוחלף: ${np.name}`);}
+          else if(action==="merge"){updated=participantsRef.current.map(q=>q.id===dups[0].id?{...q,...np,id:q.id,assigned:q.assigned,status:q.status}:q);addLog("מיזוג ידני",`מוזג: ${np.name}`);}
+          if(updated){
+            setParticipants(updated);
+            // Push immediately — new/changed rows must reach Sheets right away,
+            // not wait for the next sync/save (a sync before that would drop them).
+            gsSaveAll({participants:updated.map(flatP), user:settings.currentUser})
+              .then(()=>{setSyncStatus("ok");setLastSync(new Date());})
+              .catch(()=>{setSyncStatus("error");showToast(`⚠️ שגיאת שמירה ל-Sheets עבור ${np.name}`,"error");});
+          }
           setModal(null);setEditP(null);
         }});
         return;
@@ -1360,6 +1387,11 @@ function App() {
       setParticipantsUndo(prev=>[...prev,np], `${lang==="en"?"Add":"הוסף"}: ${np.name}`);
       addLog("הוספה ידנית",`נוסף: ${np.name}`);
       showToast(`✅ ${np.name} נוסף`);
+      // Push immediately so the new participant is durably in Sheets right away,
+      // matching the immediacy edits already get via gsUpdateP below.
+      gsSaveAll({participants:[...participantsRef.current,np].map(flatP), user:settings.currentUser})
+        .then(()=>{setSyncStatus("ok");setLastSync(new Date());})
+        .catch(()=>{setSyncStatus("error");showToast(`⚠️ שגיאת שמירה ל-Sheets עבור ${np.name}`,"error");});
     } else {
       // Update local state
       setParticipantsUndo(prev=>prev.map(q=>q.id===p.id?{...q,...p}:q), `עריכה: ${p.name}`);
