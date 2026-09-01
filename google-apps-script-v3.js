@@ -518,9 +518,10 @@ function readLocations() {
   const sheet = SS.getSheetByName(SHEETS.LOCATIONS);
   if (!sheet || sheet.getLastRow() < 2) return [];
   return sheet.getDataRange().getValues().slice(1).map(row => ({
-    id:    parseInt(row[0]) || row[0],
-    name:  String(row[1]),
-    rooms: row[2] ? String(row[2]).split("|").filter(Boolean) : [],
+    id:      parseInt(row[0]) || row[0],
+    name:    String(row[1]),
+    rooms:   row[2] ? String(row[2]).split("|").filter(Boolean) : [],
+    address: row[3] ? String(row[3]) : "",
   })).filter(l => l.name);
 }
 
@@ -547,8 +548,8 @@ function writeLocations(locations) {
   });
 
   sheet.clearContents();
-  sheet.appendRow(["id", "name", "rooms"]);
-  deduped.forEach(l => sheet.appendRow([l.id, l.name, (l.rooms || []).join("|")]));
+  sheet.appendRow(["id", "name", "rooms", "address"]);
+  deduped.forEach(l => sheet.appendRow([l.id, l.name, (l.rooms || []).join("|"), l.address || ""]));
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────

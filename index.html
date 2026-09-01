@@ -16,7 +16,7 @@ select:disabled, input:disabled { opacity: 0.6; }
 [data-dark="true"] input { background: #1E2238; color: #F0F2FF; }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; }
+    body { font-family: Arial, "Segoe UI", "Noto Sans Hebrew", "Helvetica Neue", sans-serif; }
     #loading { display:flex;align-items:center;justify-content:center;height:100vh;font-size:18px;color:#4338CA; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
@@ -46,13 +46,88 @@ select:disabled, input:disabled { opacity: 0.6; }
 // ─── Version ──────────────────────────────────────────────────────────────────
 const APP_VERSION = "1.9";
 
+// ─── Icons ────────────────────────────────────────────────────────────────────
+// Monochrome line icons (Feather-style, stroke=currentColor) replacing emoji in
+// the app's persistent UI chrome — headers, tabs, toolbar, table/modal actions.
+// Emoji embedded in plain-text content (emails, toasts, alerts, log entries)
+// are left as-is: those render as text a human reads outside the app's own UI,
+// not as icons inside it, so an <svg> there wouldn't render at all.
+const ICONS = {
+  clipboard:      <><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></>,
+  calendar:       <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+  barChart:       <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
+  mail:           <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></>,
+  mapPin:         <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>,
+  refresh:        <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>,
+  save:           <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>,
+  zap:            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
+  trash:          <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>,
+  folder:         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>,
+  search:         <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+  x:              <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+  xCircle:        <><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></>,
+  chevronUp:      <polyline points="18 15 12 9 6 15"/>,
+  chevronDown:    <polyline points="6 9 12 15 18 9"/>,
+  check:          <polyline points="20 6 9 17 4 12"/>,
+  checkCircle:    <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>,
+  globe:          <><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></>,
+  edit:           <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>,
+  heart:          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>,
+  send:           <><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>,
+  settings:       <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
+  alertTriangle:  <><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+  alertOctagon:   <><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>,
+  info:           <><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></>,
+  download:       <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>,
+  upload:         <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>,
+  shuffle:        <><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></>,
+  repeat:         <><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></>,
+  plus:           <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+  user:           <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+  cornerUpLeft:   <><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></>,
+  cornerUpRight:  <><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></>,
+  rotateCcw:      <><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></>,
+  clock:          <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+  menu:           <><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>,
+  bookOpen:       <><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></>,
+  sun:            <><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></>,
+  moon:           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>,
+  bell:           <><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>,
+  eye:            <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
+  eyeOff:         <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>,
+  lock:           <><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,
+  key:            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>,
+  tag:            <><path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
+  messageCircle:  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>,
+  map:            <><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></>,
+  smartphone:     <><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></>,
+  crown:          <path d="M3 19h18M4 19l-1.5-9L8 14l4-8 4 8 5.5-4L20 19"/>,
+  flask:          <><path d="M9 2v6.5L4 18a2 2 0 0 0 1.8 3h12.4a2 2 0 0 0 1.8-3l-5-9.5V2"/><line x1="8" y1="2" x2="16" y2="2"/><line x1="7" y1="14" x2="17" y2="14"/></>,
+};
+function Icon({name, size=13, strokeWidth=2, style, title}) {
+  const body = ICONS[name];
+  if(!body) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+      style={{display:"inline-block",verticalAlign:"-2px",flexShrink:0,...style}}>
+      {title?<title>{title}</title>:null}
+      {body}
+    </svg>
+  );
+}
+// Strips a leading emoji (+ following space) from a label string — lets call
+// sites keep using the existing LANG strings (which still carry the emoji for
+// non-UI contexts like email bodies) while rendering an <Icon/> instead in chrome.
+const stripEmoji = s => (s||"").replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}️]+\s*/u,"");
+
 // ─── Auth / Roles ─────────────────────────────────────────────────────────────
 // Passwords stored as SHA-256 hex hashes (never plaintext)
 // Default: admin=Admin123, editor=Editor123 — change in Settings → Auth
 const DEFAULT_AUTH = {
-  admin:  {nameHe:"מנהל מערכת", nameEn:"Admin",  color:"#7C3AED", bg:"#EDE9FE", icon:"👑"},
-  editor: {nameHe:"עורך",       nameEn:"Editor",  color:"#0891B2", bg:"#E0F2FE", icon:"✏️"},
-  viewer: {nameHe:"צופה",       nameEn:"Viewer",  color:"#6B7280", bg:"#F3F4F6", icon:"👁"},
+  admin:  {nameHe:"מנהל מערכת", nameEn:"Admin",  color:"#7C3AED", bg:"#EDE9FE", icon:"crown"},
+  editor: {nameHe:"עורך",       nameEn:"Editor",  color:"#0891B2", bg:"#E0F2FE", icon:"edit"},
+  viewer: {nameHe:"צופה",       nameEn:"Viewer",  color:"#6B7280", bg:"#F3F4F6", icon:"eye"},
 };
 async function hashPwd(s){
   const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
@@ -1589,7 +1664,7 @@ function App() {
   },[participants,filters,sortCol,sortDir]);
 
   const toggleSort = col=>{if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortCol(col);setSortDir("asc");}};
-  const SortIcon = ({col})=>sortCol===col?<span style={{fontSize:10,marginRight:2}}>{sortDir==="asc"?"↑":"↓"}</span>:<span style={{fontSize:10,marginRight:2,opacity:0.3}}>↕</span>;
+  const SortIcon = ({col})=>sortCol===col?<span style={{marginRight:2,display:"inline-flex"}}><Icon name={sortDir==="asc"?"chevronUp":"chevronDown"} size={10}/></span>:<span style={{marginRight:2,opacity:0.3,display:"inline-flex",flexDirection:"column",gap:-2}}><Icon name="chevronUp" size={8} style={{marginBottom:-3}}/><Icon name="chevronDown" size={8}/></span>;
 
   // ── Saved filter presets ("tags") — bundle every active filter field under one name ──
   const hasActiveFilter = !!(filters.name||filters.assigned||filters.status.length>0||filters.gender.length>0||filters.location.length>0||filters.day.length>0||filters.slot.length>0||filters.locPref.length>0||filters.age.length>0||filters.avail.length>0||filters.surveyDateFrom||filters.surveyDateTo);
@@ -1672,7 +1747,7 @@ function App() {
       + `&text=${encodeURIComponent(settings.experimentName + " — " + p.name)}`
       + (dates ? `&dates=${dates}` : "")
       + `&details=${encodeURIComponent(details)}`
-      + (loc ? `&location=${encodeURIComponent(loc.name + room)}` : "");
+      + (loc ? `&location=${encodeURIComponent((loc.address||loc.name) + room)}` : "");
     window.open(url, "_blank");
   }
 
@@ -1692,7 +1767,7 @@ function App() {
       icsText = `\n\n📆 הוסף ליומן: https://calendar.google.com/calendar/render?action=TEMPLATE`
         + `&text=${encodeURIComponent(settings.experimentName)}`
         + `&dates=${d}T${sh}00/${d}T${eh}00`
-        + (loc ? `&location=${encodeURIComponent(loc.name+room)}` : "")
+        + (loc ? `&location=${encodeURIComponent((loc.address||loc.name)+room)}` : "")
         + `&details=${encodeURIComponent("ניסוי: "+settings.experimentName)}`;
     }
     const body = lang==="en"
@@ -1752,22 +1827,22 @@ function App() {
           {/* LEFT: Hamburger + title */}
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{position:"relative"}}>
-              <button onClick={e=>{e.stopPropagation();setMenuOpen(v=>!v);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:7,padding:"5px 9px",cursor:"pointer",fontSize:16,lineHeight:1}}>☰</button>
+              <button onClick={e=>{e.stopPropagation();setMenuOpen(v=>!v);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:7,padding:"5px 9px",cursor:"pointer",display:"flex"}}><Icon name="menu" size={16}/></button>
               {menuOpen&&(
                 <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",[lang==="en"?"left":"right"]:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 12px 40px rgba(0,0,0,0.2)",zIndex:200,minWidth:200,overflow:"hidden"}}>
                   {[
-                    {icon:"📖",label:L("menuHelp"),action:()=>{setModal("help");setMenuOpen(false);}},
-                    {icon:"📋",label:L("menuChangelog"),action:()=>{setModal("changelog");setMenuOpen(false);}},
-                    {icon:darkMode?"☀️":"🌙",label:darkMode?L("menuLight"):L("menuDark"),action:()=>{setDarkMode(v=>!v);setMenuOpen(false);}},
-                    {icon:"✉️",label:L("menuGmail"),action:()=>{setModal("gmail");setMenuOpen(false);}},
-                    {icon:"⚙️",label:L("menuSettings"),action:()=>{setModal("settings");setMenuOpen(false);}},
-                    {icon:"🔐",label:lang==="en"?"Access Level":"רמת גישה",action:()=>{setAuthModal("login");setMenuOpen(false);}},
-                    {icon:"🌐",label:lang==="he"?"English":"עברית",action:()=>{
+                    {icon:"bookOpen",label:L("menuHelp"),action:()=>{setModal("help");setMenuOpen(false);}},
+                    {icon:"clipboard",label:L("menuChangelog"),action:()=>{setModal("changelog");setMenuOpen(false);}},
+                    {icon:darkMode?"sun":"moon",label:darkMode?L("menuLight"):L("menuDark"),action:()=>{setDarkMode(v=>!v);setMenuOpen(false);}},
+                    {icon:"mail",label:L("menuGmail"),action:()=>{setModal("gmail");setMenuOpen(false);}},
+                    {icon:"settings",label:L("menuSettings"),action:()=>{setModal("settings");setMenuOpen(false);}},
+                    {icon:"lock",label:lang==="en"?"Access Level":"רמת גישה",action:()=>{setAuthModal("login");setMenuOpen(false);}},
+                    {icon:"globe",label:lang==="he"?"English":"עברית",action:()=>{
                       const next=lang==="he"?"en":"he";
                       setMenuOpen(false);
                       setLangConfirm(next);
                     }},
-                    {icon:"🔍",label:lang==="en"?"Export Debug Log":"ייצוא לוג אבחון",action:()=>{
+                    {icon:"search",label:lang==="en"?"Export Debug Log":"ייצוא לוג אבחון",action:()=>{
                       setMenuOpen(false);
                       const log={
                         timestamp:new Date().toISOString(),
@@ -1794,10 +1869,10 @@ function App() {
                       a.href=url;a.download=`debug-${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.json`;
                       document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
                     }},
-                    {icon:"ℹ️",label:L("menuAbout"),action:()=>{setModal("about");setMenuOpen(false);}},
+                    {icon:"info",label:L("menuAbout"),action:()=>{setModal("about");setMenuOpen(false);}},
                   ].map(item=>(
                     <button key={item.label} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"start",padding:"11px 16px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
-                      <span>{item.icon}</span>{item.label}
+                      <Icon name={item.icon}/>{item.label}
                     </button>
                   ))}
                 </div>
@@ -1805,7 +1880,7 @@ function App() {
             </div>
             <div>
               <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-                <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"Arial,sans-serif"}}>{L("appName")}</h1>
+                <h1 style={{margin:0,fontSize:15,fontWeight:800,lineHeight:1,fontFamily:"inherit"}}>{L("appName")}</h1>
                 <span style={{fontSize:9,opacity:0.35,fontWeight:400,letterSpacing:0.3}}>v{APP_VERSION}</span>
               </div>
               <p style={{margin:0,opacity:0.55,fontSize:10,marginTop:2}}>{settings.experimentName}</p>
@@ -1832,7 +1907,7 @@ function App() {
                 ?<span style={{display:"inline-block",width:7,height:7,border:"2px solid rgba(255,255,255,0.25)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
                 :syncStatus==="ok"&&lastSync
                   ?`${lastSync.getHours()}:${String(lastSync.getMinutes()).padStart(2,"0")}`
-                  :<span style={{color:"#F87171",fontSize:10}}>✕</span>}
+                  :<span style={{color:"#F87171",display:"flex"}}><Icon name="x" size={10}/></span>}
             </span>
 
             {/* Sync + Save buttons — hidden for viewers; auto-sync on startup is sufficient */}
@@ -1840,31 +1915,31 @@ function App() {
               <button title={lang==="en"?"Sync from Form Responses":"סנכרן מהשאלון"} onClick={doSync} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
                 {syncStatus==="syncing"
                   ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
-                  :<span style={{fontSize:13}}>⇄</span>}
+                  :<Icon name="refresh" size={13}/>}
                 {lang==="en"?"Sync":"סנכרן"}
               </button>
               <button title={lang==="en"?"Save to Sheets":"שמור ל-Sheets"} onClick={doSave} disabled={syncStatus==="syncing"} style={{display:"flex",alignItems:"center",gap:4,background:syncStatus==="syncing"?"rgba(99,102,241,0.35)":syncStatus==="error"?"rgba(239,68,68,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${syncStatus==="syncing"?"rgba(129,140,248,0.6)":syncStatus==="error"?"rgba(239,68,68,0.4)":"rgba(255,255,255,0.18)"}`,color:"rgba(255,255,255,0.92)",borderRadius:5,padding:"0 9px",height:26,cursor:syncStatus==="syncing"?"default":"pointer",fontSize:11,fontFamily:"inherit",fontWeight:500,lineHeight:"26px",whiteSpace:"nowrap",transition:"all .2s"}}>
                 {syncStatus==="syncing"
                   ?<span style={{display:"inline-block",width:10,height:10,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"white",borderRadius:"50%",animation:"spin .7s linear infinite",flexShrink:0}}/>
-                  :"💾"}
+                  :<Icon name="save" size={13}/>}
                 {lang==="en"?"Save":"שמור"}
               </button>
             </>}
             {/* Edit lock indicator */}
             {editLock&&<span style={{fontSize:10,color:"rgba(255,255,255,0.7)",background:"rgba(251,191,36,0.2)",border:"1px solid rgba(251,191,36,0.4)",borderRadius:5,padding:"0 7px",height:26,display:"flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
-              ✏️ {editLock.user}
+              <Icon name="edit" size={11}/> {editLock.user}
             </span>}
 
             {/* Open Sheets link */}
-            <a href="https://docs.google.com/spreadsheets/d/1P5MUNE8ANNwS5UZh-dXT3jPhQzF6qpnWhsCPweClt9M/edit?gid=37937551#gid=37937551" target="_blank" rel="noreferrer" title={lang==="en"?"Open Google Sheets":"פתח Google Sheets"} style={{display:"flex",alignItems:"center",height:26,padding:"0 8px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:5,color:"rgba(255,255,255,0.85)",fontSize:13,textDecoration:"none",lineHeight:"26px"}}>
-              📊
+            <a href="https://docs.google.com/spreadsheets/d/1P5MUNE8ANNwS5UZh-dXT3jPhQzF6qpnWhsCPweClt9M/edit?gid=37937551#gid=37937551" target="_blank" rel="noreferrer" title={lang==="en"?"Open Google Sheets":"פתח Google Sheets"} style={{display:"flex",alignItems:"center",height:26,padding:"0 8px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:5,color:"rgba(255,255,255,0.85)",textDecoration:"none",lineHeight:"26px"}}>
+              <Icon name="barChart" size={13}/>
             </a>
 
             {/* Bell — leftmost, opens panel to the LEFT (start) */}
             <div style={{position:"relative"}}>
               <button onClick={e=>{e.stopPropagation();setNotifOpen(v=>!v);setMenuOpen(false);}}
-                style={{display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",borderRadius:5,padding:"0 8px",height:26,cursor:"pointer",fontSize:12,position:"relative",lineHeight:"26px"}}>
-                🔔
+                style={{display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",borderRadius:5,padding:"0 8px",height:26,cursor:"pointer",position:"relative",lineHeight:"26px"}}>
+                <Icon name="bell" size={13}/>
                 {notifications.length>0&&<span style={{position:"absolute",top:-4,left:-4,background:"#EF4444",color:"white",borderRadius:"50%",minWidth:15,height:15,fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px",lineHeight:1}}>
                   {notifications.length>9?"9+":notifications.length}
                 </span>}
@@ -1882,9 +1957,9 @@ function App() {
                   {notifications.map(notif=>(
                     <div key={notif.id} style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,background:notif.type==="warning"?(darkMode?"#2d1a1a":"#FFF8F8"):(darkMode?"#1a1f2e":T.tablehead)}}>
                       <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-                        <span style={{fontSize:16}}>{notif.type==="warning"?"⚠️":"ℹ️"}</span>
+                        <span style={{color:notif.type==="warning"?"#DC2626":T.textMuted,display:"flex"}}><Icon name={notif.type==="warning"?"alertTriangle":"info"} size={16}/></span>
                         <div style={{flex:1}}>
-                          <p style={{margin:"0 0 8px",fontSize:12,color:T.text,lineHeight:1.4}}>{notif.msg}</p>
+                          <p dir={lang==="en"?"ltr":"rtl"} style={{margin:"0 0 8px",fontSize:12,color:T.text,lineHeight:1.4,textAlign:lang==="en"?"left":"right"}}>{notif.msg}</p>
                           {notif.actions?.includes("keep")&&(
                             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                               {notif.actions?.includes("approve-delete")&&isAdmin?(
@@ -1894,20 +1969,20 @@ function App() {
                                     setPendingDeletes(prev=>prev.filter(x=>x.id!==notif.p.id));
                                     removeNotif(notif.id);
                                     showToast(`✅ ${lang==="en"?"Deleted":"נמחק"}: ${notif.p.name}`);
-                                  }} style={{background:"#2d1a1a",color:"#fca5a5",border:"1px solid #5a2d2d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>
-                                    ✓ {lang==="en"?"Approve delete":"אשר מחיקה"}
+                                  }} style={{display:"flex",alignItems:"center",gap:4,background:"#2d1a1a",color:"#fca5a5",border:"1px solid #5a2d2d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>
+                                    <Icon name="check" size={10}/> {lang==="en"?"Approve delete":"אשר מחיקה"}
                                   </button>
                                   <button onClick={()=>{
                                     setPendingDeletes(prev=>prev.filter(x=>x.id!==notif.p.id));
                                     removeNotif(notif.id);
                                     showToast(lang==="en"?"Delete rejected":"מחיקה נדחתה");
-                                  }} style={{background:"#1e3a2a",color:"#6ee7b7",border:"1px solid #2d5a3d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                                    ✕ {lang==="en"?"Reject":"דחה"}
+                                  }} style={{display:"flex",alignItems:"center",gap:4,background:"#1e3a2a",color:"#6ee7b7",border:"1px solid #2d5a3d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                    <Icon name="x" size={10}/> {lang==="en"?"Reject":"דחה"}
                                   </button>
                                 </>
                               ):(
-                              <button onClick={()=>removeNotif(notif.id)} style={{background:"#1e3a2a",color:"#6ee7b7",border:"1px solid #2d5a3d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                                ✓ {lang==="en"?"Keep as-is":"שמור כך"}
+                              <button onClick={()=>removeNotif(notif.id)} style={{display:"flex",alignItems:"center",gap:4,background:"#1e3a2a",color:"#6ee7b7",border:"1px solid #2d5a3d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                <Icon name="check" size={10}/> {lang==="en"?"Keep as-is":"שמור כך"}
                               </button>
                               )}
                               {notif.actions?.includes("merge")&&notif.p&&(
@@ -1918,8 +1993,8 @@ function App() {
                                   setParticipants(prev=>prev.map(x=>x.id===target.id?{...target,...notif.p,id:target.id,assigned:target.assigned||notif.p.assigned,email:target.email||notif.p.email}:x).filter(x=>x.id!==notif.p.id));
                                   removeNotif(notif.id);
                                   showToast(`🔀 ${lang==="en"?"Merged with":"מוזג עם"} ${target.name}`);
-                                }} style={{background:"#1e2d4a",color:"#93c5fd",border:"1px solid #2d4a6a",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                                  🔀 {lang==="en"?"Merge":"מזג"}
+                                }} style={{display:"flex",alignItems:"center",gap:4,background:"#1e2d4a",color:"#93c5fd",border:"1px solid #2d4a6a",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                  <Icon name="shuffle" size={10}/> {lang==="en"?"Merge":"מזג"}
                                 </button>
                               )}
                               {notif.actions?.includes("delete")&&notif.p&&(
@@ -1929,12 +2004,12 @@ function App() {
                                     removeNotif(notif.id);
                                     showToast(`🗑 ${lang==="en"?"Deleted":"נמחק"}`);
                                   }
-                                }} style={{background:"#2d1a1a",color:"#fca5a5",border:"1px solid #5a2d2d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                                  🗑 {lang==="en"?"Delete":"מחק"}
+                                }} style={{display:"flex",alignItems:"center",gap:4,background:"#2d1a1a",color:"#fca5a5",border:"1px solid #5a2d2d",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                  <Icon name="trash" size={10}/> {lang==="en"?"Delete":"מחק"}
                                 </button>
                               )}
-                              {notif.p&&<button onClick={()=>{setEditP({...notif.p});setModal("addEdit");setNotifOpen(false);}} style={{background:"#2d2a1a",color:"#fde68a",border:"1px solid #5a4a1a",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                                ✏️ {lang==="en"?"Edit":"ערוך"}
+                              {notif.p&&<button onClick={()=>{setEditP({...notif.p});setModal("addEdit");setNotifOpen(false);}} style={{display:"flex",alignItems:"center",gap:4,background:"#2d2a1a",color:"#fde68a",border:"1px solid #5a4a1a",borderRadius:5,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                <Icon name="edit" size={10}/> {lang==="en"?"Edit":"ערוך"}
                               </button>}
                             </div>
                           )}
@@ -1970,23 +2045,23 @@ function App() {
               padding:"3px 10px",borderRadius:6,cursor:"pointer",fontSize:11,
               fontFamily:"inherit",fontWeight:400,display:"flex",alignItems:"center",gap:5
             }}>
-              <span style={{fontSize:10,opacity:0.7}}>{DEFAULT_AUTH[userRole]?.icon}</span>
+              <span style={{opacity:0.7,display:"flex"}}><Icon name={DEFAULT_AUTH[userRole]?.icon} size={11}/></span>
               <span style={{color:T.text,fontWeight:600}}>{userName||settings.currentUser}</span>
               <span style={{fontSize:9,color:T.textFaint}}>· {lang==="en"?DEFAULT_AUTH[userRole]?.nameEn:DEFAULT_AUTH[userRole]?.nameHe}</span>
             </button>
             <div style={{position:"relative"}}>
-              <button onClick={e=>{e.stopPropagation();setExportMenu(v=>!v);}} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:600}}>
-                {L("btnExport")}
+              <button onClick={e=>{e.stopPropagation();setExportMenu(v=>!v);}} style={{display:"flex",alignItems:"center",gap:5,background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"6px 11px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:600}}>
+                <Icon name="download" size={12}/>{stripEmoji(L("btnExport"))}
               </button>
               {exportMenu&&(
                 <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",zIndex:200,minWidth:180}}>
                   <div style={{padding:"6px 12px",fontSize:10,color:T.textFaint,borderBottom:`1px solid ${T.border}`}}>
                     {selected.size>0?`${selected.size} ${L("selectedCount")}`:`${L("allParticipants")}`}
                   </div>
-                  {[{l:"📋 כל הנתונים",f:"all"},{l:"📧 מיילים בלבד",f:"email"},{l:"📱 טלפונים בלבד",f:"phone"}].map(i=>(
-                    <button key={i.f} onClick={()=>doExport(i.f)} style={{display:"block",width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>{i.l}</button>
+                  {[{l:"כל הנתונים",icon:"clipboard",f:"all"},{l:"מיילים בלבד",icon:"mail",f:"email"},{l:"טלפונים בלבד",icon:"smartphone",f:"phone"}].map(i=>(
+                    <button key={i.f} onClick={()=>doExport(i.f)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}><Icon name={i.icon} size={12}/>{i.l}</button>
                   ))}
-                  <button onClick={()=>{doExportJSON();setExportMenu(false);}} style={{display:"block",width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>🗂 JSON גיבוי</button>
+                  <button onClick={()=>{doExportJSON();setExportMenu(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}><Icon name="folder" size={12}/>JSON גיבוי</button>
                 </div>
               )}
             </div>
@@ -1997,13 +2072,13 @@ function App() {
       {/* ── Tabs ── */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"0 22px"}}>
         <div style={{maxWidth:1500,margin:"0 auto",display:"flex",alignItems:"center"}}>
-          {[{id:"assignments",l:L("tabAssign")},{id:"calendar",l:L("tabCalendar")},{id:"charts",l:L("tabCharts")},{id:"emails",l:L("tabEmails")},{id:"locations",l:L("tabLocations")}].map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:400,color:tab===t.id?T.accent:T.textMuted,borderBottom:tab===t.id?`2px solid ${T.accent}`:"2px solid transparent",fontFamily:"inherit",transition:"color .2s"}}>
-              {t.l}
+          {[{id:"assignments",l:L("tabAssign"),icon:"clipboard"},{id:"calendar",l:L("tabCalendar"),icon:"calendar"},{id:"charts",l:L("tabCharts"),icon:"barChart"},{id:"emails",l:L("tabEmails"),icon:"mail"},{id:"locations",l:L("tabLocations"),icon:"mapPin"}].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:400,color:tab===t.id?T.accent:T.textMuted,borderBottom:tab===t.id?`2px solid ${T.accent}`:"2px solid transparent",fontFamily:"inherit",transition:"color .2s"}}>
+              <Icon name={t.icon}/>{stripEmoji(t.l)}
             </button>
           ))}
           <span style={{marginInlineStart:"auto",display:"flex",alignItems:"center",gap:5,border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 10px",background:countdown!=="--:--:--"?(darkMode?"rgba(52,211,153,0.1)":"rgba(5,150,105,0.06)"):"transparent",fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",flexShrink:0}}>
-            <span style={{fontSize:10,color:T.textFaint}}>⏱</span>
+            <span style={{color:T.textFaint,display:"flex"}}><Icon name="clock" size={10}/></span>
             <span style={{fontSize:11,fontWeight:countdown!=="--:--:--"?700:400,color:countdown!=="--:--:--"?(darkMode?"#34D399":"#059669"):T.textFaint,letterSpacing:0.5}}>
               {countdown}
             </span>
@@ -2024,20 +2099,20 @@ function App() {
               <div style={{display:"flex",gap:7,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
                 {/* Undo / Redo — editors only */}
                 {!isViewer&&<>
-                  <button onClick={undo} disabled={!history.length} title={undoLabel?`${L("undoBtn")}: ${undoLabel}`:L("undoNothing")} style={{background:T.tablehead,color:history.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:history.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:history.length?1:0.4}}>
-                    ↩{undoLabel?<span style={{fontSize:9,marginRight:3,color:T.textMuted,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-block",verticalAlign:"middle"}}>{undoLabel}</span>:null}
+                  <button onClick={undo} disabled={!history.length} title={undoLabel?`${L("undoBtn")}: ${undoLabel}`:L("undoNothing")} style={{display:"flex",alignItems:"center",background:T.tablehead,color:history.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:history.length?"pointer":"default",fontFamily:"inherit",opacity:history.length?1:0.4}}>
+                    <Icon name="cornerUpLeft" size={13}/>{undoLabel?<span style={{fontSize:9,marginRight:3,color:T.textMuted,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-block",verticalAlign:"middle"}}>{undoLabel}</span>:null}
                   </button>
-                  <button onClick={redo} disabled={!future.length} title={lang==="en"?"Redo":"בצע שוב"} style={{background:T.tablehead,color:future.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:future.length?"pointer":"default",fontSize:13,fontFamily:"inherit",opacity:future.length?1:0.4}}>
-                    ↪
+                  <button onClick={redo} disabled={!future.length} title={lang==="en"?"Redo":"בצע שוב"} style={{display:"flex",alignItems:"center",background:T.tablehead,color:future.length?T.text:T.textFaint,border:`1px solid ${T.border}`,padding:"6px 10px",borderRadius:7,cursor:future.length?"pointer":"default",fontFamily:"inherit",opacity:future.length?1:0.4}}>
+                    <Icon name="cornerUpRight" size={13}/>
                   </button>
                 </>}
                 {!isViewer&&<>
                   <div style={{width:1,height:22,background:T.border,margin:"0 2px"}}/>
-                  <button onClick={()=>{setEditP(emptyP());setModal("addEdit");}} style={{background:"#059669",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
-                    {L("btnAddParticipant")}
+                  <button onClick={()=>{setEditP(emptyP());setModal("addEdit");}} style={{background:T.accent,color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                    <Icon name="plus" size={12}/>{stripEmoji(L("btnAddParticipant")).replace(/^\+\s*/,"")}
                   </button>
-                  <button onClick={()=>autoAssign(null)} style={{background:"linear-gradient(135deg,#4338CA,#7C3AED)",color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>
-                    {L("btnAutoAssign")}
+                  <button onClick={()=>autoAssign(null)} style={{background:T.accent,color:"white",border:"none",padding:"7px 13px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                    <Icon name="zap" size={12}/>{stripEmoji(L("btnAutoAssign"))}
                   </button>
                 </>}
                 {/* Counter pill */}
@@ -2052,12 +2127,12 @@ function App() {
               {/* Row 2: bulk operations — shown only when rows are selected (editors/admin only) */}
               {!isViewer&&selected.size>0&&(
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",background:T.rowSel,border:`1px solid ${T.accent}44`,borderRadius:9,padding:"8px 12px"}}>
-                  <span style={{fontSize:11,fontWeight:700,color:T.accent,minWidth:80}}>📌 {selected.size} {L("selectedCount")}:</span>
+                  <span style={{fontSize:11,fontWeight:700,color:T.accent,minWidth:80,display:"inline-flex",alignItems:"center",gap:4}}><Icon name="tag" size={11}/>{selected.size} {L("selectedCount")}:</span>
 
                   {/* Auto-assign selected */}
                   {selCanAutoAssign&&(
-                    <button onClick={()=>{autoAssign(selected);}} style={{background:"linear-gradient(135deg,#4338CA,#7C3AED)",color:"white",border:"none",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:11,fontFamily:"inherit"}}>
-                      ⚡ שבץ נבחרים
+                    <button onClick={()=>{autoAssign(selected);}} style={{background:T.accent,color:"white",border:"none",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:11,fontFamily:"inherit",display:"flex",alignItems:"center",gap:4}}>
+                      <Icon name="zap" size={11}/> שבץ נבחרים
                     </button>
                   )}
 
@@ -2182,14 +2257,14 @@ function App() {
                       setParticipants(updated);
                       pushRows(selected, updated);
                       showToast(`⏰ ${lang==="en"?"Times set":"שעות מולאו"}`);
-                    }} style={{background:"#FFF7ED",color:"#D97706",border:"1px solid #FDE68A",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
-                      ⏰ {lang==="en"?"Auto-fill time":"מלא שעות אוטומטית"}
+                    }} style={{display:"flex",alignItems:"center",gap:5,background:"#FFF7ED",color:"#D97706",border:"1px solid #FDE68A",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
+                      <Icon name="clock" size={11}/> {lang==="en"?"Auto-fill time":"מלא שעות אוטומטית"}
                     </button>
                   )}
 
                   {/* Bulk set location preference */}
                   <div style={{position:"relative",display:"inline-flex",alignItems:"center",gap:3}}>
-                    <span style={{fontSize:10,color:T.textMuted,fontWeight:600,whiteSpace:"nowrap"}}>📍 העדפה:</span>
+                    <span style={{fontSize:10,color:T.textMuted,fontWeight:600,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}><Icon name="mapPin" size={10}/>העדפה:</span>
                     {locations.map(loc=>{
                       const allOn=selList.every(p=>(p.locPref||[]).includes(loc.id));
                       const someOn=selList.some(p=>(p.locPref||[]).includes(loc.id));
@@ -2215,7 +2290,7 @@ function App() {
                           fontFamily:"inherit",fontWeight:allOn?700:400,
                           transition:"all .15s",
                         }}>
-                          {allOn?"✓ ":someOn?"~ ":""}{loc.name}
+                          {allOn?<Icon name="check" size={10}/>:someOn?"~ ":""}{loc.name}
                         </button>
                       );
                     })}
@@ -2223,16 +2298,16 @@ function App() {
 
                     {selList.some(p=>p.email)&&(
                       <div style={{position:"relative"}}>
-                        <button onClick={e=>{e.stopPropagation();setBulkEmailOpen(v=>!v);setExportMenu(false);}} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
-                          ✉️ {lang==="en"?"Email selected":"מייל לנבחרים"} ({selList.filter(p=>p.email).length}) ▾
+                        <button onClick={e=>{e.stopPropagation();setBulkEmailOpen(v=>!v);setExportMenu(false);}} style={{display:"flex",alignItems:"center",gap:5,background:darkMode?T.accent+"22":T.accent+"15",color:T.accent,border:`1px solid ${T.accent}44`,padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>
+                          <Icon name="mail" size={11}/> {lang==="en"?"Email selected":"מייל לנבחרים"} ({selList.filter(p=>p.email).length}) <Icon name="chevronDown" size={10}/>
                         </button>
                         {bulkEmailOpen&&(
                           <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"110%",right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",zIndex:300,minWidth:200,overflow:"hidden"}}>
                             {[
-                              {type:"invitation",icon:"📨",he:"הזמנה לניסוי",en:"Invitation",cond:p=>p.email&&p.assigned},
-                              {type:"reminder",icon:"🔔",he:"תזכורת",en:"Reminder",cond:p=>p.email&&p.assigned},
-                              {type:"noAvailability",icon:"⚠️",he:"בקשת זמינות",en:"Availability request",cond:p=>p.email},
-                              {type:"thanks",icon:"🙏",he:"תודה (השלים)",en:"Thank you",cond:p=>p.email&&p.status==="completed"},
+                              {type:"invitation",icon:"send",he:"הזמנה לניסוי",en:"Invitation",cond:p=>p.email&&p.assigned},
+                              {type:"reminder",icon:"bell",he:"תזכורת",en:"Reminder",cond:p=>p.email&&p.assigned},
+                              {type:"noAvailability",icon:"alertTriangle",he:"בקשת זמינות",en:"Availability request",cond:p=>p.email},
+                              {type:"thanks",icon:"heart",he:"תודה (השלים)",en:"Thank you",cond:p=>p.email&&p.status==="completed"},
                             ].map(opt=>{
                               const targets=selList.filter(opt.cond);
                               if(targets.length===0) return null;
@@ -2252,7 +2327,7 @@ function App() {
                                   setBulkEmailOpen(false);
                                   showToast(`✉️ ${targets.length} ${lang==="en"?"emails opened":"חלונות נפתחו"}`);
                                 }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,borderBottom:`1px solid ${T.border}`}}>
-                                  <span>{opt.icon}</span>
+                                  <Icon name={opt.icon}/>
                                   <span style={{flex:1}}>{lang==="en"?opt.en:opt.he}</span>
                                   <span style={{fontSize:10,color:T.textMuted,background:T.tablehead,borderRadius:10,padding:"1px 7px"}}>{targets.length}</span>
                                 </button>
@@ -2260,7 +2335,7 @@ function App() {
                             })}
                             {/* Free-write option */}
                             <button onClick={()=>{setBulkEmailOpen(false);setFreeMailModal(true);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"#F0FDF4",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#166534",fontWeight:700}}>
-                              <span>✍️</span>
+                              <Icon name="edit"/>
                               <span style={{flex:1}}>{lang==="en"?"Free write...":"הודעה חופשית..."}</span>
                               <span style={{fontSize:10,color:"#16a34a",background:"#DCFCE7",borderRadius:10,padding:"1px 7px"}}>{selList.filter(p=>p.email).length}</span>
                             </button>
@@ -2285,19 +2360,24 @@ function App() {
                       showToast(lang==="en"?`Delete request sent for ${ids.length} participants`:`בקשת מחיקה נשלחה עבור ${ids.length} נבדקים`);
                     }
                     setSelected(new Set());
-                  }} style={{background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
-                    🗑 {isAdmin?(lang==="en"?"Delete selected":"מחק נבחרים"):(lang==="en"?"Request delete":"בקש מחיקה")}
+                  }} style={{display:"flex",alignItems:"center",gap:5,background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",padding:"5px 11px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>
+                    <Icon name="trash" size={11}/> {isAdmin?(lang==="en"?"Delete selected":"מחק נבחרים"):(lang==="en"?"Request delete":"בקש מחיקה")}
                   </button>
 
-                  <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:18,padding:"0 4px",marginRight:"auto"}}>×</button>
+                  <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,padding:"0 4px",marginRight:"auto",display:"flex"}}><Icon name="x" size={16}/></button>
                 </div>
               )}
             </div>
 
             {/* ── Filters row ── */}
             <div style={{display:"flex",gap:7,marginBottom:8,flexWrap:"wrap",alignItems:"center",background:T.surface,padding:"8px 12px",borderRadius:10,border:`1px solid ${T.border}`}}>
-              <input placeholder={L("searchPlaceholder")} value={filters.name} onChange={e=>setFilters(f=>({...f,name:e.target.value}))}
-                style={{padding:"5px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:140}}/>
+              <div style={{position:"relative",display:"inline-flex"}}>
+                <input placeholder={L("searchPlaceholder")} value={filters.name} onChange={e=>setFilters(f=>({...f,name:e.target.value}))}
+                  style={{padding:"5px 9px",paddingInlineEnd:filters.name?22:9,border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,minWidth:140}}/>
+                {filters.name&&(
+                  <button onClick={()=>setFilters(f=>({...f,name:""}))} title={lang==="en"?"Clear":"נקה"} style={{position:"absolute",insetInlineEnd:4,top:0,bottom:0,background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:14,padding:0,lineHeight:1,display:"flex",alignItems:"center"}}>×</button>
+                )}
+              </div>
               <select value={filters.assigned} onChange={e=>setFilters(f=>({...f,assigned:e.target.value}))} style={{padding:"5px 7px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text}}>
                 <option value="">{L("filterAssigned")}</option><option value="yes">{L("filterYes")}</option><option value="no">{L("filterNo")}</option>
               </select>
@@ -2305,14 +2385,14 @@ function App() {
                 <button onClick={()=>setFilters({name:"",status:[],location:[],day:[],gender:[],assigned:"",slot:[],locPref:[],age:[],avail:[],surveyDateFrom:"",surveyDateTo:""})} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{L("clearAll")}</button>
               )}
               {hasActiveFilter&&(
-                <button onClick={saveCurrentFilter} title={lang==="en"?"Save this filter combination under a name":"שמור את שילוב הסינון הנוכחי תחת שם"} style={{background:"#EEF2FF",color:"#4338CA",border:"1px solid #C7D4FF",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}>💾 {lang==="en"?"Save filter":"שמור סינון"}</button>
+                <button onClick={saveCurrentFilter} title={lang==="en"?"Save this filter combination under a name":"שמור את שילוב הסינון הנוכחי תחת שם"} style={{display:"flex",alignItems:"center",gap:5,background:darkMode?T.accent+"22":T.accent+"15",color:T.accent,border:`1px solid ${T.accent}44`,padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:600}}><Icon name="save" size={11}/> {lang==="en"?"Save filter":"שמור סינון"}</button>
               )}
               {savedFilters.length>0&&(
                 <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center",borderInlineStart:`1px solid ${T.border}`,paddingInlineStart:8,marginInlineStart:2}}>
                   {savedFilters.map(sf=>(
                     <span key={sf.id} onClick={()=>applySavedFilter(sf)} title={lang==="en"?"Apply this saved filter":"החל סינון שמור זה"} style={{display:"inline-flex",alignItems:"center",gap:5,background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:12,padding:"3px 5px 3px 9px",fontSize:11,fontWeight:600,color:T.text,cursor:"pointer",whiteSpace:"nowrap"}}>
-                      🏷 {sf.name}
-                      <button onClick={e=>{e.stopPropagation();deleteSavedFilter(sf.id);}} title={lang==="en"?"Delete":"מחק"} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,fontSize:13,lineHeight:1,padding:0}}>×</button>
+                      <Icon name="tag" size={10}/> {sf.name}
+                      <button onClick={e=>{e.stopPropagation();deleteSavedFilter(sf.id);}} title={lang==="en"?"Delete":"מחק"} style={{background:"none",border:"none",cursor:"pointer",color:T.textFaint,lineHeight:1,padding:0,display:"flex"}}><Icon name="x" size={12}/></button>
                     </span>
                   ))}
                 </div>
@@ -2562,7 +2642,7 @@ function App() {
                                 <span style={{background:sm.bg,color:sm.text,border:`1px solid ${sm.border}`,borderRadius:5,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flex:1,textAlign:"center"}}>
                                   {p.participantId?`הושלם ${p.participantId}`:sm.label}
                                 </span>
-                                {!isViewer&&<button title="שנה" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10,color:T.textMuted,flexShrink:0}}>✏️</button>}
+                                {!isViewer&&<button title="שנה" onClick={()=>{setEditP({...p});setModal("addEdit");}} style={{display:"flex",background:T.tablehead,border:`1px solid ${T.border}`,borderRadius:4,padding:"2px 5px",cursor:"pointer",color:T.textMuted,flexShrink:0}}><Icon name="edit" size={10}/></button>}
                               </div>
                             : <select value={p.status} onChange={e=>{
                                 const newSt=e.target.value;
@@ -2864,22 +2944,22 @@ function App() {
         {tab==="locations"&&(
           <div>
             <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
-              <button onClick={()=>setModal("addLoc")} style={{background:T.accent,color:"white",border:"none",padding:"8px 15px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{L("addLocation")}</button>
-              <button onClick={doSaveLocations} style={{background:"#059669",color:"white",border:"none",padding:"8px 15px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>💾 {lang==="en"?"Save Locations":"שמור מיקומים"}</button>
+              <button onClick={()=>setModal("addLoc")} style={{display:"flex",alignItems:"center",gap:5,background:T.accent,color:"white",border:"none",padding:"8px 15px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}><Icon name="plus" size={12}/>{L("addLocation").replace(/^\+\s*/,"")}</button>
+              <button onClick={doSaveLocations} style={{display:"flex",alignItems:"center",gap:5,background:T.accent,color:"white",border:"none",padding:"8px 15px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}><Icon name="save" size={12}/> {lang==="en"?"Save Locations":"שמור מיקומים"}</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:12}}>
               {locations.map((loc,i)=>{
                 const c=LOC_COLORS[i%LOC_COLORS.length];
                 const n=participants.filter(p=>p.assigned?.locationId===loc.id).length;
                 return(
-                  <div key={loc.id} style={{background:T.surface,border:`1px solid ${c.border}`,borderRadius:12,padding:15}}>
+                  <div key={loc.id} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:15}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                       <div style={{display:"flex",alignItems:"center",gap:7}}>
-                        <span style={{width:10,height:10,borderRadius:"50%",background:c.dot,display:"inline-block"}}/>
-                        <span style={{fontSize:15,fontWeight:800,color:c.text}}>{loc.name}</span>
+                        <span style={{background:c.bg,color:c.text,border:`1px solid ${c.border}`,borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:700,lineHeight:1.6}}>#{i+1}</span>
+                        <span style={{fontSize:15,fontWeight:800,color:T.text}}>{loc.name}</span>
                       </div>
                       <div style={{display:"flex",gap:5}}>
-                        <button onClick={()=>setModal({type:"editLoc",loc:{...loc,rooms:[...loc.rooms]}})} style={{background:c.bg,color:c.text,border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>✏️</button>
+                        <button onClick={()=>setModal({type:"editLoc",loc:{...loc,rooms:[...loc.rooms]}})} style={{display:"flex",background:T.tablehead,color:T.textMuted,border:`1px solid ${T.border}`,padding:"3px 8px",borderRadius:5,cursor:"pointer",fontWeight:700}}><Icon name="edit" size={12}/></button>
                         <button onClick={()=>{
                           const affected=participants.filter(p=>
                             (p.assigned?.locationId===loc.id) ||
@@ -2907,7 +2987,7 @@ function App() {
                           gsSaveAll({participants:newPs.map(flatP), locations:newLocs, settings, user:settings.currentUser})
                             .then(()=>{setSyncStatus("ok");setLastSync(new Date());showToast(`🗑 "${loc.name}" נמחק`);})
                             .catch(()=>setSyncStatus("error"));
-                        }} style={{background:"#FEF2F2",color:"#DC2626",border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>🗑</button>
+                        }} style={{display:"flex",background:"#FEF2F2",color:"#DC2626",border:"none",padding:"3px 8px",borderRadius:5,cursor:"pointer"}}><Icon name="trash" size={12}/></button>
                       </div>
                     </div>
                     <div style={{fontSize:11,color:T.textMuted,marginBottom:8}}>{n} {L("locAssigned")}</div>
@@ -2978,7 +3058,7 @@ function App() {
 
       {/* Location add/edit */}
       {(modal==="addLoc"||modal?.type==="editLoc")&&(
-        <LocModal loc={modal?.type==="editLoc"?modal.loc:{id:null,name:"",rooms:[]}} T={T} L={L} lang={lang}
+        <LocModal loc={modal?.type==="editLoc"?modal.loc:{id:null,name:"",address:"",rooms:[]}} T={T} L={L} lang={lang}
           onSave={l=>{if(l.id){setLocations(p=>p.map(x=>x.id===l.id?l:x));}else{setLocations(p=>[...p,{...l,id:newId(locations)}]);}setModal(null);}}
           onClose={()=>setModal(null)}/>
       )}
@@ -3063,10 +3143,10 @@ function App() {
 
       {/* About */}
       {modal==="about"&&(
-        <ModalShell title="ℹ️ אודות" T={T} onClose={()=>setModal(null)}>
+        <ModalShell title={<span style={{display:"inline-flex",alignItems:"center",gap:6}}><Icon name="info" size={15}/> אודות</span>} T={T} onClose={()=>setModal(null)}>
           <div style={{textAlign:"center",padding:"10px 0",color:T.text}}>
-            <div style={{fontSize:40,marginBottom:8}}>🧪</div>
-            <h2 style={{margin:"0 0 4px",fontSize:18}}>{L("appName")}</h2>
+            <div style={{marginBottom:8,display:"flex",justifyContent:"center",color:T.accent}}><Icon name="flask" size={40} strokeWidth={1.5}/></div>
+            <h2 style={{margin:"0 0 4px",fontSize:18,fontFamily:"inherit"}}>{L("appName")}</h2>
             <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>גרסה {APP_VERSION}</div>
             <div style={{fontSize:12,color:T.textMuted,lineHeight:1.7}}>
               <p>מערכת לניהול ותיאום משתתפים במחקר</p>
@@ -3279,15 +3359,15 @@ function App() {
               <div style={{padding:"10px 14px",borderBottom:`1px solid ${T.border}`,fontSize:12,fontWeight:800,color:T.text}}>{p.name}</div>
               {/* פרטים */}
               <button onClick={()=>{setRowMenu(null);setEditP({...p});setModal("addEdit");}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
-                🔍 {lang==="en"?"Details":"פרטים"}
+                <Icon name="search" size={13}/> {lang==="en"?"Details":"פרטים"}
               </button>
               {/* שלח מייל */}
               {p.email&&<button onClick={()=>{setRowMenu(null);setFreeMailModal({recipients:[p]});}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
-                ✉️ {lang==="en"?"Send email":"שלח מייל"}
+                <Icon name="mail" size={13}/> {lang==="en"?"Send email":"שלח מייל"}
               </button>}
               {/* וואטסאפ */}
               {p.phone&&waPhone(p.phone)&&<a href={`https://wa.me/${waPhone(p.phone)}`} target="_blank" rel="noopener noreferrer" onClick={()=>setRowMenu(null)} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text,textDecoration:"none"}}>
-                💬 {lang==="en"?"WhatsApp":"וואטסאפ"}
+                <Icon name="messageCircle" size={13}/> {lang==="en"?"WhatsApp":"וואטסאפ"}
               </a>}
               {/* מייל זימון עם RSVP */}
               {p.email&&p.assigned&&<button onClick={()=>{
@@ -3295,7 +3375,7 @@ function App() {
                 const e=buildInviteWithRSVP(p);
                 sendViaGmail(e.subject,e.body,p.email);
               }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
-                📨 {lang==="en"?"Invite + RSVP":"הזמנה + RSVP"}
+                <Icon name="send" size={13}/> {lang==="en"?"Invite + RSVP":"הזמנה + RSVP"}
               </button>}
               {/* צור אירוע ביומן */}
               {p.assigned&&<button onClick={()=>{
@@ -3307,11 +3387,11 @@ function App() {
                   openGoogleCalendar(p);
                 }
               }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
-                📅 {lang==="en"?"Add to Google Calendar":"צור אירוע ביומן גוגל"}
+                <Icon name="calendar" size={13}/> {lang==="en"?"Add to Google Calendar":"צור אירוע ביומן גוגל"}
               </button>}
               {/* נקה שיבוץ */}
               {p.assigned&&isEditor&&<button onClick={()=>{setRowMenu(null);clearA(p.id);}} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:T.text}}>
-                ✕ {lang==="en"?"Clear assignment":"נקה שיבוץ"}
+                <Icon name="x" size={13}/> {lang==="en"?"Clear assignment":"נקה שיבוץ"}
               </button>}
               {/* מחק */}
               {!isViewer&&<button onClick={()=>{
@@ -3327,7 +3407,7 @@ function App() {
                   showToast(lang==="en"?"Delete request sent to admin":"בקשת מחיקה נשלחה למנהל");
                 }
               }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",textAlign:"right",padding:"10px 14px",border:"none",background:darkMode?"#2d1a1a":"#FEF2F2",cursor:"pointer",fontSize:12,fontFamily:"inherit",color:"#DC2626"}}>
-                🗑 {lang==="en"?"Delete":"מחק"}
+                <Icon name="trash" size={13}/> {lang==="en"?"Delete":"מחק"}
               </button>}
             </>);})()} 
           </div>
@@ -3516,7 +3596,7 @@ function App() {
         />
       )}
 
-      {toast&&<div style={{position:"fixed",bottom:20,right:22,background:toast.type==="error"?"#DC2626":"#1E1B4B",color:"white",padding:"10px 16px",borderRadius:8,fontSize:13,fontWeight:600,zIndex:3000,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",animation:"slideUp .25s ease"}}>{toast.msg}</div>}
+      {toast&&<div dir={lang==="en"?"ltr":"rtl"} style={{position:"fixed",bottom:20,right:22,background:toast.type==="error"?"#DC2626":"#1E1B4B",color:"white",padding:"10px 16px",borderRadius:8,fontSize:13,fontWeight:600,zIndex:3000,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",animation:"slideUp .25s ease",textAlign:lang==="en"?"left":"right"}}>{toast.msg}</div>}
       <style>{`@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
   );
@@ -3526,12 +3606,12 @@ function App() {
 // ── EmailTab Component ────────────────────────────────────────────────────────
 function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,darkMode,sendViaGmail,GS_URL,setModal,dayNames,buildEmail,setEmailModal,setFreeMailModal}) {
   const TEMPLATES = [
-    {key:"invitation",   icon:"📨", labelHe:"הזמנה לניסוי",         labelEn:"Experiment Invitation",  filter:p=>p.assigned, color:"#4338CA"},
-    {key:"reminder",     icon:"🔔", labelHe:"תזכורת לניסוי",         labelEn:"Experiment Reminder",     filter:p=>p.assigned, color:"#D97706"},
-    {key:"locPrefAsk",   icon:"📍", labelHe:"בקשת העדפת מיקום",      labelEn:"Location Preference Ask", filter:p=>!p.locPref?.length, color:"#059669"},
-    {key:"thankYou",     icon:"🙏", labelHe:"תודה על השתתפות",       labelEn:"Thank You",               filter:p=>p.status==="completed", color:"#7C3AED"},
-    {key:"noAvailability",icon:"⚠️",labelHe:"עדכון זמינות נדרש",     labelEn:"Availability Needed",     filter:p=>Object.values(p.availability).every(s=>s.length===0), color:"#DC2626"},
-    {key:"confirmation", icon:"✅", labelHe:"אישור שיבוץ",           labelEn:"Assignment Confirmation", filter:p=>p.status==="confirmed", color:"#0891B2"},
+    {key:"invitation",   icon:"send",          labelHe:"הזמנה לניסוי",         labelEn:"Experiment Invitation",  filter:p=>p.assigned},
+    {key:"reminder",     icon:"bell",          labelHe:"תזכורת לניסוי",         labelEn:"Experiment Reminder",     filter:p=>p.assigned},
+    {key:"locPrefAsk",   icon:"mapPin",        labelHe:"בקשת העדפת מיקום",      labelEn:"Location Preference Ask", filter:p=>!p.locPref?.length},
+    {key:"thankYou",     icon:"heart",         labelHe:"תודה על השתתפות",       labelEn:"Thank You",               filter:p=>p.status==="completed"},
+    {key:"noAvailability",icon:"alertTriangle",labelHe:"עדכון זמינות נדרש",     labelEn:"Availability Needed",     filter:p=>Object.values(p.availability).every(s=>s.length===0)},
+    {key:"confirmation", icon:"checkCircle",   labelHe:"אישור שיבוץ",           labelEn:"Assignment Confirmation", filter:p=>p.status==="confirmed"},
   ];
 
   const buildLocPrefEmail = (p,lang,locations,settings) => {
@@ -3598,7 +3678,7 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
     <div>
       {/* Gmail hint */}
       <div style={{background:darkMode?"#1a1608":"#FFF7ED",border:"1px solid #FDE68A",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:darkMode?"#FCD34D":"#92400E"}}>
-        📬 <strong>Gmail:</strong> {lang==="en"?"Clicking Send opens Gmail Compose. For direct API sending, configure in":"לחיצה על שלח פותחת Gmail. לשליחה ישירה ב-API — הגדר ב-"}<button onClick={()=>setModal("gmail")} style={{background:"none",border:"none",cursor:"pointer",color:"#D97706",fontWeight:700,fontFamily:"inherit",textDecoration:"underline"}}>{lang==="en"?"Gmail Settings":"הגדרות Gmail"}</button>
+        <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Icon name="mail" size={13}/> <strong>Gmail:</strong></span> {lang==="en"?"Clicking Send opens Gmail Compose. For direct API sending, configure in":"לחיצה על שלח פותחת Gmail. לשליחה ישירה ב-API — הגדר ב-"}<button onClick={()=>setModal("gmail")} style={{background:"none",border:"none",cursor:"pointer",color:"#D97706",fontWeight:700,fontFamily:"inherit",textDecoration:"underline"}}>{lang==="en"?"Gmail Settings":"הגדרות Gmail"}</button>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"240px 1fr",gap:16}}>
@@ -3608,13 +3688,13 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
           {TEMPLATES.map(t=>(
             <button key={t.key} onClick={()=>setSelTemplate(t.key)} style={{
               display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"start",
-              padding:"9px 12px",borderRadius:7,border:`1.5px solid ${selTemplate===t.key?t.color:T.border}`,
-              background:selTemplate===t.key?(darkMode?t.color+"22":t.color+"12"):T.tablehead,
-              color:selTemplate===t.key?t.color:T.text,
+              padding:"9px 12px",borderRadius:7,border:`1.5px solid ${selTemplate===t.key?T.accent:T.border}`,
+              background:selTemplate===t.key?(darkMode?T.accent+"22":T.accent+"12"):T.tablehead,
+              color:selTemplate===t.key?T.accent:T.text,
               cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:selTemplate===t.key?700:400,
               marginBottom:5,transition:"all .12s"
             }}>
-              <span>{t.icon}</span>
+              <Icon name={t.icon}/>
               <span style={{flex:1}}>{lang==="en"?t.labelEn:t.labelHe}</span>
               <span style={{fontSize:10,opacity:0.6}}>{participants.filter(t.filter).length}</span>
             </button>
@@ -3624,7 +3704,7 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
               display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"start",
               padding:"9px 12px",borderRadius:7,border:`1px solid ${T.border}`,
               background:T.tablehead,color:T.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"
-            }}>✍️ {lang==="en"?"Free-write":"הודעה חופשית"}</button>
+            }}><Icon name="edit" size={12}/> {lang==="en"?"Free-write":"הודעה חופשית"}</button>
           </div>
         </div>
 
@@ -3640,9 +3720,9 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
                 {k:"manual", l:lang==="en"?"Manual":"בחירה ידנית"},
               ].map(rf=>(
                 <button key={rf.k} onClick={()=>setRecipientFilter(rf.k)} style={{
-                  padding:"4px 12px",borderRadius:15,border:`1px solid ${recipientFilter===rf.k?tmpl.color:T.border}`,
-                  background:recipientFilter===rf.k?(darkMode?tmpl.color+"33":tmpl.color+"15"):"transparent",
-                  color:recipientFilter===rf.k?tmpl.color:T.textMuted,
+                  padding:"4px 12px",borderRadius:15,border:`1px solid ${recipientFilter===rf.k?T.accent:T.border}`,
+                  background:recipientFilter===rf.k?(darkMode?T.accent+"33":T.accent+"15"):"transparent",
+                  color:recipientFilter===rf.k?T.accent:T.textMuted,
                   cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:recipientFilter===rf.k?700:400
                 }}>{rf.l}</button>
               ))}
@@ -3663,10 +3743,10 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
               {/* List */}
               <div style={{maxHeight:220,overflowY:"auto",padding:"4px 0"}}>
                 {filteredManual.map(p=>(
-                  <label key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",cursor:"pointer",background:manualSel.has(p.id)?(darkMode?tmpl.color+"22":tmpl.color+"10"):"transparent",transition:"background .1s"}}>
+                  <label key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",cursor:"pointer",background:manualSel.has(p.id)?(darkMode?T.accent+"22":T.accent+"10"):"transparent",transition:"background .1s"}}>
                     <input type="checkbox" checked={manualSel.has(p.id)} onChange={e=>{
                       setManualSel(prev=>{const next=new Set(prev);e.target.checked?next.add(p.id):next.delete(p.id);return next;});
-                    }} style={{accentColor:tmpl.color}}/>
+                    }} style={{accentColor:T.accent}}/>
                     <span style={{color:T.text,fontWeight:manualSel.has(p.id)?700:400,fontSize:12}}>{p.name}</span>
                     <span style={{color:T.textFaint,fontSize:10,marginRight:"auto"}}>{p.email||"—"}</span>
                     <span style={{fontSize:10,color:T.textFaint}}>{p.status}</span>
@@ -3676,7 +3756,7 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
               </div>
               {/* Select all filtered */}
               <div style={{padding:"6px 10px",borderTop:`1px solid ${T.border}`,display:"flex",gap:8}}>
-                <button onClick={()=>setManualSel(prev=>{const next=new Set(prev);filteredManual.forEach(p=>next.add(p.id));return next;})} style={{fontSize:10,color:tmpl.color,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>✓ {lang==="en"?"Select all":"סמן הכל"}</button>
+                <button onClick={()=>setManualSel(prev=>{const next=new Set(prev);filteredManual.forEach(p=>next.add(p.id));return next;})} style={{fontSize:10,color:T.accent,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>✓ {lang==="en"?"Select all":"סמן הכל"}</button>
                 <button onClick={()=>setManualSel(prev=>{const next=new Set(prev);filteredManual.forEach(p=>next.delete(p.id));return next;})} style={{fontSize:10,color:T.textMuted,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>✕ {lang==="en"?"Clear":"נקה"}</button>
               </div>
             </div>
@@ -3686,8 +3766,11 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
           {allRecipients.length>0&&(
             <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:12,padding:"6px 8px",background:T.tablehead,borderRadius:7,border:`1px solid ${T.border}`,maxHeight:70,overflowY:"auto"}}>
               {allRecipients.map(p=>(
-                <span key={p.id} style={{background:darkMode?tmpl.color+"33":tmpl.color+"15",color:tmpl.color,border:`1px solid ${tmpl.color}44`,borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:600}}>
+                <span key={p.id} style={{display:"inline-flex",alignItems:"center",gap:4,background:darkMode?T.accent+"33":T.accent+"15",color:T.accent,border:`1px solid ${T.accent}44`,borderRadius:10,padding:"1px 6px 1px 8px",fontSize:10,fontWeight:600}}>
                   {p.name}
+                  {recipientFilter==="manual"&&(
+                    <button onClick={()=>setManualSel(prev=>{const next=new Set(prev);next.delete(p.id);return next;})} title={lang==="en"?"Remove":"הסר"} style={{background:"none",border:"none",cursor:"pointer",color:"inherit",fontSize:11,padding:0,lineHeight:1,display:"flex"}}>×</button>
+                  )}
                 </span>
               ))}
             </div>
@@ -3713,10 +3796,12 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
               </div>
             </div>
             <input value={currentSubject} onChange={e=>setEditedSubjects(prev=>({...prev,[selTemplate]:e.target.value}))}
-              style={{width:"100%",padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",marginBottom:6,fontWeight:700}}
+              dir={lang==="en"?"ltr":"rtl"}
+              style={{width:"100%",padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",marginBottom:6,fontWeight:700,textAlign:lang==="en"?"left":"right"}}
               placeholder={lang==="en"?"Subject":"נושא"}/>
             <textarea value={currentBody} onChange={e=>setEditedBodies(prev=>({...prev,[selTemplate]:e.target.value}))}
-              rows={6} style={{width:"100%",padding:"6px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",resize:"vertical",lineHeight:1.5}}/>
+              dir={lang==="en"?"ltr":"rtl"}
+              rows={6} style={{width:"100%",padding:"6px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text,boxSizing:"border-box",resize:"vertical",lineHeight:1.5,textAlign:lang==="en"?"left":"right"}}/>
             {allRecipients.length>0&&<p style={{margin:"4px 0 0",fontSize:10,color:T.textFaint}}>{lang==="en"?"Tip: first recipient's name will be replaced for each send":"שם הנמען הראשון יוחלף לכל נמען בשליחה"}</p>}
           </div>
 
@@ -3734,7 +3819,7 @@ function EmailTab({participants,locations,locById,locColor,settings,T,L,lang,dar
               window.open(url,"_blank");
             }
           }} style={{
-            background:allRecipients.filter(p=>p.email).length?tmpl.color:"#9CA3AF",
+            background:allRecipients.filter(p=>p.email).length?T.accent:"#9CA3AF",
             color:"white",border:"none",padding:"9px 20px",borderRadius:8,cursor:"pointer",
             fontSize:13,fontWeight:700,fontFamily:"inherit",
             opacity:allRecipients.filter(p=>p.email).length?1:0.5
@@ -3790,8 +3875,8 @@ function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div>
-            <h3 style={{margin:0,fontSize:15,color:T.text,fontWeight:800}}>
-              ✍️ {lang==="en"?"Free Email to Selected":"הודעה חופשית לנבחרים"}
+            <h3 style={{margin:0,fontSize:15,color:T.text,fontWeight:800,display:"flex",alignItems:"center",gap:6}}>
+              <Icon name="edit" size={14}/> {lang==="en"?"Free Email to Selected":"הודעה חופשית לנבחרים"}
             </h3>
             <p style={{margin:"4px 0 0",fontSize:11,color:T.textMuted}}>
               {lang==="en"
@@ -3818,7 +3903,8 @@ function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
           </label>
           <input value={subject} onChange={e=>setSubject(e.target.value)}
             placeholder={lang==="en"?"Email subject...":"נושא ההודעה..."}
-            style={inputStyle}/>
+            dir={lang==="en"?"ltr":"rtl"}
+            style={{...inputStyle,textAlign:lang==="en"?"left":"right"}}/>
         </div>
 
         {/* Body */}
@@ -3828,13 +3914,14 @@ function FreeMailModal({recipients, T, L, lang, sendViaGmail, onClose}) {
           </label>
           <textarea value={body} onChange={e=>setBody(e.target.value)}
             placeholder={lang==="en"?"Write your message here...":"כתוב את ההודעה כאן..."}
-            rows={7} style={{...inputStyle,resize:"vertical",lineHeight:1.65}}/>
+            dir={lang==="en"?"ltr":"rtl"}
+            rows={7} style={{...inputStyle,resize:"vertical",lineHeight:1.65,textAlign:lang==="en"?"left":"right"}}/>
         </div>
 
         {/* AI buttons */}
         <div style={{display:"flex",gap:7,marginBottom:16,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-            <span style={{fontSize:10,color:T.textMuted}}>🔑 Anthropic API key:</span>
+            <span style={{fontSize:10,color:T.textMuted,display:"inline-flex",alignItems:"center",gap:4}}><Icon name="key" size={11}/> Anthropic API key:</span>
             <input type="password" defaultValue={window._anthropicKey||""} onChange={e=>{window._anthropicKey=e.target.value;}} placeholder="sk-ant-..." style={{flex:1,padding:"4px 8px",border:`1px solid ${T.border}`,borderRadius:5,fontSize:11,fontFamily:"inherit",background:T.inputBg,color:T.text}}/>
           </div>
           <button onClick={()=>callAI("proofread")} disabled={aiLoading||!body.trim()} style={{
@@ -4161,14 +4248,25 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose,al
           <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{L("colNotes")}</label>
           <textarea value={p.notes||""} onChange={e=>setP(prev=>({...prev,notes:e.target.value}))} rows={2} style={{...inputStyle,resize:"vertical"}}/>
         </div>
+        {/* Experiment date/time — editable now, can be left blank and filled in later */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <div>
+            <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{lang==="en"?"Experiment date":"תאריך התנסות"}</label>
+            <input type="date" value={p.expDate||""} onChange={e=>setP(prev=>({...prev,expDate:e.target.value}))} style={inputStyle}/>
+          </div>
+          <div>
+            <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:3,fontWeight:600}}>{lang==="en"?"Start time":"שעת התנסות"}</label>
+            <input type="time" value={p.startTime||""} onChange={e=>setP(prev=>({...prev,startTime:e.target.value}))} style={inputStyle}/>
+          </div>
+        </div>
         {/* Participant ID — P001-P030 */}
         {(()=>{
           const usedIds=new Set((allParticipants||[]).filter(x=>x.id!==p.id&&x.participantId).map(x=>x.participantId));
           const options=Array.from({length:30},(_,i)=>`P${String(i+1).padStart(3,"0")}`);
           return(
             <div style={{marginBottom:14,background:p.participantId?(darkMode?"#052e16":"#F0FDF4"):T.tablehead,borderRadius:9,padding:"10px 14px",border:`1px solid ${p.participantId?(darkMode?"#166534":"#A7F3D0"):T.border}`}}>
-              <label style={{display:"block",fontSize:11,color:T.textMuted,marginBottom:6,fontWeight:700}}>
-                🔬 {lang==="en"?"Participant ID (for completed experiments)":"מזהה נבדק (לניסוי שהושלם)"}
+              <label style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:T.textMuted,marginBottom:6,fontWeight:700}}>
+                <Icon name="flask" size={12}/> {lang==="en"?"Participant ID (for completed experiments)":"מזהה נבדק (לניסוי שהושלם)"}
               </label>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <select value={p.participantId||""} onChange={e=>{
@@ -4182,17 +4280,17 @@ function ParticipantModal({p:initP,locations,T,L,lang,darkMode,onSave,onClose,al
                     </option>
                   ))}
                 </select>
-                {p.participantId&&<span style={{fontSize:12,color:"#059669",fontWeight:800,whiteSpace:"nowrap"}}>✓ השלים</span>}
+                {p.participantId&&<span style={{fontSize:12,color:"#059669",fontWeight:800,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:3}}><Icon name="check" size={11}/> השלים</span>}
               </div>
               {!p.participantId&&p.status==="completed"&&(
-                <p style={{margin:"6px 0 0",fontSize:11,color:"#DC2626"}}>⚠️ {lang==="en"?"Must assign a participant ID to mark as completed":"חובה לבחור מזהה נבדק לפני סימון כ-השלים"}</p>
+                <p style={{margin:"6px 0 0",fontSize:11,color:"#DC2626",display:"flex",alignItems:"center",gap:4}}><Icon name="alertTriangle" size={11}/> {lang==="en"?"Must assign a participant ID to mark as completed":"חובה לבחור מזהה נבדק לפני סימון כ-השלים"}</p>
               )}
             </div>
           );
         })()}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"8px 15px",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"inherit"}}>{L("btnCancel")}</button>
-          <button onClick={()=>{if(p.status==="completed"&&!p.participantId){alert(lang==="en"?"Please assign a participant ID before marking as Completed":"יש לבחור מזהה נבדק לפני שמירה עם סטטוס השלים");return;}onSave(p);}} disabled={!p.name.trim()} style={{background:"#059669",color:"white",border:"none",padding:"8px 18px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",opacity:p.name.trim()?1:0.5}}>
+          <button onClick={()=>{if(p.status==="completed"&&!p.participantId){alert(lang==="en"?"Please assign a participant ID before marking as Completed":"יש לבחור מזהה נבדק לפני שמירה עם סטטוס השלים");return;}onSave(p);}} disabled={!p.name.trim()} style={{background:T.accent,color:"white",border:"none",padding:"8px 18px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",opacity:p.name.trim()?1:0.5}}>
             {p.id?L("btnSaveChanges"):L("btnAddConfirm")}
           </button>
         </div>
@@ -4214,9 +4312,9 @@ function AuthPanel({T,lang,userRole,userName,authPwds,setAuthPwds,onLogin,onLogo
   const [pwdSaved,setPwdSaved] = React.useState(false);
 
   const ROLES = [
-    {key:"admin",  icon:"👑", nameHe:"מנהל מערכת", nameEn:"Admin",  color:"#7C3AED"},
-    {key:"editor", icon:"✏️", nameHe:"עורך",        nameEn:"Editor", color:"#0891B2"},
-    {key:"viewer", icon:"👁", nameHe:"צופה",        nameEn:"Viewer", color:"#6B7280"},
+    {key:"admin",  icon:"crown", nameHe:"מנהל מערכת", nameEn:"Admin",  color:"#7C3AED"},
+    {key:"editor", icon:"edit",  nameHe:"עורך",        nameEn:"Editor", color:"#0891B2"},
+    {key:"viewer", icon:"eye",   nameHe:"צופה",        nameEn:"Viewer", color:"#6B7280"},
   ];
 
   const tryLogin = async (role)=>{
@@ -4251,8 +4349,8 @@ function AuthPanel({T,lang,userRole,userName,authPwds,setAuthPwds,onLogin,onLogo
       {["admin","editor"].map(role=>(
         <div key={role} style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,color:T.textMuted,fontWeight:700,marginBottom:5}}>
-            {ROLES.find(r=>r.key===role)?.icon} {lang==="en"?ROLES.find(r=>r.key===role)?.nameEn:ROLES.find(r=>r.key===role)?.nameHe}
-            {authPwds[role]?<span style={{color:"#10b981",marginRight:6}}>✓ {lang==="en"?"set":"מוגדרת"}</span>:<span style={{color:"#f59e0b",marginRight:6}}>⚠ {lang==="en"?"not set":"לא מוגדרת"}</span>}
+            <Icon name={ROLES.find(r=>r.key===role)?.icon}/> {lang==="en"?ROLES.find(r=>r.key===role)?.nameEn:ROLES.find(r=>r.key===role)?.nameHe}
+            {authPwds[role]?<span style={{color:"#10b981",marginRight:6,display:"inline-flex",alignItems:"center",gap:3}}><Icon name="check" size={11}/> {lang==="en"?"set":"מוגדרת"}</span>:<span style={{color:"#f59e0b",marginRight:6,display:"inline-flex",alignItems:"center",gap:3}}><Icon name="alertTriangle" size={11}/> {lang==="en"?"not set":"לא מוגדרת"}</span>}
           </label>
           <input type="password" placeholder={lang==="en"?"New password...":"סיסמה חדשה..."} value={newPwds[role]}
             onChange={e=>setNewPwds(p=>({...p,[role]:e.target.value}))} style={inputStyle}/>
@@ -4274,8 +4372,8 @@ function AuthPanel({T,lang,userRole,userName,authPwds,setAuthPwds,onLogin,onLogo
       {/* Current status */}
       <div style={{background:T.tablehead,borderRadius:9,padding:"10px 14px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:12,color:T.textMuted}}>{lang==="en"?"Currently:":"כרגע:"}</span>
-        <span style={{fontWeight:700,color:ROLES.find(r=>r.key===userRole)?.color,fontSize:13}}>
-          {ROLES.find(r=>r.key===userRole)?.icon} {lang==="en"?ROLES.find(r=>r.key===userRole)?.nameEn:ROLES.find(r=>r.key===userRole)?.nameHe}
+        <span style={{fontWeight:700,color:ROLES.find(r=>r.key===userRole)?.color,fontSize:13,display:"inline-flex",alignItems:"center",gap:5}}>
+          <Icon name={ROLES.find(r=>r.key===userRole)?.icon}/> {lang==="en"?ROLES.find(r=>r.key===userRole)?.nameEn:ROLES.find(r=>r.key===userRole)?.nameHe}
           {userName&&<span style={{fontWeight:400,color:T.textMuted}}> · {userName}</span>}
         </span>
         <button onClick={onLogout} style={{background:"#FEF2F2",color:"#DC2626",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>
@@ -4296,7 +4394,7 @@ function AuthPanel({T,lang,userRole,userName,authPwds,setAuthPwds,onLogin,onLogo
             background:targetRole===r.key?r.color+"18":T.tablehead,color:targetRole===r.key?r.color:T.textMuted,
             cursor:"pointer",fontFamily:"inherit",fontWeight:targetRole===r.key?800:400,fontSize:11,transition:"all .15s"
           }}>
-            <div style={{fontSize:18,marginBottom:2}}>{r.icon}</div>
+            <div style={{marginBottom:2,display:"flex",justifyContent:"center"}}><Icon name={r.icon} size={18}/></div>
             <div>{lang==="en"?r.nameEn:r.nameHe}</div>
           </button>
         ))}
@@ -4311,8 +4409,8 @@ function AuthPanel({T,lang,userRole,userName,authPwds,setAuthPwds,onLogin,onLogo
               placeholder={lang==="en"?"Password":"סיסמה"}
               style={{...inputStyle,borderColor:pwdError?"#EF4444":T.border,paddingInlineEnd:34,width:"100%",boxSizing:"border-box"}}/>
             <button type="button" onClick={()=>setShowPwd(v=>!v)}
-              style={{position:"absolute",insetInlineEnd:8,background:"none",border:"none",cursor:"pointer",color:T.textMuted,fontSize:16,lineHeight:1,padding:2}}>
-              {showPwd?"🙈":"👁"}
+              style={{position:"absolute",insetInlineEnd:8,background:"none",border:"none",cursor:"pointer",color:T.textMuted,lineHeight:1,padding:2,display:"flex"}}>
+              <Icon name={showPwd?"eyeOff":"eye"} size={15}/>
             </button>
           </div>
           {!authPwds[targetRole]&&(
@@ -4344,6 +4442,7 @@ function LocModal({L,lang,loc,T,onSave,onClose}) {
   if(!L) L=(k)=>k;
   if(!lang) lang="he";
   const [name,setName]=useState(loc.name||"");
+  const [address,setAddress]=useState(loc.address||"");
   const [rooms,setRooms]=useState(loc.rooms||[]);
   const [nr,setNr]=useState("");
   const inputStyle={padding:"7px 9px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit",background:T.inputBg,color:T.text};
@@ -4355,6 +4454,16 @@ function LocModal({L,lang,loc,T,onSave,onClose}) {
           <label style={{display:"block",fontSize:11,fontWeight:600,color:T.textMuted,marginBottom:4}}>שם</label>
           <input value={name} onChange={e=>setName(e.target.value)} style={{...inputStyle,width:"100%",boxSizing:"border-box"}} placeholder="נמל, הר, אוניברסיטה…"/>
         </div>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"block",fontSize:11,fontWeight:600,color:T.textMuted,marginBottom:4}}>{lang==="en"?"Address (used for the calendar invite)":"כתובת (משמשת בזימון ליומן)"}</label>
+          <div style={{display:"flex",gap:6}}>
+            <input value={address} onChange={e=>setAddress(e.target.value)} style={{...inputStyle,flex:1,boxSizing:"border-box"}} placeholder={lang==="en"?"Paste the address from Google Maps…":"הדבק כתובת ממפות גוגל…"}/>
+            <button type="button" title={lang==="en"?"Search on Google Maps":"חפש במפות גוגל"}
+              onClick={()=>window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address||name)}`,"_blank")}
+              style={{display:"flex",alignItems:"center",background:T.tablehead,color:T.textMuted,border:`1px solid ${T.border}`,padding:"0 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit"}}><Icon name="map" size={14}/></button>
+          </div>
+          <p style={{margin:"4px 0 0",fontSize:10,color:T.textFaint}}>{lang==="en"?"Find the place on the map, copy its address, and paste it here.":"מצא את המקום במפה, העתק את הכתובת שמופיעה שם, והדבק כאן."}</p>
+        </div>
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,fontWeight:600,color:T.textMuted,marginBottom:6}}>{L("locRooms")}</label>
           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>
@@ -4362,12 +4471,12 @@ function LocModal({L,lang,loc,T,onSave,onClose}) {
           </div>
           <div style={{display:"flex",gap:6}}>
             <input value={nr} onChange={e=>setNr(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&nr.trim()){setRooms(p=>[...p,nr.trim()]);setNr("");}}} placeholder="שם חדר (Enter)" style={{...inputStyle,flex:1}}/>
-            <button onClick={()=>{if(nr.trim()){setRooms(p=>[...p,nr.trim()]);setNr("");}}} style={{background:"#4338CA",color:"white",border:"none",padding:"7px 12px",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700}}>+</button>
+            <button onClick={()=>{if(nr.trim()){setRooms(p=>[...p,nr.trim()]);setNr("");}}} style={{background:T.accent,color:"white",border:"none",padding:"7px 12px",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700}}>+</button>
           </div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:T.tablehead,color:T.text,border:`1px solid ${T.border}`,padding:"7px 13px",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>{L("btnCancel")}</button>
-          <button type="button" onClick={()=>{const finalRooms=nr.trim()?[...rooms,nr.trim()]:rooms;onSave({...loc,name,rooms:finalRooms});}} disabled={!name.trim()} style={{background:"#4338CA",color:"white",border:"none",padding:"7px 15px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{lang==="en"?"Save":"שמור"}</button>
+          <button type="button" onClick={()=>{const finalRooms=nr.trim()?[...rooms,nr.trim()]:rooms;onSave({...loc,name,address,rooms:finalRooms});}} disabled={!name.trim()} style={{background:T.accent,color:"white",border:"none",padding:"7px 15px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{lang==="en"?"Save":"שמור"}</button>
         </div>
       </div>
     </div>
