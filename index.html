@@ -265,6 +265,19 @@ async function gsSaveAll(payload) {
   return data;
 }
 
+async function gsAddParticipant(patch, user) {
+  const res = await fetch(GS_URL, {
+    method: "POST",
+    mode: "cors",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ action: "addParticipant", patch, user }),
+  });
+  if (!res.ok) throw new Error("Network blocked");
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data; // { ok, id }
+}
+
 async function gsUpdateP(id, patch, user) {
   const res = await fetch(GS_URL, {
     method: "POST",
@@ -1360,6 +1373,14 @@ function App() {
   }
 
   // ── Add / Edit participant ─────────────────────────────────────────────────
+  // New participants are pushed via gsAddParticipant (appends ONE row, id
+  // assigned server-side under lock) — never via gsSaveAll/gsUpdateP's full-
+  // list or existing-row paths, which would either overwrite the whole sheet
+  // from a possibly-stale local cache or require a row that doesn't exist yet.
+  function reconcileNewId(tempId, realId) {
+    if(tempId===realId) return;
+    setParticipants(prev=>prev.map(x=>x.id===tempId?{...x,id:realId}:x));
+  }
   function saveParticipant(p) {
     if(!p.id) {
       const np={...p,id:newId(participants),importedAt:Date.now()};
@@ -1368,15 +1389,25 @@ function App() {
       if(dups.length>0) {
         setModal(null);setEditP(null);
         setDupModal({conflicts:[{incoming:np,existing:dups,reason:dupReason(np,dups[0])}],index:0,newOnes:[],resolved:[],onDone:(action)=>{
-          let updated=null;
-          if(action==="add"){updated=[...participantsRef.current,np];addLog("הוספה ידנית",`נוסף: ${np.name}`);}
-          else if(action==="replace"){updated=participantsRef.current.map(q=>q.id===dups[0].id?{...np,id:q.id}:q);addLog("החלפה ידנית",`הוחלף: ${np.name}`);}
-          else if(action==="merge"){updated=participantsRef.current.map(q=>q.id===dups[0].id?{...q,...np,id:q.id,assigned:q.assigned,status:q.status}:q);addLog("מיזוג ידני",`מוזג: ${np.name}`);}
-          if(updated){
-            setParticipants(updated);
-            // Push immediately — new/changed rows must reach Sheets right away,
-            // not wait for the next sync/save (a sync before that would drop them).
-            gsSaveAll({participants:updated.map(flatP), user:settings.currentUser})
+          if(action==="add"){
+            setParticipants(prev=>[...prev,np]);
+            addLog("הוספה ידנית",`נוסף: ${np.name}`);
+            gsAddParticipant(flatP(np), settings.currentUser)
+              .then(({id})=>{reconcileNewId(np.id,id);setSyncStatus("ok");setLastSync(new Date());})
+              .catch(()=>{setSyncStatus("error");showToast(`⚠️ שגיאת שמירה ל-Sheets עבור ${np.name}`,"error");});
+          } else if(action==="replace"){
+            const merged={...np,id:dups[0].id};
+            setParticipants(prev=>prev.map(q=>q.id===dups[0].id?merged:q));
+            addLog("החלפה ידנית",`הוחלף: ${np.name}`);
+            gsUpdateP(dups[0].id, toFullPatch(merged), settings.currentUser)
+              .then(()=>{setSyncStatus("ok");setLastSync(new Date());})
+              .catch(()=>{setSyncStatus("error");showToast(`⚠️ שגיאת שמירה ל-Sheets עבור ${np.name}`,"error");});
+          } else if(action==="merge"){
+            const base=dups[0];
+            const merged={...base,...np,id:base.id,assigned:base.assigned,status:base.status};
+            setParticipants(prev=>prev.map(q=>q.id===dups[0].id?merged:q));
+            addLog("מיזוג ידני",`מוזג: ${np.name}`);
+            gsUpdateP(dups[0].id, toFullPatch(merged), settings.currentUser)
               .then(()=>{setSyncStatus("ok");setLastSync(new Date());})
               .catch(()=>{setSyncStatus("error");showToast(`⚠️ שגיאת שמירה ל-Sheets עבור ${np.name}`,"error");});
           }
@@ -1387,10 +1418,8 @@ function App() {
       setParticipantsUndo(prev=>[...prev,np], `${lang==="en"?"Add":"הוסף"}: ${np.name}`);
       addLog("הוספה ידנית",`נוסף: ${np.name}`);
       showToast(`✅ ${np.name} נוסף`);
-      // Push immediately so the new participant is durably in Sheets right away,
-      // matching the immediacy edits already get via gsUpdateP below.
-      gsSaveAll({participants:[...participantsRef.current,np].map(flatP), user:settings.currentUser})
-        .then(()=>{setSyncStatus("ok");setLastSync(new Date());})
+      gsAddParticipant(flatP(np), settings.currentUser)
+        .then(({id})=>{reconcileNewId(np.id,id);setSyncStatus("ok");setLastSync(new Date());})
         .catch(()=>{setSyncStatus("error");showToast(`⚠️ שגיאת שמירה ל-Sheets עבור ${np.name}`,"error");});
     } else {
       // Update local state

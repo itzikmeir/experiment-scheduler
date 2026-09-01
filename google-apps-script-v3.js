@@ -70,6 +70,7 @@ function doPost(e) {
     const action = body.action;
     if (action === "saveAll")  return cors(saveAll(body));
     if (action === "updateP")  return cors(updateParticipant(body));
+    if (action === "addParticipant") return cors(addParticipant(body));
     return cors({ error: "Unknown action: " + action });
   } catch(err) {
     return cors({ error: err.toString() });
@@ -260,6 +261,40 @@ function updateParticipant(body) {
       return { ok: true };
     }
     return { error: "Participant not found: id=" + id };
+  });
+}
+
+// ─── addParticipant ───────────────────────────────────────────────────────────
+// Appends exactly ONE new row — never touches any other row. Unlike saveAll
+// (which clearContents()s and rewrites the whole sheet from whatever list the
+// client sends), this is safe even if the calling client's local cache is
+// stale relative to Sheets: it can only add, never overwrite/erase existing
+// data. The new id is computed here, inside the lock, from the sheet's own
+// current contents — not from the client's (possibly stale) copy — so two
+// concurrent adds from different clients can never collide on the same id.
+function addParticipant(body) {
+  return withLock(() => {
+    const sheet = getOrCreate(SHEETS.PARTICIPANTS);
+    if (sheet.getLastRow() === 0) sheet.appendRow(P_HEADERS);
+    const data  = sheet.getDataRange().getValues();
+    const idCol = P_HEADERS.indexOf("id");
+    let maxId = 0;
+    for (let i = 1; i < data.length; i++) {
+      const v = parseInt(data[i][idCol]);
+      if (!isNaN(v) && v > maxId) maxId = v;
+    }
+    const newIdVal = maxId + 1;
+    const patch = body.patch || {};
+    const row = P_HEADERS.map(h => {
+      if (h === "id") return newIdVal;
+      if (h === "updatedAt") return new Date().toISOString();
+      if (h === "updatedBy") return body.user || "";
+      const v = patch[h];
+      return v !== null && v !== undefined ? v : "";
+    });
+    sheet.appendRow(row);
+    addLog(body.user || "unknown", "addParticipant", "נוסף משתתף חדש: " + (patch.name||"") + " id=" + newIdVal);
+    return { ok: true, id: newIdVal };
   });
 }
 
